@@ -117,6 +117,17 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, [isMobile]);
   
+  // Define handleSelectChat first since it's used in other callbacks
+  const handleSelectChat = useCallback((chatId) => {
+    setActiveChatId(chatId);
+  }, []);
+
+  // Define handleNewChat next since it's used in other callbacks
+  const handleNewChat = useCallback(() => {
+    setActiveChatId(null);
+    setMessages([]);
+  }, []);
+
   // Toggle mobile sidebar
   const toggleMobileSidebar = useCallback(() => {
     setShowMobileSidebar(prev => !prev);
@@ -136,7 +147,7 @@ function App() {
     if (isMobile) {
       setShowMobileSidebar(false);
     }
-  }, [isMobile]);
+  }, [isMobile, handleNewChat]);
   
   // Toggle sidebar collapse (desktop)
   const handleToggleCollapse = useCallback(() => {
@@ -202,11 +213,6 @@ function App() {
     setChats(updatedChats);
   };
 
-  const handleNewChat = () => {
-    setActiveChatId(null);
-    setMessages([]);
-  };
-
   const handleDeleteChat = (chatId, e) => {
     e.stopPropagation();
     
@@ -221,10 +227,6 @@ function App() {
       
       return updatedChats;
     });
-  };
-
-  const handleSelectChat = (chatId) => {
-    setActiveChatId(chatId);
   };
 
   const handleMessageError = (error) => {
