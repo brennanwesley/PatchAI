@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { supabase } from './supabaseClient';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 import App from './App';
 import LandingPage from './components/LandingPage';
@@ -9,56 +9,29 @@ import reportWebVitals from './reportWebVitals';
 
 // Auth wrapper component to protect routes
 const PrivateRoute = ({ children }) => {
-  const [loading, setLoading] = React.useState(true);
-  const [session, setSession] = React.useState(null);
-  const [initialCheckDone, setInitialCheckDone] = React.useState(false);
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  if (user === null) {
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+};
 
-  React.useEffect(() => {
-    let mounted = true;
+// Public route that redirects to chat if user is authenticated
+const PublicRoute = ({ children }) => {
+  const { user } = useAuth();
+  
+  if (user) {
+    return <Navigate to="/chat" replace />;
+  }
+  
+  return children;
+};
 
-    const checkAuth = async () => {
-      try {
-        // Check for existing session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (mounted) {
-          setSession(session);
-          setInitialCheckDone(true);
-        }
-      } catch (error) {
-        console.error('Error checking auth:', error);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (mounted) {
-        setSession(session);
-        setInitialCheckDone(true);
-        setLoading(false);
-        
-        // Only redirect if we're not already on the right page
-        if (session && window.location.pathname !== '/chat') {
-          navigate('/chat');
-        } else if (!session) {
-          navigate('/');
-        }
-      }
-    });
-
-    // Initial auth check
-    checkAuth();
-
-    return () => {
-      mounted = false;
-      subscription?.unsubscribe();
-    };
-  }, [navigate]);
-
+const AppRoutes = () => {
+  const { loading } = useAuth();
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -66,35 +39,37 @@ const PrivateRoute = ({ children }) => {
       </div>
     );
   }
-
-  // Only render the protected route if we have a session and initial check is done
-  if (!session && initialCheckDone) {
-    return <Navigate to="/" replace />;
-  }
   
-  if (session) {
-    return React.cloneElement(children, { user: session.user, loading });
-  }
-  
-  return null;
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <PublicRoute>
+            <LandingPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/chat"
+        element={
+          <PrivateRoute>
+            <App />
+          </PrivateRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 };
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <Router>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route
-          path="/chat"
-          element={
-            <PrivateRoute>
-              <App />
-            </PrivateRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </Router>
   </React.StrictMode>
 );

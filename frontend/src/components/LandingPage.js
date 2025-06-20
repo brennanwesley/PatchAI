@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
+import React, { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { FiActivity, FiBarChart2, FiGlobe, FiDollarSign, FiFileText, FiLogIn, FiUserPlus } from 'react-icons/fi';
 
 const LandingPage = () => {
@@ -10,33 +9,7 @@ const LandingPage = () => {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const navigate = useNavigate();
-
-  // Check if user is already logged in - only on initial render
-  useEffect(() => {
-    let mounted = true;
-    
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        // Only redirect if we're not in the middle of a sign-in/sign-up
-        if (mounted && session?.user && !isLoading) {
-          navigate('/chat');
-        }
-      } catch (error) {
-        console.error('Error checking auth status:', error);
-      }
-    };
-    
-    // Only check auth if we're not in the middle of a sign-in/sign-up
-    if (!isLoading) {
-      checkAuth();
-    }
-    
-    return () => {
-      mounted = false;
-    };
-  }, [navigate, isLoading]);
+  const { login, signUp } = useAuth();
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -46,33 +19,18 @@ const LandingPage = () => {
     try {
       if (isLogin) {
         // Sign in
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        
-        if (error) throw error;
-        
-        // Navigation will be handled by the auth state change listener in PrivateRoute
-        navigate('/chat');
+        await login(email, password);
       } else {
         // Sign up
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
+        await signUp(email, password);
+        
+        // Show success message and switch to login
+        setError({
+          type: 'success',
+          message: 'Account created successfully! Please check your email to verify your account.',
         });
-        
-        if (signUpError) throw signUpError;
-        
-        if (data?.user) {
-          // Show success message and switch to login
-          setError({
-            type: 'success',
-            message: 'Account created successfully! Please sign in.'
-          });
-          setIsLogin(true);
-          setPassword('');
-        }
+        setIsLogin(true);
+        setPassword('');
       }
     } catch (error) {
       console.error('Authentication error:', error);

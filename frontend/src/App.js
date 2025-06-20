@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
 import ChatFeed from './components/ChatFeed';
 import ChatInput from './components/ChatInput';
@@ -15,37 +16,14 @@ const LOCAL_STORAGE_KEYS = {
   ACTIVE_CHAT: 'patchai-active-chat'
 };
 
-function App({ user: propUser, loading: propLoading = false }) {
+function App() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   
-  // User state (passed down from PrivateRoute)
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  // Update user state when prop changes
-  useEffect(() => {
-    if (propUser !== undefined) {
-      setUser(propUser);
-      setLoading(propLoading);
-    }
-  }, [propUser, propLoading]);
-  
-  // Listen for auth state changes
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
-      setLoading(false);
-    });
-    
-    return () => subscription?.unsubscribe();
-  }, []);
-
   // Handle sign out
   const handleSignOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      setUser(null);
+      await logout();
       navigate('/');
     } catch (error) {
       console.error('Error signing out:', error);
