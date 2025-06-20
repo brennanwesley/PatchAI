@@ -45,7 +45,10 @@ logger.info(f"OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else
 
 try:
     if OPENAI_API_KEY:
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        # Initialize OpenAI client with explicit parameters only
+        openai_client = OpenAI(
+            api_key=OPENAI_API_KEY
+        )
         logger.info("OpenAI client initialized successfully")
     else:
         logger.error("OPENAI_API_KEY is None or empty")
