@@ -7,6 +7,10 @@ import { FiMenu } from 'react-icons/fi';
 import './App.css';
 
 function App() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const sidebarRef = useRef(null);
+  
   const [chats, setChats] = useState(() => {
     const savedChats = localStorage.getItem('patchai-chats');
     return savedChats ? JSON.parse(savedChats) : [];
