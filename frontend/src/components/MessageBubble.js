@@ -38,7 +38,7 @@ const MessageBubble = ({ role, content, timestamp }) => {
         >
           {/* Message Text */}
           <div
-            className={`text-sm leading-relaxed ${
+            className={`text-sm leading-relaxed space-y-2 ${
               isUser ? 'text-white' : 'text-gray-900 dark:text-gray-100'
             }`}
             dangerouslySetInnerHTML={createMarkup(formattedContent)}
