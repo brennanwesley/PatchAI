@@ -11,6 +11,8 @@ import reportWebVitals from './reportWebVitals';
 const PrivateRoute = ({ children }) => {
   const [loading, setLoading] = React.useState(true);
   const [session, setSession] = React.useState(null);
+  const [initialCheckDone, setInitialCheckDone] = React.useState(false);
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     let mounted = true;
@@ -21,6 +23,7 @@ const PrivateRoute = ({ children }) => {
         const { data: { session } } = await supabase.auth.getSession();
         if (mounted) {
           setSession(session);
+          setInitialCheckDone(true);
         }
       } catch (error) {
         console.error('Error checking auth:', error);
@@ -35,7 +38,15 @@ const PrivateRoute = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setSession(session);
+        setInitialCheckDone(true);
         setLoading(false);
+        
+        // Only redirect if we're not already on the right page
+        if (session && window.location.pathname !== '/chat') {
+          navigate('/chat');
+        } else if (!session) {
+          navigate('/');
+        }
       }
     });
 
@@ -46,7 +57,7 @@ const PrivateRoute = ({ children }) => {
       mounted = false;
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -56,8 +67,16 @@ const PrivateRoute = ({ children }) => {
     );
   }
 
-  // Pass the user and loading state to the App component
-  return session ? React.cloneElement(children, { user: session.user, loading }) : <Navigate to="/" replace />;
+  // Only render the protected route if we have a session and initial check is done
+  if (!session && initialCheckDone) {
+    return <Navigate to="/" replace />;
+  }
+  
+  if (session) {
+    return React.cloneElement(children, { user: session.user, loading });
+  }
+  
+  return null;
 };
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

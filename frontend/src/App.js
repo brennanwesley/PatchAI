@@ -19,18 +19,26 @@ function App({ user: propUser, loading: propLoading = false }) {
   const navigate = useNavigate();
   
   // User state (passed down from PrivateRoute)
-  const [user, setUser] = useState(propUser);
-  const [loading, setLoading] = useState(propLoading);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   
   // Update user state when prop changes
   useEffect(() => {
-    setUser(propUser);
-  }, [propUser]);
+    if (propUser !== undefined) {
+      setUser(propUser);
+      setLoading(propLoading);
+    }
+  }, [propUser, propLoading]);
   
-  // Update loading state when prop changes
+  // Listen for auth state changes
   useEffect(() => {
-    setLoading(propLoading);
-  }, [propLoading]);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+      setLoading(false);
+    });
+    
+    return () => subscription?.unsubscribe();
+  }, []);
 
   // Handle sign out
   const handleSignOut = async () => {

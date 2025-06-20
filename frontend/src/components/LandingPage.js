@@ -12,12 +12,15 @@ const LandingPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  // Check if user is already logged in
+  // Check if user is already logged in - only on initial render
   useEffect(() => {
+    let mounted = true;
+    
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+        // Only redirect if we're not in the middle of a sign-in/sign-up
+        if (mounted && session?.user && !isLoading) {
           navigate('/chat');
         }
       } catch (error) {
@@ -25,8 +28,15 @@ const LandingPage = () => {
       }
     };
     
-    checkAuth();
-  }, [navigate]);
+    // Only check auth if we're not in the middle of a sign-in/sign-up
+    if (!isLoading) {
+      checkAuth();
+    }
+    
+    return () => {
+      mounted = false;
+    };
+  }, [navigate, isLoading]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
