@@ -3,8 +3,23 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
+// Debug logging
+console.log('Supabase URL:', supabaseUrl ? 'Present' : 'Missing');
+console.log('Supabase Key:', supabaseAnonKey ? 'Present' : 'Missing');
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase configuration. Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY in your .env file');
+  const errorMsg = 'Missing Supabase configuration. Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY in your environment variables';
+  console.error(errorMsg);
+  throw new Error(errorMsg);
+}
+
+// Validate URL format
+try {
+  new URL(supabaseUrl);
+} catch (err) {
+  const errorMsg = `Invalid Supabase URL format: ${supabaseUrl}. It should look like: https://xxxxxxxxxxxxxx.supabase.co`;
+  console.error(errorMsg);
+  throw new Error(errorMsg);
 }
 
 // Create a single supabase client for interacting with your database
