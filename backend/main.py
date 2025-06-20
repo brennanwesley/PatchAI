@@ -92,6 +92,24 @@ class PromptRequest(BaseModel):
 class PromptResponse(BaseModel):
     response: str
 
+def get_system_prompt():
+    """
+    Defines the system prompt that sets the behavior and personality of PatchAI
+    """
+    return """You are PatchAI, an AI assistant specialized in oilfield operations. Your role is to provide expert-level 
+    guidance on drilling, completions, production, and other oilfield-related topics. Follow these guidelines:
+    
+    1. Be concise and technical in your responses
+    2. Use industry-standard terminology and units of measurement
+    3. When discussing complex topics, break down information into clear, numbered points
+    4. Always prioritize safety and regulatory compliance in your advice
+    5. If you're unsure about something, say so rather than guessing
+    6. Format your responses with proper markdown for better readability
+    7. Use bullet points for lists and **bold** for important terms
+    
+    Your responses should be helpful, accurate, and tailored to the user's level of expertise.
+    """
+
 # Routes
 @app.get("/")
 async def root():
@@ -117,33 +135,42 @@ async def debug_info():
 
 @app.post("/prompt", response_model=PromptResponse)
 async def chat_completion(request: PromptRequest):
-    """Send messages to OpenAI Chat Completion API"""
     if not openai_client:
         raise HTTPException(
             status_code=500,
             detail="OpenAI client not initialized"
         )
     try:
-        # Convert Pydantic models to dict format expected by OpenAI
-        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        # Convert messages to the format expected by the API
+        messages = [{"role": "system", "content": get_system_prompt()}]
         
-        # Call OpenAI API
+        # Add conversation history
+        for msg in request.messages:
+            messages.append({"role": msg.role, "content": msg.content})
+        
+        logger.info(f"Sending request to OpenAI with messages: {messages}")
+        
         response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=messages,
             max_tokens=1000,
-            temperature=0.7
+            temperature=0.7,
+            top_p=0.9,
+            frequency_penalty=0.2,
+            presence_penalty=0.1
         )
         
         assistant_response = response.choices[0].message.content
+        logger.info(f"Received response from OpenAI: {assistant_response[:200]}...")  # Log first 200 chars
         
         return PromptResponse(response=assistant_response)
         
     except Exception as e:
-        logging.error(f"OpenAI API error: {e}")
+        error_msg = f"OpenAI API error: {str(e)}"
+        logger.error(error_msg)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get response from OpenAI: {str(e)}"
+            detail=error_msg
         )
 
 if __name__ == "__main__":

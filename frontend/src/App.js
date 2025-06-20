@@ -18,7 +18,7 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeChatId, setActiveChatId] = useState('1');
 
-  const handleSendMessage = (content) => {
+  const handleSendMessage = async (content) => {
     // Add user message
     const userMessage = {
       role: 'user',
@@ -29,17 +29,48 @@ function App() {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Simulate AI response (replace with actual API call later)
-    setTimeout(() => {
+    try {
+      // Call the backend API
+      const response = await fetch('https://patchai-backend.onrender.com/prompt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            ...messages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            })),
+            { role: 'user', content: content }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
       const aiMessage = {
         role: 'assistant',
-        content: `I received your message: "${content}"\n\nThis is a mock response. Here are some key points:\n• Point 1: This demonstrates bullet formatting\n• Point 2: Line breaks work correctly\n• Point 3: Ready for [backend integration](https://github.com/brennanwesley/PatchAI)`,
+        content: data.response,
         timestamp: new Date().toLocaleTimeString()
       };
       
       setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Error calling API:', error);
+      const errorMessage = {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error processing your request. Please try again later.',
+        timestamp: new Date().toLocaleTimeString()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleNewChat = () => {
