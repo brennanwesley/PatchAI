@@ -2,6 +2,7 @@
 """
 Simplified main.py for guaranteed Render deployment success
 Uses minimal dependencies and robust error handling
+Last updated: 2025-06-20 06:32 UTC - FORCE REDEPLOY
 """
 
 from fastapi import FastAPI, HTTPException
