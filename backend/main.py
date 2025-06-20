@@ -34,16 +34,18 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY environment variable is required")
-if not SUPABASE_URL:
-    raise ValueError("SUPABASE_URL environment variable is required")
-if not SUPABASE_SERVICE_ROLE_KEY:
-    raise ValueError("SUPABASE_SERVICE_ROLE_KEY environment variable is required")
+# Initialize clients with error handling
+openai_client = None
+supabase = None
 
-# Initialize clients
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+try:
+    if OPENAI_API_KEY:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+except Exception as e:
+    logging.warning(f"Client initialization warning: {e}")
+    # Continue without crashing - will handle in endpoints
 
 # Pydantic models
 class Message(BaseModel):
@@ -91,6 +93,11 @@ async def root():
 @app.post("/prompt", response_model=PromptResponse)
 async def chat_completion(request: PromptRequest):
     """Send messages to OpenAI Chat Completion API"""
+    if not openai_client:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI client not initialized"
+        )
     try:
         # Convert Pydantic models to dict format expected by OpenAI
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
@@ -120,6 +127,11 @@ async def save_history(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     """Save user and assistant messages to Supabase"""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Supabase client not initialized"
+        )
     try:
         user_id = get_user_id_from_token(credentials)
         
@@ -153,6 +165,11 @@ async def get_history(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> List[HistoryMessage]:
     """Get latest 20 messages for current user"""
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Supabase client not initialized"
+        )
     try:
         user_id = get_user_id_from_token(credentials)
         
