@@ -158,30 +158,38 @@ function App() {
     }
   }, [activeChatId, chats]);
 
-  // Create new chat with database storage
+  // Create new chat session with first message
   const createNewChat = async (firstMessage) => {
+    console.log('🆕 Creating new chat with message:', firstMessage);
+    
     try {
-      if (!user) {
-        console.error('User not authenticated');
-        return null;
-      }
-
-      // Generate title from first message
+      // Generate title from first message (first 50 chars)
       const title = firstMessage.content.length > 50 
         ? firstMessage.content.substring(0, 50) + '...'
         : firstMessage.content;
 
-      // Create chat session in database
+      console.log('📝 Creating chat with title:', title);
+
+      // Create session in database using ChatService
       const newChat = await ChatService.createChatSession(title, firstMessage);
-      
+      console.log('✅ Created chat session:', newChat);
+
+      if (!newChat || !newChat.id) {
+        throw new Error('Failed to create chat session');
+      }
+
+      console.log('📝 Created chat object:', newChat);
+
       // Update local state
       setChats(prevChats => [newChat, ...prevChats]);
       setActiveChatId(newChat.id);
       setMessages([firstMessage]);
-      
+
+      console.log('✅ Updated local state with new chat');
+
       return newChat.id;
     } catch (error) {
-      console.error('Error creating new chat:', error);
+      console.error('❌ Error creating new chat:', error);
       return null;
     }
   };
@@ -253,8 +261,13 @@ function App() {
   };
 
   const handleSendMessage = async (messageInput) => {
+    console.log('🚀 handleSendMessage called with:', messageInput);
+    console.log('👤 User authenticated:', !!user);
+    console.log('💬 Current messages:', messages);
+    console.log('🆔 Active chat ID:', activeChatId);
+    
     if (!user) {
-      console.error('User not authenticated');
+      console.error('❌ User not authenticated');
       return;
     }
 
@@ -262,8 +275,11 @@ function App() {
     const messageContent = typeof messageInput === 'string' ? messageInput : messageInput.content;
     const messageFiles = typeof messageInput === 'object' ? messageInput.files : [];
 
+    console.log('📝 Processed message content:', messageContent);
+    console.log('📎 Message files:', messageFiles);
+
     if (!messageContent || messageContent.trim() === '') {
-      console.error('Empty message content');
+      console.error('❌ Empty message content');
       return;
     }
 
@@ -274,31 +290,40 @@ function App() {
       files: messageFiles // Store files for future use
     };
 
+    console.log('✅ Created user message:', userMessage);
+
     let currentChatId = activeChatId;
     
     // If no active chat, create a new one
     if (!currentChatId) {
+      console.log('🆕 Creating new chat...');
       currentChatId = await createNewChat(userMessage);
+      console.log('🆔 New chat ID:', currentChatId);
       if (!currentChatId) {
+        console.error('❌ Failed to create new chat');
         handleMessageError(new Error('Failed to create new chat'));
         return;
       }
     } else {
+      console.log('📝 Adding message to existing chat:', currentChatId);
       // Add user message to existing chat in database
       try {
         await ChatService.addMessageToSession(currentChatId, userMessage.role, userMessage.content);
+        console.log('✅ Message added to database');
         
         // Update local state
         const updatedMessages = [...messages, userMessage];
+        console.log('🔄 Updating local messages:', updatedMessages);
         setMessages(updatedMessages);
         updateChat(currentChatId, updatedMessages);
       } catch (error) {
-        console.error('Error adding message to session:', error);
+        console.error('❌ Error adding message to session:', error);
         handleMessageError(error);
         return;
       }
     }
 
+    console.log('🔄 Setting loading state...');
     setIsLoading(true);
 
     try {
@@ -307,6 +332,8 @@ function App() {
         role: msg.role,
         content: msg.content
       }));
+
+      console.log('📡 Sending to API:', apiMessages);
 
       // Call backend API
       const response = await fetch(`https://patchai-backend.onrender.com/prompt`, {
@@ -319,11 +346,16 @@ function App() {
         })
       });
 
+      console.log('📡 API Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ API Error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ API Response data:', data);
       
       const aiMessage = {
         role: 'assistant',
@@ -331,17 +363,28 @@ function App() {
         timestamp: new Date().toISOString()
       };
 
+      console.log('🤖 Created AI message:', aiMessage);
+
       // Add AI response to database
       await ChatService.addMessageToSession(currentChatId, aiMessage.role, aiMessage.content);
+      console.log('✅ AI message added to database');
       
       // Update local state
-      setMessages(prev => [...prev, aiMessage]);
+      console.log('🔄 Updating messages with AI response...');
+      setMessages(prev => {
+        const newMessages = [...prev, aiMessage];
+        console.log('📝 New messages state:', newMessages);
+        return newMessages;
+      });
+      
       const finalMessages = [...messages, userMessage, aiMessage];
       updateChat(currentChatId, finalMessages);
 
     } catch (error) {
+      console.error('❌ Error in handleSendMessage:', error);
       handleMessageError(error);
     } finally {
+      console.log('🔄 Clearing loading state...');
       setIsLoading(false);
     }
   };
