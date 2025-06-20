@@ -42,27 +42,35 @@ logger = logging.getLogger(__name__)
 logger.info(f"OPENAI_API_KEY exists: {OPENAI_API_KEY is not None}")
 logger.info(f"OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
 
+# Direct OpenAI API configuration
+openai.api_key = OPENAI_API_KEY
+openai.base_url = "https://api.openai.com/v1/"
+
+# Use a custom HTTP client to avoid proxy issues
+import httpx
+
+class CustomHTTPClient(httpx.Client):
+    def __init__(self, *args, **kwargs):
+        # Remove any proxy settings
+        kwargs.pop('proxies', None)
+        kwargs['timeout'] = httpx.Timeout(60.0, connect=60.0)
+        super().__init__(*args, **kwargs)
+
+# Initialize the client
 try:
     if OPENAI_API_KEY:
-        # Initialize OpenAI client for project keys (sk-proj-*)
-        from openai import OpenAI
+        # Create a custom HTTP client
+        http_client = CustomHTTPClient()
         
-        # Clear any proxy environment variables that might interfere
-        proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
-        original_proxies = {}
-        for var in proxy_vars:
-            if var in os.environ:
-                original_proxies[var] = os.environ[var]
-                del os.environ[var]
+        # Initialize OpenAI with our custom client
+        openai_client = openai.OpenAI(
+            api_key=OPENAI_API_KEY,
+            http_client=http_client
+        )
         
-        # Create client with minimal parameters
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        
-        # Restore proxy environment variables
-        for var, value in original_proxies.items():
-            os.environ[var] = value
-            
-        logger.info("OpenAI client initialized successfully")
+        # Test the connection
+        openai_client.models.list()
+        logger.info("OpenAI client initialized and tested successfully")
     else:
         logger.error("OPENAI_API_KEY is None or empty")
         initialization_error = "OPENAI_API_KEY is None or empty"
