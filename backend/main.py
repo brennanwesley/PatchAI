@@ -42,9 +42,9 @@ logger = logging.getLogger(__name__)
 logger.info(f"OPENAI_API_KEY exists: {OPENAI_API_KEY is not None}")
 logger.info(f"OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
 
-# Direct OpenAI API configuration
-openai.api_key = OPENAI_API_KEY
-openai.base_url = "https://api.openai.com/v1/"
+# Import OpenAI and set up client
+import openai
+from openai import OpenAI
 
 # Use a custom HTTP client to avoid proxy issues
 import httpx
