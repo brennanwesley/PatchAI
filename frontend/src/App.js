@@ -1,14 +1,72 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ChatFeed from './components/ChatFeed';
 import ChatInput from './components/ChatInput';
 import { v4 as uuidv4 } from 'uuid';
-import { FiMenu } from 'react-icons/fi';
+import { FiMenu, FiLogOut } from 'react-icons/fi';
+import { supabase } from './supabaseClient';
 import './App.css';
 
 const MOBILE_BREAKPOINT = 768;
 
 function App() {
+  const navigate = useNavigate();
+  
+  // Auth state
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Check auth state on mount
+  useEffect(() => {
+    // Check active sessions and sets the user
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        const currentUser = session?.user || null;
+        setUser(currentUser);
+        
+        if (currentUser) {
+          // User is signed in
+          setLoading(false);
+        } else {
+          // User is not signed in, redirect to landing page
+          navigate('/');
+        }
+      }
+    );
+
+    // Check for existing session
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          navigate('/');
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkSession();
+    
+    return () => {
+      // Cleanup subscription on unmount
+      subscription?.unsubscribe();
+    };
+  }, [navigate]);
+
+  // Handle sign out
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   // Layout state
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
@@ -59,7 +117,7 @@ function App() {
     if (isMobile) {
       setShowMobileSidebar(false);
     }
-  }, [isMobile]);
+  }, [isMobile, handleSelectChat]);
   
   // Close mobile sidebar when new chat is created
   const handleNewChatWrapper = useCallback(() => {
@@ -68,6 +126,11 @@ function App() {
       setShowMobileSidebar(false);
     }
   }, [isMobile]);
+  
+  // Toggle sidebar collapse (desktop)
+  const handleToggleCollapse = useCallback(() => {
+    setIsSidebarCollapsed(prev => !prev);
+  }, []);
 
   // Load messages for active chat
   useEffect(() => {
@@ -226,56 +289,50 @@ function App() {
     }
   };
 
-  // Desktop Layout
-  const renderDesktopLayout = () => (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      {/* Desktop Sidebar - Always visible */}
-      <div className="hidden md:flex md:flex-shrink-0 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
-        <Sidebar
-          chatHistory={chats}
-          activeChatId={activeChatId}
-          onSelectChat={handleSelectChat}
-          onNewChat={handleNewChat}
-          onDeleteChat={handleDeleteChat}
-          isCollapsed={false}
-          onToggleCollapse={() => {}}
-        />
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Chat Feed with padding and scrollable area */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-6">
-          <div className="max-w-3xl mx-auto w-full pb-24">
-            <ChatFeed messages={messages} isLoading={isLoading} />
-          </div>
-        </div>
-        
-        {/* Fixed input container at the bottom */}
-        <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="max-w-3xl mx-auto w-full px-6 py-4">
-            <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
-  // Mobile Layout
-  const renderMobileLayout = () => (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 z-20">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-20 bg-white dark:bg-gray-800 shadow-sm p-2 flex justify-between items-center">
         <button
           onClick={toggleMobileSidebar}
-          className="p-2 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none"
+          className="p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           aria-label="Toggle sidebar"
         >
           <FiMenu className="w-6 h-6" />
         </button>
-        <h1 className="ml-2 text-xl font-semibold text-gray-800 dark:text-white">PatchAI</h1>
+        
+        <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">PatchAI</h1>
+        
+        <button
+          onClick={handleSignOut}
+          className="p-2 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 focus:outline-none"
+          title="Sign out"
+        >
+          <FiLogOut className="w-6 h-6" />
+        </button>
       </div>
-
+      
+      {/* Desktop sidebar toggle */}
+      <button
+        onClick={handleToggleCollapse}
+        className="hidden md:block fixed top-4 left-4 z-20 p-2 rounded-md bg-white dark:bg-gray-800 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        <FiMenu className="w-6 h-6" />
+      </button>
+      
       {/* Mobile Sidebar - Hidden by default */}
       <div
         ref={sidebarRef}
@@ -290,8 +347,8 @@ function App() {
             onSelectChat={handleSelectChatWrapper}
             onNewChat={handleNewChatWrapper}
             onDeleteChat={handleDeleteChat}
-            isCollapsed={false}
-            onToggleCollapse={() => {}}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={handleToggleCollapse}
           />
         </div>
       </div>
@@ -305,23 +362,23 @@ function App() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-auto pt-14 pb-24 px-4">
-          <div className="max-w-3xl mx-auto w-full">
+      <div className="flex-1 flex flex-col h-full overflow-hidden pt-14 md:pt-0">
+        {/* Chat Feed with padding and scrollable area */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
+          <div className="max-w-3xl mx-auto w-full pb-24">
             <ChatFeed messages={messages} isLoading={isLoading} />
           </div>
         </div>
-        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="max-w-3xl mx-auto w-full px-4 pb-4 pt-2">
+        
+        {/* Fixed input container at the bottom */}
+        <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="max-w-3xl mx-auto w-full px-4 md:px-6 py-4">
             <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
           </div>
         </div>
       </div>
     </div>
   );
-
-  // Render the appropriate layout based on screen size
-  return isMobile ? renderMobileLayout() : renderDesktopLayout();
 }
 
 export default App;
