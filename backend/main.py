@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from typing import List
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
 import logging
 
 # Load environment variables
@@ -45,10 +44,13 @@ logger.info(f"OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else
 
 try:
     if OPENAI_API_KEY:
-        # Initialize OpenAI client with explicit parameters only
-        openai_client = OpenAI(
-            api_key=OPENAI_API_KEY
-        )
+        # Try alternative initialization approach
+        import openai
+        openai.api_key = OPENAI_API_KEY
+        
+        # Test if we can create a client
+        from openai import OpenAI
+        openai_client = OpenAI()
         logger.info("OpenAI client initialized successfully")
     else:
         logger.error("OPENAI_API_KEY is None or empty")
