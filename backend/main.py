@@ -47,13 +47,21 @@ try:
         # Initialize OpenAI client for project keys (sk-proj-*)
         from openai import OpenAI
         
-        # Create client with minimal parameters to avoid proxies issue
-        openai_client = OpenAI(
-            api_key=OPENAI_API_KEY,
-            # Explicitly set other parameters to avoid defaults
-            timeout=60.0,
-            max_retries=3
-        )
+        # Clear any proxy environment variables that might interfere
+        proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
+        original_proxies = {}
+        for var in proxy_vars:
+            if var in os.environ:
+                original_proxies[var] = os.environ[var]
+                del os.environ[var]
+        
+        # Create client with minimal parameters
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        
+        # Restore proxy environment variables
+        for var, value in original_proxies.items():
+            os.environ[var] = value
+            
         logger.info("OpenAI client initialized successfully")
     else:
         logger.error("OPENAI_API_KEY is None or empty")
