@@ -18,22 +18,22 @@ const ChatFeed = ({ messages = [], isLoading = false, chatTitle = "New Chat" }) 
 
   return (
     <div className="flex-1 flex flex-col h-full">
-      {/* Chat Header */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+      {/* Chat Header - Hidden on mobile as we have a fixed header in App.js */}
+      <div className="hidden md:block bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4">
+        <h1 className="text-lg md:text-xl font-semibold text-gray-900 dark:text-gray-100">
           {chatTitle}
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {messages.length} messages
+        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1">
+          {messages.length} message{messages.length !== 1 ? 's' : ''}
         </p>
       </div>
 
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-800">
-        <div className="max-w-4xl mx-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-800 pt-4 md:pt-0">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 py-4 md:py-6">
           {/* Welcome Message */}
           {messages.length === 0 && !isLoading && (
-            <div className="text-center py-12">
+            <div className="text-center py-8 md:py-12">
               <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg 
                   className="w-8 h-8 text-blue-500" 

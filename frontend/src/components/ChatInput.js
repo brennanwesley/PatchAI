@@ -46,10 +46,9 @@ const ChatInput = ({
   };
 
   return (
-    <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-4">
+    <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-4 py-3 md:py-4 md:px-6">
       <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-        <div className="flex items-end space-x-3">
-          {/* Textarea */}
+        <div className="flex items-end space-x-2">
           <div className="flex-1 relative">
             <textarea
               ref={textareaRef}
@@ -58,38 +57,23 @@ const ChatInput = ({
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
               disabled={disabled}
-              rows={1}
-              className={`
-                w-full px-4 py-3 pr-12 rounded-lg border border-gray-300 dark:border-gray-600
-                bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
-                placeholder-gray-500 dark:placeholder-gray-400
-                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-                resize-none overflow-hidden
-                ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
-              style={{ minHeight: '48px', maxHeight: '120px' }}
+              rows="1"
+              className="w-full px-4 py-2 pr-12 text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none overflow-hidden text-sm md:text-base"
+              style={{ minHeight: '40px', maxHeight: '120px' }}
             />
-            
-            {/* Character count (optional) */}
-            {message.length > 500 && (
-              <div className="absolute bottom-1 right-12 text-xs text-gray-400">
-                {message.length}/1000
-              </div>
-            )}
+            <div className="absolute right-2 bottom-2 text-xs text-gray-400 dark:text-gray-500 hidden md:block">
+              {disabled ? 'Sending...' : 'Shift+Enter for new line'}
+            </div>
           </div>
-
-          {/* Send Button */}
           <button
             type="submit"
-            disabled={disabled || !message.trim()}
-            className={`
-              px-4 py-3 rounded-lg font-medium transition-colors duration-200
-              ${
-                disabled || !message.trim()
-                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-md'
-              }
-            `}
+            disabled={!message.trim() || disabled}
+            className={`p-2 rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+              !message.trim() || disabled
+                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+            aria-label="Send message"
           >
             <svg 
               className="w-5 h-5" 

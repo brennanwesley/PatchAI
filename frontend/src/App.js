@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatFeed from './components/ChatFeed';
 import ChatInput from './components/ChatInput';
 import { v4 as uuidv4 } from 'uuid';
+import { FiMenu } from 'react-icons/fi';
 import './App.css';
 
 function App() {
@@ -159,22 +160,62 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-      <Sidebar 
-        chatHistory={chats} 
-        activeChatId={activeChatId}
-        onSelectChat={handleSelectChat}
-        onNewChat={handleNewChat}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-      />
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <ChatFeed messages={messages} isLoading={isLoading} />
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-          <ChatInput 
-            onSendMessage={handleSendMessage} 
-            isLoading={isLoading} 
-          />
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+      {/* Mobile Header */}
+      {isMobile && (
+        <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 z-20">
+          <button
+            onClick={toggleMobileSidebar}
+            className="p-2 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none"
+            aria-label="Toggle sidebar"
+          >
+            <FiMenu className="w-6 h-6" />
+          </button>
+          <h1 className="ml-2 text-xl font-semibold text-gray-800 dark:text-white">PatchAI</h1>
+        </div>
+      )}
+
+      {/* Sidebar */}
+      <div
+        ref={sidebarRef}
+        className={`fixed md:static inset-y-0 left-0 transform ${
+          isMobile
+            ? `${showMobileSidebar ? 'translate-x-0' : '-translate-x-full'}`
+            : 'translate-x-0'
+        } md:translate-x-0 z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
+      >
+        <Sidebar
+          chatHistory={chats}
+          activeChatId={activeChatId}
+          onSelectChat={handleSelectChat}
+          onNewChat={() => {
+            handleNewChat();
+            if (isMobile) setShowMobileSidebar(false);
+          }}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={setIsSidebarCollapsed}
+        />
+      </div>
+
+      {/* Overlay for mobile */}
+      {isMobile && showMobileSidebar && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
+          onClick={() => setShowMobileSidebar(false)}
+        />
+      )}
+
+      {/* Main Content */}
+      <div 
+        className={`flex-1 flex flex-col h-full ${
+          !isSidebarCollapsed && !isMobile ? 'md:ml-64' : ''
+        }`}
+      >
+        <div className="flex-1 overflow-auto pt-14 pb-24 md:pb-4 md:pt-0">
+          <ChatFeed messages={messages} isLoading={isLoading} />
+        </div>
+        <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
+          <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
         </div>
       </div>
     </div>
