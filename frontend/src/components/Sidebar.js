@@ -13,6 +13,7 @@ const Sidebar = ({
   activeChatId = null,
   onSelectChat = () => {},
   onNewChat = () => {},
+  onDeleteChat = () => {},
   isCollapsed = false,
   onToggleCollapse = () => {}
 }) => {
@@ -131,7 +132,7 @@ const Sidebar = ({
       </div>
       
       {/* Chat List */}
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="flex-1 overflow-y-auto py-2 pb-24 md:pb-2">
         {filteredChats.length === 0 ? (
           <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
             {searchQuery ? 'No matching chats found' : 'No chats yet'}
@@ -179,11 +180,8 @@ const Sidebar = ({
                   )}
                   {hoveredChatId === chat.id && !isCollapsed && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Handle delete chat
-                      }}
-                      className="ml-2 p-1 text-gray-400 hover:text-red-500"
+                      onClick={(e) => onDeleteChat(chat.id, e)}
+                      className="ml-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
                       aria-label="Delete chat"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -244,6 +242,7 @@ Sidebar.propTypes = {
   activeChatId: PropTypes.string,
   onSelectChat: PropTypes.func,
   onNewChat: PropTypes.func,
+  onDeleteChat: PropTypes.func,
   isCollapsed: PropTypes.bool,
   onToggleCollapse: PropTypes.func
 };

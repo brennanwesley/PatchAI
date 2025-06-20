@@ -129,6 +129,22 @@ function App() {
     setMessages([]);
   };
 
+  const handleDeleteChat = (chatId, e) => {
+    e.stopPropagation();
+    
+    setChats(prevChats => {
+      const updatedChats = prevChats.filter(chat => chat.id !== chatId);
+      
+      // If the deleted chat was active, clear the active chat
+      if (chatId === activeChatId) {
+        setActiveChatId(null);
+        setMessages([]);
+      }
+      
+      return updatedChats;
+    });
+  };
+
   const handleSelectChat = (chatId) => {
     setActiveChatId(chatId);
   };
@@ -214,20 +230,23 @@ function App() {
   const renderDesktopLayout = () => (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
       {/* Desktop Sidebar - Always visible */}
-      <div className="hidden md:flex md:flex-shrink-0 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-        <Sidebar
-          chatHistory={chats}
-          activeChatId={activeChatId}
-          onSelectChat={handleSelectChat}
-          onNewChat={handleNewChat}
-          isCollapsed={false}
-          onToggleCollapse={() => {}}
-        />
+      <div className="hidden md:flex md:flex-shrink-0 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+        <div className="flex-1 overflow-y-auto">
+          <Sidebar
+            chatHistory={chats}
+            activeChatId={activeChatId}
+            onSelectChat={handleSelectChat}
+            onNewChat={handleNewChat}
+            onDeleteChat={handleDeleteChat}
+            isCollapsed={false}
+            onToggleCollapse={() => {}}
+          />
+        </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-auto pb-4">
+        <div className="flex-1 overflow-auto">
           <ChatFeed messages={messages} isLoading={isLoading} />
         </div>
         <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
@@ -255,18 +274,21 @@ function App() {
       {/* Mobile Sidebar - Hidden by default */}
       <div
         ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 transform ${
+        className={`fixed inset-y-0 left-0 flex flex-col transform ${
           showMobileSidebar ? 'translate-x-0' : '-translate-x-full'
         } z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
       >
-        <Sidebar
-          chatHistory={chats}
-          activeChatId={activeChatId}
-          onSelectChat={handleSelectChatWrapper}
-          onNewChat={handleNewChatWrapper}
-          isCollapsed={false}
-          onToggleCollapse={() => {}}
-        />
+        <div className="flex-1 overflow-y-auto">
+          <Sidebar
+            chatHistory={chats}
+            activeChatId={activeChatId}
+            onSelectChat={handleSelectChatWrapper}
+            onNewChat={handleNewChatWrapper}
+            onDeleteChat={handleDeleteChat}
+            isCollapsed={false}
+            onToggleCollapse={() => {}}
+          />
+        </div>
       </div>
 
       {/* Overlay for mobile */}

@@ -93,7 +93,7 @@ const ChatInput = ({
 
         {/* Help text */}
         <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-          Press Enter to send, Shift+Enter for new line
+          Press Enter to send, Shift+Enter for new line -- Patch can make mistakes, please check important info.
         </div>
       </form>
     </div>
