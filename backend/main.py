@@ -34,6 +34,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Initialize clients with error handling
 openai_client = None
+initialization_error = None
 
 # Debug logging
 logging.basicConfig(level=logging.INFO)
@@ -48,8 +49,12 @@ try:
         logger.info("OpenAI client initialized successfully")
     else:
         logger.error("OPENAI_API_KEY is None or empty")
+        initialization_error = "OPENAI_API_KEY is None or empty"
 except Exception as e:
     logger.error(f"OpenAI client initialization error: {e}")
+    logger.error(f"Error type: {type(e).__name__}")
+    logger.error(f"OpenAI key starts with: {OPENAI_API_KEY[:10] if OPENAI_API_KEY else 'None'}...")
+    initialization_error = f"{type(e).__name__}: {str(e)}"
     # Continue without crashing - will handle in endpoints
 
 # Pydantic models
@@ -77,6 +82,7 @@ async def debug_info():
         "openai_key_exists": OPENAI_API_KEY is not None,
         "openai_key_length": len(OPENAI_API_KEY) if OPENAI_API_KEY else 0,
         "openai_client_initialized": openai_client is not None,
+        "initialization_error": initialization_error,
         "environment_vars": {
             "PORT": os.getenv("PORT"),
             "OPENAI_API_KEY": "***" if OPENAI_API_KEY else None,
