@@ -244,13 +244,13 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto w-full px-4 py-6">
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-3xl mx-auto w-full">
             <ChatFeed messages={messages} isLoading={isLoading} />
           </div>
         </div>
         <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="max-w-3xl mx-auto w-full p-4">
+          <div className="max-w-3xl mx-auto w-full px-6 pb-6 pt-2">
             <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
           </div>
         </div>
@@ -303,11 +303,15 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-auto pt-14 pb-24">
-          <ChatFeed messages={messages} isLoading={isLoading} />
+        <div className="flex-1 overflow-auto pt-14 pb-24 px-4">
+          <div className="max-w-3xl mx-auto w-full">
+            <ChatFeed messages={messages} isLoading={isLoading} />
+          </div>
         </div>
-        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
-          <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
+        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="max-w-3xl mx-auto w-full px-4 pb-4 pt-2">
+            <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
+          </div>
         </div>
       </div>
     </div>
