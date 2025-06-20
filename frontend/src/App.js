@@ -244,13 +244,16 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-auto p-6">
-          <div className="max-w-3xl mx-auto w-full">
+        {/* Chat Feed with padding and scrollable area */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-6">
+          <div className="max-w-3xl mx-auto w-full pb-24">
             <ChatFeed messages={messages} isLoading={isLoading} />
           </div>
         </div>
+        
+        {/* Fixed input container at the bottom */}
         <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="max-w-3xl mx-auto w-full px-6 pb-6 pt-2">
+          <div className="max-w-3xl mx-auto w-full px-6 py-4">
             <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
           </div>
         </div>
