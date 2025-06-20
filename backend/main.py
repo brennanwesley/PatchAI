@@ -5,13 +5,16 @@ Uses minimal dependencies and robust error handling
 Last updated: 2025-06-20 06:48 UTC - FINAL DEPLOYMENT FIX
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import os
 from dotenv import load_dotenv
 import logging
+import jwt
+from supabase import create_client, Client
 
 # Load environment variables
 load_dotenv()
@@ -30,17 +33,34 @@ app.add_middleware(
 
 # Environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 # Initialize clients with error handling
 openai_client = None
+supabase_client = None
 initialization_error = None
+
+# Security
+security = HTTPBearer()
 
 # Debug logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 logger.info(f"OPENAI_API_KEY exists: {OPENAI_API_KEY is not None}")
-logger.info(f"OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
+logger.info(f"SUPABASE_URL exists: {SUPABASE_URL is not None}")
+logger.info(f"SUPABASE_SERVICE_ROLE_KEY exists: {SUPABASE_SERVICE_ROLE_KEY is not None}")
+
+# Initialize Supabase client
+try:
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        logger.info("Supabase client initialized successfully")
+    else:
+        logger.error("Supabase configuration missing")
+except Exception as e:
+    logger.error(f"Supabase client initialization error: {e}")
 
 # Import OpenAI and set up client
 import openai
@@ -155,6 +175,7 @@ async def debug_info():
         "openai_key_exists": OPENAI_API_KEY is not None,
         "openai_key_length": len(OPENAI_API_KEY) if OPENAI_API_KEY else 0,
         "openai_client_initialized": openai_client is not None,
+        "supabase_client_initialized": supabase_client is not None,
         "initialization_error": initialization_error,
         "environment_vars": {
             "PORT": os.getenv("PORT"),
@@ -198,6 +219,46 @@ async def chat_completion(request: PromptRequest):
         
     except Exception as e:
         error_msg = f"OpenAI API error: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(
+            status_code=500,
+            detail=error_msg
+        )
+
+@app.get("/history")
+async def get_history():
+    if not supabase_client:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase client not initialized"
+        )
+    try:
+        data = supabase_client.from_("history").select("*")
+        return data.execute()
+    except Exception as e:
+        error_msg = f"Supabase API error: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(
+            status_code=500,
+            detail=error_msg
+        )
+
+@app.post("/history")
+async def save_history(request: PromptRequest):
+    if not supabase_client:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase client not initialized"
+        )
+    try:
+        data = {
+            "messages": request.messages,
+            "response": ""
+        }
+        supabase_client.from_("history").insert([data]).execute()
+        return {"message": "History saved successfully"}
+    except Exception as e:
+        error_msg = f"Supabase API error: {str(e)}"
         logger.error(error_msg)
         raise HTTPException(
             status_code=500,

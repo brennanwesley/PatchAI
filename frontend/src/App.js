@@ -7,14 +7,11 @@ import ChatInput from './components/ChatInput';
 import { v4 as uuidv4 } from 'uuid';
 import { FiMenu, FiLogOut } from 'react-icons/fi';
 import { supabase } from './supabaseClient';
+import { ChatService } from './services/chatService';
 import './App.css';
 
 // Constants
 const MOBILE_BREAKPOINT = 768;
-const LOCAL_STORAGE_KEYS = {
-  CHATS: 'patchai-chats',
-  ACTIVE_CHAT: 'patchai-active-chat'
-};
 
 function App() {
   const navigate = useNavigate();
@@ -37,23 +34,61 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const sidebarRef = useRef(null);
   
-  // Chat state
-  const [chats, setChats] = useState(() => {
-    const savedChats = localStorage.getItem(LOCAL_STORAGE_KEYS.CHATS);
-    try {
-      return savedChats ? JSON.parse(savedChats) : [];
-    } catch (error) {
-      console.error('Error parsing saved chats:', error);
-      return [];
-    }
-  });
-  
-  const [activeChatId, setActiveChatId] = useState(() => {
-    return localStorage.getItem(LOCAL_STORAGE_KEYS.ACTIVE_CHAT) || null;
-  });
+  // Chat state - now using Supabase instead of localStorage
+  const [chats, setChats] = useState([]);
+  const [activeChatId, setActiveChatId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [chatsLoading, setChatsLoading] = useState(true);
 
+  // Load user's chat sessions from database
+  useEffect(() => {
+    const loadUserChats = async () => {
+      if (!user) {
+        setChats([]);
+        setActiveChatId(null);
+        setMessages([]);
+        setChatsLoading(false);
+        return;
+      }
+
+      try {
+        setChatsLoading(true);
+        
+        // Clear any legacy localStorage data
+        ChatService.clearLocalStorageData();
+        
+        // Load chats from database
+        const userChats = await ChatService.getUserChatSessions();
+        setChats(userChats);
+        
+        // If no active chat but chats exist, select the most recent one
+        if (!activeChatId && userChats.length > 0) {
+          const mostRecentChat = userChats[0]; // Already sorted by updated_at DESC
+          setActiveChatId(mostRecentChat.id);
+          setMessages(mostRecentChat.messages || []);
+        } else if (activeChatId) {
+          // Load messages for the active chat
+          const activeChat = userChats.find(chat => chat.id === activeChatId);
+          if (activeChat) {
+            setMessages(activeChat.messages || []);
+          } else {
+            // Active chat not found, reset
+            setActiveChatId(null);
+            setMessages([]);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading user chats:', error);
+        setChats([]);
+      } finally {
+        setChatsLoading(false);
+      }
+    };
+
+    loadUserChats();
+  }, [user, activeChatId]);
+  
   // Handle window resize and mobile/desktop detection
   useEffect(() => {
     const handleResize = () => {
@@ -91,7 +126,7 @@ function App() {
   const toggleMobileSidebar = useCallback(() => {
     setShowMobileSidebar(prev => !prev);
   }, []);
-  
+
   // Close mobile sidebar when chat is selected
   const handleSelectChatWrapper = useCallback((chatId) => {
     handleSelectChat(chatId);
@@ -115,89 +150,101 @@ function App() {
 
   // Load messages for active chat
   useEffect(() => {
-    if (activeChatId) {
-      const activeChat = chats.find(chat => chat.id === activeChatId);
+    const activeChat = chats.find(chat => chat.id === activeChatId);
+    if (activeChat) {
       setMessages(activeChat ? activeChat.messages : []);
     } else {
       setMessages([]);
     }
   }, [activeChatId, chats]);
 
-  // Save chats to localStorage whenever they change
-  useEffect(() => {
+  // Create new chat with database storage
+  const createNewChat = async (firstMessage) => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEYS.CHATS, JSON.stringify(chats));
-      if (activeChatId) {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.ACTIVE_CHAT, activeChatId);
+      if (!user) {
+        console.error('User not authenticated');
+        return null;
       }
+
+      // Generate title from first message
+      const title = firstMessage.content.length > 50 
+        ? firstMessage.content.substring(0, 50) + '...'
+        : firstMessage.content;
+
+      // Create chat session in database
+      const newChat = await ChatService.createChatSession(title, firstMessage);
+      
+      // Update local state
+      setChats(prevChats => [newChat, ...prevChats]);
+      setActiveChatId(newChat.id);
+      setMessages([firstMessage]);
+      
+      return newChat.id;
     } catch (error) {
-      console.error('Error saving to localStorage:', error);
+      console.error('Error creating new chat:', error);
+      return null;
     }
-  }, [chats, activeChatId]);
-
-  const createNewChat = (firstMessage) => {
-    const newChatId = uuidv4();
-    const newChat = {
-      id: newChatId,
-      title: firstMessage.content.length > 30 
-        ? `${firstMessage.content.substring(0, 30)}...` 
-        : firstMessage.content,
-      messages: [firstMessage],
-      timestamp: new Date().toISOString(),
-      messageCount: 1
-    };
-    
-    setChats(prevChats => [newChat, ...prevChats]);
-    setActiveChatId(newChatId);
-    return newChatId;
   };
 
-  const updateChat = (chatId, newMessages) => {
-    const chatIndex = chats.findIndex(chat => chat.id === chatId);
-    if (chatIndex === -1) return;
+  // Update chat with new messages
+  const updateChat = async (chatId, newMessages) => {
+    try {
+      // Update local state immediately for responsiveness
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.id === chatId 
+            ? {
+                ...chat,
+                messages: newMessages,
+                messageCount: newMessages.length,
+                lastMessage: newMessages[newMessages.length - 1]?.content || '',
+                updatedAt: new Date().toISOString()
+              }
+            : chat
+        )
+      );
 
-    const updatedChats = [...chats];
-    updatedChats[chatIndex] = {
-      ...updatedChats[chatIndex],
-      messages: newMessages,
-      messageCount: newMessages.length,
-      lastMessage: newMessages[newMessages.length - 1]?.content || '',
-      timestamp: new Date().toISOString()
-    };
-
-    // Move to top of the list
-    const [movedChat] = updatedChats.splice(chatIndex, 1);
-    updatedChats.unshift(movedChat);
-    
-    setChats(updatedChats);
+      // Note: Individual messages are saved via ChatService.addMessageToSession
+      // This function just updates the local state for UI responsiveness
+    } catch (error) {
+      console.error('Error updating chat:', error);
+    }
   };
 
-  const handleDeleteChat = (chatId, e) => {
+  // Delete chat from database
+  const handleDeleteChat = async (chatId, e) => {
     e.stopPropagation();
     
-    setChats(prevChats => {
-      const updatedChats = prevChats.filter(chat => chat.id !== chatId);
+    try {
+      // Delete from database
+      await ChatService.deleteSession(chatId);
       
-      // If the deleted chat was active, clear the active chat
-      if (chatId === activeChatId) {
-        setActiveChatId(null);
-        setMessages([]);
-      }
-      
-      return updatedChats;
-    });
+      // Update local state
+      setChats(prevChats => {
+        const updatedChats = prevChats.filter(chat => chat.id !== chatId);
+        
+        // If the deleted chat was active, clear the active chat
+        if (chatId === activeChatId) {
+          setActiveChatId(null);
+          setMessages([]);
+        }
+        
+        return updatedChats;
+      });
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+    }
   };
 
   const handleMessageError = (error) => {
     console.error('Error sending message:', error);
     const errorMessage = {
-      id: uuidv4(),
-      role: 'system',
-      content: 'Sorry, there was an error processing your message. Please try again.',
+      role: 'assistant',
+      content: 'Sorry, I encountered an error processing your request. Please try again.',
       timestamp: new Date().toISOString(),
       isError: true
     };
-    
+
     if (activeChatId) {
       const updatedMessages = [...messages, errorMessage];
       setMessages(updatedMessages);
@@ -205,11 +252,15 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (content) => {
+  const handleSendMessage = async (messageContent) => {
+    if (!user) {
+      console.error('User not authenticated');
+      return;
+    }
+
     const userMessage = {
-      id: uuidv4(),
       role: 'user',
-      content: content,
+      content: messageContent,
       timestamp: new Date().toISOString()
     };
 
@@ -217,31 +268,44 @@ function App() {
     
     // If no active chat, create a new one
     if (!currentChatId) {
-      currentChatId = createNewChat(userMessage);
+      currentChatId = await createNewChat(userMessage);
+      if (!currentChatId) {
+        handleMessageError(new Error('Failed to create new chat'));
+        return;
+      }
     } else {
-      // Update existing chat with new message
-      const updatedMessages = [...messages, userMessage];
-      setMessages(updatedMessages);
-      updateChat(currentChatId, updatedMessages);
+      // Add user message to existing chat in database
+      try {
+        await ChatService.addMessageToSession(currentChatId, userMessage.role, userMessage.content);
+        
+        // Update local state
+        const updatedMessages = [...messages, userMessage];
+        setMessages(updatedMessages);
+        updateChat(currentChatId, updatedMessages);
+      } catch (error) {
+        console.error('Error adding message to session:', error);
+        handleMessageError(error);
+        return;
+      }
     }
-    
+
     setIsLoading(true);
 
     try {
-      // Call the backend API
-      const response = await fetch('https://patchai-backend.onrender.com/prompt', {
+      // Prepare messages for API call
+      const apiMessages = messages.concat([userMessage]).map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // Call backend API
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/prompt`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [
-            ...messages.map(msg => ({
-              role: msg.role,
-              content: msg.content
-            })),
-            { role: 'user', content: content }
-          ]
+          messages: apiMessages
         })
       });
 
@@ -254,20 +318,23 @@ function App() {
       const aiMessage = {
         role: 'assistant',
         content: data.response,
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: new Date().toISOString()
       };
+
+      // Add AI response to database
+      await ChatService.addMessageToSession(currentChatId, aiMessage.role, aiMessage.content);
       
+      // Update local state
       setMessages(prev => [...prev, aiMessage]);
+      const finalMessages = [...messages, userMessage, aiMessage];
+      updateChat(currentChatId, finalMessages);
+
     } catch (error) {
       handleMessageError(error);
     } finally {
       setIsLoading(false);
     }
   };
-
-
-
-
 
   // Handle authentication redirects
   useEffect(() => {
@@ -320,7 +387,7 @@ function App() {
             activeChatId={activeChatId}
             onSelectChat={handleSelectChat}
             onNewChat={handleNewChat}
-            onDeleteChat={handleDeleteChat}
+            onDeleteChat={(chatId, e) => handleDeleteChat(chatId, e)}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={handleToggleCollapse}
           />
@@ -340,7 +407,7 @@ function App() {
             activeChatId={activeChatId}
             onSelectChat={handleSelectChatWrapper}
             onNewChat={handleNewChatWrapper}
-            onDeleteChat={handleDeleteChat}
+            onDeleteChat={(chatId, e) => handleDeleteChat(chatId, e)}
             isCollapsed={false}
             onToggleCollapse={toggleMobileSidebar}
           />
