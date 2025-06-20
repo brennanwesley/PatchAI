@@ -1,32 +1,123 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatFeed from './components/ChatFeed';
 import ChatInput from './components/ChatInput';
+import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 
 function App() {
-  // Test case messages as requested
-  const [messages, setMessages] = useState([
-    { role: 'user', content: 'How do I drill a horizontal well?' },
-    { 
-      role: 'assistant', 
-      content: 'You need a whipstock, a mud motor, and directional tools.\n• Start vertical\n• Kickoff point ~4000 ft\n• Maintain 8°–12° per 100 ft' 
-    }
-  ]);
-
+  const [chats, setChats] = useState(() => {
+    const savedChats = localStorage.getItem('patchai-chats');
+    return savedChats ? JSON.parse(savedChats) : [];
+  });
+  const [activeChatId, setActiveChatId] = useState(() => {
+    return localStorage.getItem('patchai-active-chat') || null;
+  });
+  const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [activeChatId, setActiveChatId] = useState('1');
 
-  const handleSendMessage = async (content) => {
-    // Add user message
-    const userMessage = {
-      role: 'user',
-      content: content,
-      timestamp: new Date().toLocaleTimeString()
+  // Load messages for active chat
+  useEffect(() => {
+    if (activeChatId) {
+      const activeChat = chats.find(chat => chat.id === activeChatId);
+      setMessages(activeChat ? activeChat.messages : []);
+    } else {
+      setMessages([]);
+    }
+  }, [activeChatId, chats]);
+
+  // Save chats to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('patchai-chats', JSON.stringify(chats));
+    if (activeChatId) {
+      localStorage.setItem('patchai-active-chat', activeChatId);
+    }
+  }, [chats, activeChatId]);
+
+  const createNewChat = (firstMessage) => {
+    const newChatId = uuidv4();
+    const newChat = {
+      id: newChatId,
+      title: firstMessage.content.length > 30 
+        ? `${firstMessage.content.substring(0, 30)}...` 
+        : firstMessage.content,
+      messages: [firstMessage],
+      timestamp: new Date().toISOString(),
+      messageCount: 1
     };
     
-    setMessages(prev => [...prev, userMessage]);
+    setChats(prevChats => [newChat, ...prevChats]);
+    setActiveChatId(newChatId);
+    return newChatId;
+  };
+
+  const updateChat = (chatId, newMessages) => {
+    const chatIndex = chats.findIndex(chat => chat.id === chatId);
+    if (chatIndex === -1) return;
+
+    const updatedChats = [...chats];
+    updatedChats[chatIndex] = {
+      ...updatedChats[chatIndex],
+      messages: newMessages,
+      messageCount: newMessages.length,
+      lastMessage: newMessages[newMessages.length - 1]?.content || '',
+      timestamp: new Date().toISOString()
+    };
+
+    // Move to top of the list
+    const [movedChat] = updatedChats.splice(chatIndex, 1);
+    updatedChats.unshift(movedChat);
+    
+    setChats(updatedChats);
+  };
+
+  const handleNewChat = () => {
+    setActiveChatId(null);
+    setMessages([]);
+  };
+
+  const handleSelectChat = (chatId) => {
+    setActiveChatId(chatId);
+  };
+
+  const handleMessageError = (error) => {
+    console.error('Error sending message:', error);
+    const errorMessage = {
+      id: uuidv4(),
+      role: 'system',
+      content: 'Sorry, there was an error processing your message. Please try again.',
+      timestamp: new Date().toISOString(),
+      isError: true
+    };
+    
+    if (activeChatId) {
+      const updatedMessages = [...messages, errorMessage];
+      setMessages(updatedMessages);
+      updateChat(activeChatId, updatedMessages);
+    }
+  };
+
+  const handleSendMessage = async (content) => {
+    const userMessage = {
+      id: uuidv4(),
+      role: 'user',
+      content: content,
+      timestamp: new Date().toISOString()
+    };
+
+    let currentChatId = activeChatId;
+    
+    // If no active chat, create a new one
+    if (!currentChatId) {
+      currentChatId = createNewChat(userMessage);
+    } else {
+      // Update existing chat with new message
+      const updatedMessages = [...messages, userMessage];
+      setMessages(updatedMessages);
+      updateChat(currentChatId, updatedMessages);
+    }
+    
     setIsLoading(true);
 
     try {
@@ -61,76 +152,30 @@ function App() {
       
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Error calling API:', error);
-      const errorMessage = {
-        role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request. Please try again later.',
-        timestamp: new Date().toLocaleTimeString()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      handleMessageError(error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleNewChat = () => {
-    setMessages([]);
-    setActiveChatId(null);
-  };
-
-  const handleSelectChat = (chatId) => {
-    setActiveChatId(chatId);
-    // In a real app, load messages for this chat
-    console.log('Selected chat:', chatId);
-  };
-
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
-
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
-      <Sidebar
+      <Sidebar 
+        chatHistory={chats} 
         activeChatId={activeChatId}
         onSelectChat={handleSelectChat}
         onNewChat={handleNewChat}
         isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={toggleSidebar}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile Header */}
-        <div className="lg:hidden bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={toggleSidebar}
-              className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              PatchAI
-            </h1>
-            <div className="w-10" /> {/* Spacer */}
-          </div>
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <ChatFeed messages={messages} isLoading={isLoading} />
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          <ChatInput 
+            onSendMessage={handleSendMessage} 
+            isLoading={isLoading} 
+          />
         </div>
-
-        {/* Chat Feed */}
-        <ChatFeed
-          messages={messages}
-          isLoading={isLoading}
-          chatTitle="Drilling Operations Chat"
-        />
-
-        {/* Chat Input */}
-        <ChatInput
-          onSendMessage={handleSendMessage}
-          disabled={isLoading}
-        />
       </div>
     </div>
   );

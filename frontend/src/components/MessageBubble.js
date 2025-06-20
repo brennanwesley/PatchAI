@@ -24,7 +24,7 @@ const MessageBubble = ({ role, content, timestamp }) => {
                 : 'bg-green-500'
             }`}
           >
-            {isUser ? 'U' : 'AI'}
+            {isUser ? 'U' : 'Patch'}
           </div>
         </div>
 

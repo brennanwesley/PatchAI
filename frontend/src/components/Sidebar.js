@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import PropTypes from 'prop-types';
 
 /**
  * Sidebar component with chat history and new chat functionality
  * @param {Object} props
- * @param {Array} props.chatHistory - Array of past chat objects
+ * @param {Array} props.chatHistory - Array of chat objects
  * @param {string} props.activeChatId - ID of currently active chat
  * @param {function} props.onSelectChat - Callback when a chat is selected
  * @param {function} props.onNewChat - Callback when new chat is created
@@ -18,192 +20,246 @@ const Sidebar = ({
   isCollapsed = false,
   onToggleCollapse = () => {}
 }) => {
+  const [searchQuery, setSearchQuery] = useState('');
   const [hoveredChatId, setHoveredChatId] = useState(null);
 
-  // Mock chat history if none provided
-  const mockChats = chatHistory.length > 0 ? chatHistory : [
-    {
-      id: '1',
-      title: 'How to drill horizontal wells?',
-      lastMessage: 'You need a whipstock, a mud motor...',
-      timestamp: '2 hours ago',
-      messageCount: 8
-    },
-    {
-      id: '2', 
-      title: 'Completion design questions',
-      lastMessage: 'The perforation strategy depends...',
-      timestamp: '1 day ago',
-      messageCount: 12
-    },
-    {
-      id: '3',
-      title: 'Reservoir modeling help',
-      lastMessage: 'For pressure transient analysis...',
-      timestamp: '3 days ago',
-      messageCount: 6
-    },
-    {
-      id: '4',
-      title: 'Production optimization',
-      lastMessage: 'Consider implementing ESP...',
-      timestamp: '1 week ago',
-      messageCount: 15
-    }
-  ];
+  // Format chat timestamps
+  const formattedChats = useMemo(() => {
+    return chatHistory.map(chat => {
+      const messages = chat.messages || [];
+      const lastMessage = messages.length > 0 ? messages[messages.length - 1].content : 'No messages yet';
+      const timestamp = chat.timestamp ? new Date(chat.timestamp) : null;
+      
+      return {
+        ...chat,
+        formattedTime: timestamp 
+          ? formatDistanceToNow(timestamp, { addSuffix: true })
+          : 'Just now',
+        lastMessage,
+        messageCount: messages.length
+      };
+    });
+  }, [chatHistory]);
+
+  // Filter chats based on search query
+  const filteredChats = useMemo(() => {
+    if (!searchQuery.trim()) return formattedChats;
+    const query = searchQuery.toLowerCase();
+    return formattedChats.filter(chat => {
+      const title = chat.title || '';
+      const lastMessage = chat.lastMessage || '';
+      return (
+        title.toLowerCase().includes(query) || 
+        lastMessage.toLowerCase().includes(query)
+      );
+    });
+  }, [formattedChats, searchQuery]);
 
   const truncateText = (text, maxLength = 50) => {
+    if (!text) return '';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+  };
+  
+  // Get first letter of title or return '?'
+  const getInitial = (title) => {
+    if (!title || typeof title !== 'string') return '?';
+    return title.charAt(0).toUpperCase();
   };
 
   return (
-    <>
-      {/* Mobile Overlay */}
-      {!isCollapsed && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={onToggleCollapse}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`
-        fixed lg:relative inset-y-0 left-0 z-50 lg:z-0
-        w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700
-        transform transition-transform duration-300 ease-in-out
-        ${isCollapsed ? '-translate-x-full lg:translate-x-0' : 'translate-x-0'}
-        flex flex-col h-full
-      `}>
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              PatchAI
+    <div 
+      className={`
+        flex flex-col h-full bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700
+        ${isCollapsed ? 'w-16' : 'w-64'}
+        transition-all duration-200 ease-in-out
+      `}
+    >
+      {/* Header */}
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          {!isCollapsed && (
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Chats
             </h2>
+          )}
+          <button
+            onClick={onToggleCollapse}
+            className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+            )}
+          </button>
+        </div>
+        
+        {/* Search and New Chat Button */}
+        {!isCollapsed && (
+          <div className="mt-4 space-y-2">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search chats..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
             <button
-              onClick={onToggleCollapse}
-              className="lg:hidden p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={onNewChat}
+              className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Chat
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Chat List */}
+      <div className="flex-1 overflow-y-auto">
+        {isCollapsed ? (
+          <div className="py-2">
+            <button
+              onClick={onNewChat}
+              className="w-full flex items-center justify-center p-3 text-gray-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
+              title="New Chat"
+              aria-label="New Chat"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
           </div>
-          
-          {/* New Chat Button */}
-          <button
-            onClick={onNewChat}
-            className="w-full mt-3 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>New Chat</span>
-          </button>
-        </div>
-
-        {/* Chat History */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin">
-          <div className="p-2">
-            <h3 className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Recent Chats
-            </h3>
-            
-            {mockChats.length === 0 ? (
-              <div className="px-3 py-8 text-center">
-                <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  No chats yet
-                </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                  Start a new conversation
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {mockChats.map((chat) => (
-                  <button
-                    key={chat.id}
-                    onClick={() => onSelectChat(chat.id)}
-                    onMouseEnter={() => setHoveredChatId(chat.id)}
-                    onMouseLeave={() => setHoveredChatId(null)}
-                    className={`
-                      w-full p-3 rounded-lg text-left transition-colors duration-200
-                      ${activeChatId === chat.id 
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800'
-                      }
-                    `}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h4 className={`
-                          text-sm font-medium truncate
-                          ${activeChatId === chat.id 
-                            ? 'text-blue-700 dark:text-blue-300' 
-                            : 'text-gray-900 dark:text-gray-100'
-                          }
-                        `}>
-                          {truncateText(chat.title, 30)}
-                        </h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
-                          {truncateText(chat.lastMessage, 40)}
-                        </p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
-                            {chat.timestamp}
-                          </span>
-                          <span className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full">
-                            {chat.messageCount}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Options Menu */}
-                      {hoveredChatId === chat.id && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Handle chat options (delete, rename, etc.)
-                          }}
-                          className="ml-2 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-                        >
-                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                          </svg>
-                        </button>
+        ) : (
+          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+            {filteredChats.length > 0 ? (
+              filteredChats.map((chat) => (
+                <li 
+                  key={chat.id}
+                  className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer ${
+                    activeChatId === chat.id ? 'bg-blue-50 dark:bg-gray-700' : ''
+                  }`}
+                  onClick={() => onSelectChat(chat.id)}
+                  onMouseEnter={() => setHoveredChatId(chat.id)}
+                  onMouseLeave={() => setHoveredChatId(null)}
+                >
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
+                      {getInitial(chat.title)}
+                    </div>
+                    <div className="ml-3 flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        {chat.title || 'New Chat'}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {truncateText(chat.lastMessage || 'No messages yet', 30)}
+                      </p>
+                    </div>
+                    <div className="ml-2 flex flex-col items-end">
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        {chat.formattedTime || 'Just now'}
+                      </span>
+                      {chat.messageCount > 0 && (
+                        <span className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {chat.messageCount}
+                        </span>
                       )}
                     </div>
-                  </button>
-                ))}
-              </div>
+                  </div>
+                </li>
+              ))
+            ) : (
+              <li className="px-4 py-8 text-center">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {searchQuery ? 'No matching chats found' : 'No chats yet'}
+                </p>
+                <button
+                  onClick={searchQuery ? () => setSearchQuery('') : onNewChat}
+                  className="mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  {searchQuery ? 'Clear search' : 'Start a new chat'}
+                </button>
+              </li>
             )}
-          </div>
-        </div>
+          </ul>
+        )}
+      </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">U</span>
+      {/* Footer */}
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+        {!isCollapsed ? (
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  {localStorage.getItem('userInitials') || 'U'}
+                </span>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                User
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {localStorage.getItem('userName') || 'User'}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Free Plan
+                {localStorage.getItem('userEmail') || 'user@example.com'}
               </p>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex justify-center">
+            <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {(localStorage.getItem('userInitials') || 'U').charAt(0)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
+};
+
+Sidebar.propTypes = {
+  chatHistory: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      title: PropTypes.string,
+      messages: PropTypes.array,
+      timestamp: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number,
+        PropTypes.instanceOf(Date)
+      ])
+    })
+  ),
+  activeChatId: PropTypes.string,
+  onSelectChat: PropTypes.func,
+  onNewChat: PropTypes.func,
+  isCollapsed: PropTypes.bool,
+  onToggleCollapse: PropTypes.func
+};
+
+Sidebar.defaultProps = {
+  chatHistory: [],
+  activeChatId: null,
+  onSelectChat: () => {},
+  onNewChat: () => {},
+  isCollapsed: false,
+  onToggleCollapse: () => {}
 };
 
 export default Sidebar;
