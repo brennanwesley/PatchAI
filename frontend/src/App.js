@@ -8,7 +8,12 @@ import { FiMenu, FiLogOut } from 'react-icons/fi';
 import { supabase } from './supabaseClient';
 import './App.css';
 
+// Constants
 const MOBILE_BREAKPOINT = 768;
+const LOCAL_STORAGE_KEYS = {
+  CHATS: 'patchai-chats',
+  ACTIVE_CHAT: 'patchai-active-chat'
+};
 
 function App() {
   const navigate = useNavigate();
@@ -74,11 +79,17 @@ function App() {
   
   // Chat state
   const [chats, setChats] = useState(() => {
-    const savedChats = localStorage.getItem('patchai-chats');
-    return savedChats ? JSON.parse(savedChats) : [];
+    const savedChats = localStorage.getItem(LOCAL_STORAGE_KEYS.CHATS);
+    try {
+      return savedChats ? JSON.parse(savedChats) : [];
+    } catch (error) {
+      console.error('Error parsing saved chats:', error);
+      return [];
+    }
   });
+  
   const [activeChatId, setActiveChatId] = useState(() => {
-    return localStorage.getItem('patchai-active-chat') || null;
+    return localStorage.getItem(LOCAL_STORAGE_KEYS.ACTIVE_CHAT) || null;
   });
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -144,9 +155,13 @@ function App() {
 
   // Save chats to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('patchai-chats', JSON.stringify(chats));
-    if (activeChatId) {
-      localStorage.setItem('patchai-active-chat', activeChatId);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.CHATS, JSON.stringify(chats));
+      if (activeChatId) {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ACTIVE_CHAT, activeChatId);
+      }
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
     }
   }, [chats, activeChatId]);
 
