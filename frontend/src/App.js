@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
 import ChatFeed from './components/ChatFeed';
@@ -18,7 +18,8 @@ const LOCAL_STORAGE_KEYS = {
 
 function App() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const location = useLocation();
+  const { user, logout, loading } = useAuth();
   
   // Handle sign out
   const handleSignOut = async () => {
@@ -268,8 +269,7 @@ function App() {
 
 
 
-  const { loading } = useAuth();
-
+  // Show loading spinner while auth state is being determined
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -277,6 +277,15 @@ function App() {
       </div>
     );
   }
+
+  // If not authenticated and not on the auth page, redirect to login
+  useEffect(() => {
+    if (!user && !location.pathname.startsWith('/auth')) {
+      navigate('/');
+    } else if (user && location.pathname === '/') {
+      navigate('/chat');
+    }
+  }, [user, location.pathname, navigate]);
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">

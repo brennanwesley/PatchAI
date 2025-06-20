@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 
 const AuthContext = createContext({});
@@ -7,24 +7,49 @@ const AuthContext = createContext({});
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Function to handle session changes
+  const handleAuthChange = useCallback(async (event, session) => {
+    const currentUser = session?.user ?? null;
+    setUser(currentUser);
+    
+    // Only redirect if we're not already on the target page
+    if (currentUser && !location.pathname.startsWith('/chat')) {
+      navigate('/chat');
+    } else if (!currentUser && location.pathname !== '/') {
+      navigate('/');
+    }
+    
+    if (!initialized) {
+      setInitialized(true);
+      setLoading(false);
+    }
+  }, [navigate, location.pathname, initialized]);
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-
-      // Redirect based on auth state
-      if (session) {
-        navigate('/chat');
-      } else {
-        navigate('/');
+    // Check for existing session first
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        handleAuthChange('INITIAL_SESSION', session);
+      } catch (error) {
+        console.error('Error checking session:', error);
+        setLoading(false);
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    checkSession();
+
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
+
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
+  }, [handleAuthChange]);
 
   const login = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({
