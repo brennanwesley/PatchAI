@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { FiActivity, FiBarChart2, FiGlobe, FiDollarSign, FiFileText, FiLogIn, FiUserPlus } from 'react-icons/fi';
 
