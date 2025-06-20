@@ -360,12 +360,12 @@ function App() {
       // Update local state
       console.log('🔄 Updating messages with AI response...');
       setMessages(prev => {
-        const newMessages = [...prev, aiMessage];
+        const newMessages = [...prev, assistantMessage];
         console.log('📝 New messages state:', newMessages);
         return newMessages;
       });
       
-      const finalMessages = [...messages, userMessage, aiMessage];
+      const finalMessages = [...messages, userMessage, assistantMessage];
       updateChat(currentChatId, finalMessages);
 
     } catch (error) {
