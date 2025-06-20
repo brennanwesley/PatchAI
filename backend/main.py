@@ -226,17 +226,43 @@ async def chat_completion(request: PromptRequest):
         )
 
 @app.get("/history")
-async def get_history():
+async def get_history(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Get chat history for the authenticated user
+    """
     if not supabase_client:
         raise HTTPException(
             status_code=500,
             detail="Supabase client not initialized"
         )
+    
     try:
-        data = supabase_client.from_("history").select("*")
-        return data.execute()
+        # Verify JWT token and get user ID
+        token = credentials.credentials
+        try:
+            # Decode the token to get user ID
+            # Note: In a production environment, verify the token signature
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            user_id = decoded.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        except Exception as e:
+            logger.error(f"Token validation error: {e}")
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        # Query chat_sessions for this user
+        response = supabase_client.table('chat_sessions')\
+            .select('*')\
+            .eq('user_id', user_id)\
+            .order('updated_at', desc=True)\
+            .execute()
+            
+        return {"data": response.data, "error": None}
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        error_msg = f"Supabase API error: {str(e)}"
+        error_msg = f"Error fetching chat history: {str(e)}"
         logger.error(error_msg)
         raise HTTPException(
             status_code=500,

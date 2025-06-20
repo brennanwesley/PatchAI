@@ -19,51 +19,64 @@ export class ChatService {
         return [];
       }
 
+      let sessions = [];
+      let apiError = null;
+
       // First try to get from API
       try {
-        const sessions = await ApiService.getChatHistory();
-        if (sessions && sessions.length > 0) {
+        const response = await ApiService.getChatHistory();
+        if (response && response.data) {
+          sessions = response.data;
+          console.log('Fetched sessions from API:', sessions);
           return sessions;
         }
-      } catch (apiError) {
-        console.warn('Failed to fetch chat history from API, falling back to Supabase:', apiError);
+      } catch (error) {
+        apiError = error;
+        console.warn('Failed to fetch chat history from API, falling back to Supabase:', error);
       }
 
       // Fallback to Supabase if API fails
-      const { data: sessions, error } = await supabase
-        .from('chat_sessions')
-        .select(`
-          id,
-          title,
-          created_at,
-          updated_at,
-          messages (
+      try {
+        const { data, error: supabaseError } = await supabase
+          .from('chat_sessions')
+          .select(`
             id,
-            role,
-            content,
-            created_at
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false });
+            title,
+            created_at,
+            updated_at,
+            messages (
+              id,
+              role,
+              content,
+              created_at
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching chat sessions from Supabase:', error);
+        if (supabaseError) {
+          console.error('Error fetching chat sessions from Supabase:', supabaseError);
+          throw supabaseError;
+        }
+
+        // Transform data to match frontend format
+        sessions = (data || []).map(session => ({
+          id: session.id,
+          title: session.title || 'New Chat',
+          messages: (session.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+          messageCount: session.messages?.length || 0,
+          lastMessage: session.messages?.length > 0 
+            ? session.messages[session.messages.length - 1].content 
+            : 'No messages yet',
+          createdAt: session.created_at,
+          updatedAt: session.updated_at
+        }));
+        
+        return sessions;
+      } catch (error) {
+        console.error('Error in Supabase fallback:', error);
         throw error;
       }
-
-      // Transform data to match frontend format
-      return sessions.map(session => ({
-        id: session.id,
-        title: session.title,
-        messages: (session.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
-        messageCount: session.messages?.length || 0,
-        lastMessage: session.messages?.length > 0 
-          ? session.messages[session.messages.length - 1].content 
-          : 'No messages yet',
-        createdAt: session.created_at,
-        updatedAt: session.updated_at
-      }));
     } catch (error) {
       console.error('Error in getUserChatSessions:', error);
       return [];
