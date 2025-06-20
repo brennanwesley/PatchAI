@@ -182,7 +182,7 @@ function App() {
         throw new Error('Failed to create new chat session');
       }
       
-      // Update local state
+      // Create the chat object with proper structure
       const newChatObj = {
         id: newChat.id,
         title: chatTitle,
@@ -193,16 +193,26 @@ function App() {
         updatedAt: new Date().toISOString()
       };
       
-      setChats(prevChats => [newChatObj, ...prevChats]);
+      // Update local state
+      setChats(prevChats => {
+        const updatedChats = [newChatObj, ...prevChats];
+        console.log('🔄 Updated chats list:', updatedChats);
+        return updatedChats;
+      });
+      
       setActiveChatId(newChat.id);
       setMessages([firstMessage]);
       
-      console.log('🔄 Updated local state with new chat:', newChatObj);
+      console.log('✅ Updated local state with new chat:', newChatObj);
       
       return newChat.id;
     } catch (error) {
       console.error('❌ Error creating new chat:', error);
-      handleMessageError(error);
+      // Show error to user
+      handleMessageError({
+        message: 'Failed to create new chat. Please try again.',
+        details: error.message
+      });
       return null;
     }
   };
@@ -258,18 +268,44 @@ function App() {
   };
 
   const handleMessageError = (error) => {
-    console.error('Error sending message:', error);
-    const errorMessage = {
+    console.error('Error in chat:', error);
+    
+    // Extract error message from different error formats
+    let errorMessage = 'Sorry, I encountered an error processing your request. Please try again.';
+    
+    if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error?.message) {
+      errorMessage = error.message;
+    } else if (error?.response?.data?.detail) {
+      errorMessage = error.response.data.detail;
+    } else if (error?.details) {
+      errorMessage = error.details;
+    }
+    
+    console.log('📝 Error details:', { 
+      error, 
+      activeChatId, 
+      messageCount: messages?.length || 0 
+    });
+    
+    const errorMessageObj = {
       role: 'assistant',
-      content: 'Sorry, I encountered an error processing your request. Please try again.',
+      content: `Error: ${errorMessage}`,
       timestamp: new Date().toISOString(),
       isError: true
     };
 
-    if (activeChatId) {
-      const updatedMessages = [...messages, errorMessage];
+    // Only update messages if we have an active chat
+    if (activeChatId && messages) {
+      console.log('📝 Adding error message to chat:', activeChatId);
+      const updatedMessages = [...messages, errorMessageObj];
       setMessages(updatedMessages);
       updateChat(activeChatId, updatedMessages);
+    } else {
+      console.warn('⚠️ No active chat or messages array to update with error');
+      // If there's no active chat but we need to show the error
+      setMessages(prev => [...(prev || []), errorMessageObj]);
     }
   };
 
@@ -309,6 +345,9 @@ function App() {
     let updatedMessages = [];
     
     try {
+      // Set loading state immediately
+      setIsLoading(true);
+
       // If no active chat, create a new one
       if (!currentChatId) {
         console.log('🆕 Creating new chat...');
@@ -318,6 +357,7 @@ function App() {
           throw new Error('Failed to create new chat');
         }
         updatedMessages = [userMessage];
+        setMessages(updatedMessages);
       } else {
         console.log('📝 Adding message to existing chat:', currentChatId);
         // Add user message to database
@@ -327,13 +367,9 @@ function App() {
         // Update local state
         updatedMessages = [...messages, userMessage];
         setMessages(updatedMessages);
-        updateChat(currentChatId, updatedMessages);
       }
 
-      console.log('🔄 Setting loading state...');
-      setIsLoading(true);
-
-      // Prepare messages for API call
+      // Prepare messages for API call (include all previous messages for context)
       const apiMessages = updatedMessages.map(msg => ({
         role: msg.role,
         content: msg.content
@@ -341,32 +377,32 @@ function App() {
 
       console.log('📡 Sending to API:', apiMessages);
 
-      // Call backend API through ApiService
-      const response = await ApiService.sendPrompt(apiMessages);
-      console.log('✅ API Response received:', response);
+      try {
+        // Call backend API through ApiService
+        const response = await ApiService.sendPrompt(apiMessages);
+        console.log('✅ API Response received:', response);
 
-      const assistantMessage = {
-        role: 'assistant',
-        content: response.response || response.content || 'No response from assistant',
-        timestamp: new Date().toISOString()
-      };
-      
-      console.log('🤖 Assistant message:', assistantMessage);
+        const assistantMessage = {
+          role: 'assistant',
+          content: response.response || response.content || 'No response from assistant',
+          timestamp: new Date().toISOString()
+        };
+        
+        console.log('🤖 Assistant message:', assistantMessage);
 
-      // Add AI response to database
-      await ChatService.addMessageToSession(currentChatId, assistantMessage.role, assistantMessage.content);
-      console.log('✅ AI message added to database');
-      
-      // Update local state
-      console.log('🔄 Updating messages with AI response...');
-      setMessages(prev => {
-        const newMessages = [...prev, assistantMessage];
-        console.log('📝 New messages state:', newMessages);
-        return newMessages;
-      });
-      
-      const finalMessages = [...messages, userMessage, assistantMessage];
-      updateChat(currentChatId, finalMessages);
+        // Add AI response to database
+        await ChatService.addMessageToSession(currentChatId, assistantMessage.role, assistantMessage.content);
+        console.log('✅ AI message added to database');
+        
+        // Update local state with both user and assistant messages
+        const finalMessages = [...updatedMessages, assistantMessage];
+        setMessages(finalMessages);
+        updateChat(currentChatId, finalMessages);
+        
+      } catch (apiError) {
+        console.error('❌ API Error:', apiError);
+        throw apiError;
+      }
 
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error);
