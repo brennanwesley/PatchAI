@@ -197,19 +197,22 @@ function App() {
         </div>
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Mobile */}
       <div
         ref={sidebarRef}
-        className={`fixed md:static inset-y-0 left-0 transform ${
+        className={`fixed inset-y-0 left-0 transform ${
           isMobile
             ? `${showMobileSidebar ? 'translate-x-0' : '-translate-x-full'}`
-            : 'translate-x-0'
-        } md:translate-x-0 z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
+            : 'hidden'
+        } md:relative md:translate-x-0 md:flex md:flex-shrink-0 z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
       >
         <Sidebar
           chatHistory={chats}
           activeChatId={activeChatId}
-          onSelectChat={handleSelectChat}
+          onSelectChat={(chatId) => {
+            handleSelectChat(chatId);
+            if (isMobile) setShowMobileSidebar(false);
+          }}
           onNewChat={() => {
             handleNewChat();
             if (isMobile) setShowMobileSidebar(false);
@@ -228,12 +231,8 @@ function App() {
       )}
 
       {/* Main Content */}
-      <div 
-        className={`flex-1 flex flex-col h-full ${
-          !isSidebarCollapsed && !isMobile ? 'md:ml-64' : ''
-        }`}
-      >
-        <div className="flex-1 overflow-auto pt-14 pb-24 md:pb-4 md:pt-0">
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <div className={`flex-1 overflow-auto ${isMobile ? 'pt-14 pb-24' : 'pb-4'}`}>
           <ChatFeed messages={messages} isLoading={isLoading} />
         </div>
         <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
