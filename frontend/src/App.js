@@ -52,7 +52,6 @@ function App() {
   });
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Handle window resize and mobile/desktop detection
   useEffect(() => {
