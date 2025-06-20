@@ -79,8 +79,13 @@ const ChatInput = ({
   };
 
   const handleKeyDown = (e) => {
-    // Submit on Cmd+Enter or Ctrl+Enter
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    // Submit on Enter (without Shift), new line on Shift+Enter
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+    // Also allow Cmd+Enter or Ctrl+Enter for submission
+    else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       handleSubmit(e);
     }

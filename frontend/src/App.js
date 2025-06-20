@@ -252,16 +252,26 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (messageContent) => {
+  const handleSendMessage = async (messageInput) => {
     if (!user) {
       console.error('User not authenticated');
       return;
     }
 
+    // Handle both string and object inputs from ChatInput
+    const messageContent = typeof messageInput === 'string' ? messageInput : messageInput.content;
+    const messageFiles = typeof messageInput === 'object' ? messageInput.files : [];
+
+    if (!messageContent || messageContent.trim() === '') {
+      console.error('Empty message content');
+      return;
+    }
+
     const userMessage = {
       role: 'user',
-      content: messageContent,
-      timestamp: new Date().toISOString()
+      content: messageContent.trim(),
+      timestamp: new Date().toISOString(),
+      files: messageFiles // Store files for future use
     };
 
     let currentChatId = activeChatId;
@@ -299,7 +309,7 @@ function App() {
       }));
 
       // Call backend API
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/prompt`, {
+      const response = await fetch(`https://patchai-backend.onrender.com/prompt`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
