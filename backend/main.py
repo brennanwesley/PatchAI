@@ -35,12 +35,21 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Initialize clients with error handling
 openai_client = None
 
+# Debug logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+logger.info(f"OPENAI_API_KEY exists: {OPENAI_API_KEY is not None}")
+logger.info(f"OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
+
 try:
     if OPENAI_API_KEY:
         openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        logging.info("OpenAI client initialized successfully")
+        logger.info("OpenAI client initialized successfully")
+    else:
+        logger.error("OPENAI_API_KEY is None or empty")
 except Exception as e:
-    logging.warning(f"OpenAI client initialization warning: {e}")
+    logger.error(f"OpenAI client initialization error: {e}")
     # Continue without crashing - will handle in endpoints
 
 # Pydantic models
@@ -60,6 +69,21 @@ async def root():
     # Trigger deployment
     """Root endpoint for health check"""
     return {"message": "PatchAI Backend API is running"}
+
+@app.get("/debug")
+async def debug_info():
+    """Debug endpoint to check environment variables and client status"""
+    return {
+        "openai_key_exists": OPENAI_API_KEY is not None,
+        "openai_key_length": len(OPENAI_API_KEY) if OPENAI_API_KEY else 0,
+        "openai_client_initialized": openai_client is not None,
+        "environment_vars": {
+            "PORT": os.getenv("PORT"),
+            "OPENAI_API_KEY": "***" if OPENAI_API_KEY else None,
+            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
+            "SUPABASE_SERVICE_ROLE_KEY": "***" if os.getenv("SUPABASE_SERVICE_ROLE_KEY") else None
+        }
+    }
 
 @app.post("/prompt", response_model=PromptResponse)
 async def chat_completion(request: PromptRequest):
