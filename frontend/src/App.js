@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { FiMenu, FiLogOut } from 'react-icons/fi';
 import { supabase } from './supabaseClient';
 import { ChatService } from './services/chatService';
+import { ApiService } from './services/apiService';
 import './App.css';
 
 // Constants
@@ -160,36 +161,48 @@ function App() {
 
   // Create new chat session with first message
   const createNewChat = async (firstMessage) => {
-    console.log('🆕 Creating new chat with message:', firstMessage);
+    console.log('🆕 createNewChat called with:', firstMessage);
     
+    if (!user) {
+      console.error('❌ User not authenticated');
+      return null;
+    }
+
     try {
-      // Generate title from first message (first 50 chars)
-      const title = firstMessage.content.length > 50 
-        ? firstMessage.content.substring(0, 50) + '...'
-        : firstMessage.content;
-
-      console.log('📝 Creating chat with title:', title);
-
-      // Create session in database using ChatService
-      const newChat = await ChatService.createChatSession(title, firstMessage);
-      console.log('✅ Created chat session:', newChat);
-
+      // Create a title from the first message (first 30 chars)
+      const chatTitle = firstMessage.content.substring(0, 30) + (firstMessage.content.length > 30 ? '...' : '');
+      
+      console.log('📝 Creating new chat with title:', chatTitle);
+      
+      // Create new chat session in database
+      const newChat = await ChatService.createChatSession(chatTitle, firstMessage);
+      console.log('✅ New chat created:', newChat);
+      
       if (!newChat || !newChat.id) {
-        throw new Error('Failed to create chat session');
+        throw new Error('Failed to create new chat session');
       }
-
-      console.log('📝 Created chat object:', newChat);
-
+      
       // Update local state
-      setChats(prevChats => [newChat, ...prevChats]);
+      const newChatObj = {
+        id: newChat.id,
+        title: chatTitle,
+        messages: [firstMessage],
+        messageCount: 1,
+        lastMessage: firstMessage.content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      setChats(prevChats => [newChatObj, ...prevChats]);
       setActiveChatId(newChat.id);
       setMessages([firstMessage]);
-
-      console.log('✅ Updated local state with new chat');
-
+      
+      console.log('🔄 Updated local state with new chat:', newChatObj);
+      
       return newChat.id;
     } catch (error) {
       console.error('❌ Error creating new chat:', error);
+      handleMessageError(error);
       return null;
     }
   };
@@ -278,7 +291,7 @@ function App() {
     console.log('📝 Processed message content:', messageContent);
     console.log('📎 Message files:', messageFiles);
 
-    if (!messageContent || messageContent.trim() === '') {
+    if (!messageContent.trim()) {
       console.error('❌ Empty message content');
       return;
     }
@@ -287,86 +300,61 @@ function App() {
       role: 'user',
       content: messageContent.trim(),
       timestamp: new Date().toISOString(),
-      files: messageFiles // Store files for future use
+      files: messageFiles
     };
 
     console.log('✅ Created user message:', userMessage);
 
     let currentChatId = activeChatId;
+    let updatedMessages = [];
     
-    // If no active chat, create a new one
-    if (!currentChatId) {
-      console.log('🆕 Creating new chat...');
-      currentChatId = await createNewChat(userMessage);
-      console.log('🆔 New chat ID:', currentChatId);
+    try {
+      // If no active chat, create a new one
       if (!currentChatId) {
-        console.error('❌ Failed to create new chat');
-        handleMessageError(new Error('Failed to create new chat'));
-        return;
-      }
-    } else {
-      console.log('📝 Adding message to existing chat:', currentChatId);
-      // Add user message to existing chat in database
-      try {
+        console.log('🆕 Creating new chat...');
+        currentChatId = await createNewChat(userMessage);
+        console.log('🆔 New chat ID:', currentChatId);
+        if (!currentChatId) {
+          throw new Error('Failed to create new chat');
+        }
+        updatedMessages = [userMessage];
+      } else {
+        console.log('📝 Adding message to existing chat:', currentChatId);
+        // Add user message to database
         await ChatService.addMessageToSession(currentChatId, userMessage.role, userMessage.content);
         console.log('✅ Message added to database');
         
         // Update local state
-        const updatedMessages = [...messages, userMessage];
-        console.log('🔄 Updating local messages:', updatedMessages);
+        updatedMessages = [...messages, userMessage];
         setMessages(updatedMessages);
         updateChat(currentChatId, updatedMessages);
-      } catch (error) {
-        console.error('❌ Error adding message to session:', error);
-        handleMessageError(error);
-        return;
       }
-    }
 
-    console.log('🔄 Setting loading state...');
-    setIsLoading(true);
+      console.log('🔄 Setting loading state...');
+      setIsLoading(true);
 
-    try {
       // Prepare messages for API call
-      const apiMessages = messages.concat([userMessage]).map(msg => ({
+      const apiMessages = updatedMessages.map(msg => ({
         role: msg.role,
         content: msg.content
       }));
 
       console.log('📡 Sending to API:', apiMessages);
 
-      // Call backend API
-      const response = await fetch(`https://patchai-backend.onrender.com/prompt`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: apiMessages
-        })
-      });
+      // Call backend API through ApiService
+      const response = await ApiService.sendPrompt(apiMessages);
+      console.log('✅ API Response received:', response);
 
-      console.log('📡 API Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ API Error:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ API Response data:', data);
-      
-      const aiMessage = {
+      const assistantMessage = {
         role: 'assistant',
-        content: data.response,
+        content: response.response || response.content || 'No response from assistant',
         timestamp: new Date().toISOString()
       };
-
-      console.log('🤖 Created AI message:', aiMessage);
+      
+      console.log('🤖 Assistant message:', assistantMessage);
 
       // Add AI response to database
-      await ChatService.addMessageToSession(currentChatId, aiMessage.role, aiMessage.content);
+      await ChatService.addMessageToSession(currentChatId, assistantMessage.role, assistantMessage.content);
       console.log('✅ AI message added to database');
       
       // Update local state

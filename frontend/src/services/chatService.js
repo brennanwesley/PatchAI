@@ -1,8 +1,9 @@
 import { supabase } from '../supabaseClient';
+import { ApiService } from './apiService';
 
 /**
- * Chat Service - Handles all chat-related database operations with user isolation
- * Replaces localStorage with secure Supabase database storage
+ * Chat Service - Handles all chat-related operations
+ * Uses Supabase for database operations and API service for AI completions
  */
 
 export class ChatService {
@@ -12,6 +13,17 @@ export class ChatService {
    */
   static async getUserChatSessions() {
     try {
+      // First try to get from API
+      try {
+        const sessions = await ApiService.getChatHistory();
+        if (sessions && sessions.length > 0) {
+          return sessions;
+        }
+      } catch (apiError) {
+        console.warn('Failed to fetch chat history from API, falling back to Supabase:', apiError);
+      }
+
+      // Fallback to Supabase if API fails
       const { data: sessions, error } = await supabase
         .from('chat_sessions')
         .select(`
@@ -29,7 +41,7 @@ export class ChatService {
         .order('updated_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching chat sessions:', error);
+        console.error('Error fetching chat sessions from Supabase:', error);
         throw error;
       }
 
@@ -37,9 +49,9 @@ export class ChatService {
       return sessions.map(session => ({
         id: session.id,
         title: session.title,
-        messages: session.messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
-        messageCount: session.messages.length,
-        lastMessage: session.messages.length > 0 
+        messages: (session.messages || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
+        messageCount: session.messages?.length || 0,
+        lastMessage: session.messages?.length > 0 
           ? session.messages[session.messages.length - 1].content 
           : 'No messages yet',
         createdAt: session.created_at,
@@ -101,41 +113,42 @@ export class ChatService {
 
   /**
    * Add a message to a chat session
-   * @param {string} sessionId - Chat session ID
-   * @param {string} role - Message role (user, assistant, system)
+   * @param {string} chatId - Chat session ID
+   * @param {string} role - Message role ('user' or 'assistant')
    * @param {string} content - Message content
-   * @returns {Promise<Object>} Created message
+   * @returns {Promise<Object>} Added message
    */
-  static async addMessageToSession(sessionId, role, content) {
+  static async addMessageToSession(chatId, role, content) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
+      // First try to save via API
+      try {
+        const response = await ApiService.sendPrompt([{ role, content }]);
+        return response;
+      } catch (apiError) {
+        console.warn('Failed to save message via API, falling back to Supabase:', apiError);
       }
 
-      // Insert message
-      const { data: message, error: messageError } = await supabase
+      // Fallback to Supabase
+      const { data: message, error } = await supabase
         .from('messages')
         .insert({
-          chat_session_id: sessionId,
-          user_id: user.id,
+          chat_id: chatId,
           role: role,
-          content: content
+          content: content,
+          user_id: (await supabase.auth.getUser()).data.user?.id
         })
         .select()
         .single();
 
-      if (messageError) {
-        console.error('Error adding message:', messageError);
-        throw messageError;
-      }
+      if (error) throw error;
 
-      // Update chat session timestamp
-      await supabase
+      // Update the chat's updated_at timestamp
+      const { error: updateError } = await supabase
         .from('chat_sessions')
         .update({ updated_at: new Date().toISOString() })
-        .eq('id', sessionId)
-        .eq('user_id', user.id);
+        .eq('id', chatId);
+
+      if (updateError) console.error('Error updating chat timestamp:', updateError);
 
       return {
         id: message.id,
