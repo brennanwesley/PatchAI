@@ -1,36 +1,40 @@
-#!/usr/bin/env python3
-"""
-Simplified main.py for guaranteed Render deployment success
-Uses minimal dependencies and robust error handling
-Last updated: 2025-06-20 06:32 UTC - FORCE REDEPLOY
-"""
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import os
+from dotenv import load_dotenv
+from openai import OpenAI
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Load environment variables
+load_dotenv()
 
 # Initialize FastAPI app
-app = FastAPI(
-    title="PatchAI Backend API",
-    version="1.0.0",
-    description="OpenAI Chat Completion API for PatchAI"
-)
+app = FastAPI(title="PatchAI Backend API", version="1.0.0")
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Configure this for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Environment variables
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Initialize clients with error handling
+openai_client = None
+
+try:
+    if OPENAI_API_KEY:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        logging.info("OpenAI client initialized successfully")
+except Exception as e:
+    logging.warning(f"OpenAI client initialization warning: {e}")
+    # Continue without crashing - will handle in endpoints
 
 # Pydantic models
 class Message(BaseModel):
@@ -43,46 +47,24 @@ class PromptRequest(BaseModel):
 class PromptResponse(BaseModel):
     response: str
 
-# Environment variables
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# Initialize OpenAI client
-openai_client = None
-if OPENAI_API_KEY:
-    try:
-        from openai import OpenAI
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        logger.info("OpenAI client initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize OpenAI client: {e}")
-else:
-    logger.warning("OPENAI_API_KEY not found - OpenAI client not initialized")
-
+# Routes
 @app.get("/")
 async def root():
-    """Health check endpoint"""
-    return {
-        "message": "PatchAI Backend API is running",
-        "status": "healthy",
-        "openai_client_initialized": openai_client is not None
-    }
+    # Trigger deployment
+    """Root endpoint for health check"""
+    return {"message": "PatchAI Backend API is running"}
 
 @app.post("/prompt", response_model=PromptResponse)
 async def chat_completion(request: PromptRequest):
     """Send messages to OpenAI Chat Completion API"""
-    logger.info(f"Received prompt request with {len(request.messages)} messages")
-    
     if not openai_client:
-        logger.error("OpenAI client not initialized")
         raise HTTPException(
             status_code=500,
-            detail="OpenAI client not initialized. Please check OPENAI_API_KEY environment variable."
+            detail="OpenAI client not initialized"
         )
-    
     try:
         # Convert Pydantic models to dict format expected by OpenAI
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        logger.info(f"Converted messages: {messages}")
         
         # Call OpenAI API
         response = openai_client.chat.completions.create(
@@ -93,12 +75,11 @@ async def chat_completion(request: PromptRequest):
         )
         
         assistant_response = response.choices[0].message.content
-        logger.info(f"OpenAI response received: {assistant_response[:100]}...")
         
         return PromptResponse(response=assistant_response)
         
     except Exception as e:
-        logger.error(f"OpenAI API error: {e}")
+        logging.error(f"OpenAI API error: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get response from OpenAI: {str(e)}"
@@ -106,5 +87,4 @@ async def chat_completion(request: PromptRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
