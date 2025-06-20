@@ -1,6 +1,7 @@
 import logo from './logo.svg';
 import './App.css';
 
+// Trigger deployment update
 function App() {
   return (
     <div className="App">

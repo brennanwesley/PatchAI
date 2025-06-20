@@ -84,6 +84,8 @@ def get_user_id_from_token(credentials: HTTPAuthorizationCredentials = Depends(s
 # Routes
 @app.get("/")
 async def root():
+    # Trigger deployment
+    """Root endpoint for health check"""
     return {"message": "Chat Backend API is running"}
 
 @app.post("/prompt", response_model=PromptResponse)
