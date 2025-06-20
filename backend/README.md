@@ -1,144 +1,195 @@
-# Chat Backend API
+# PatchAI Backend
 
-A FastAPI backend that provides chat functionality with OpenAI integration and message history storage via Supabase.
+## 🚀 Deployment Status: Docker Setup
+**Last Updated: 2025-06-20**  
+**Current Setup:** Docker-based deployment for consistent environments
 
-## Features
+## 📋 Project Overview
+A FastAPI backend that provides chat functionality with OpenAI integration, containerized with Docker for reliable deployment.
 
-- **POST /prompt**: Send messages to OpenAI's Chat Completion API
-- **POST /history**: Save user and assistant messages to Supabase
-- **GET /history**: Retrieve latest 20 messages for authenticated user
-- JWT-based authentication
-- CORS middleware for cross-origin requests
-- Environment variable configuration
+## 🛠 Current Configuration
 
-## Setup
+### Python Version
+- **Required:** Python 3.11.10 (specified in `runtime.txt`)
+- **Issue:** Render may still be defaulting to Python 3.13
 
-### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
+### Key Dependencies
+```
+fastapi==0.95.2
+uvicorn[standard]==0.24.0
+openai==1.6.1
+pydantic==1.10.13
+python-dotenv==1.0.0
 ```
 
-### 2. Environment Variables
+## 🔍 Current Issues
 
-Copy `.env.example` to `.env` and fill in your API keys:
+### 1. Python Version Mismatch
+- **Problem:** Render might be ignoring `runtime.txt` and using Python 3.13
+- **Error:** `TypeError: ForwardRef._evaluate() missing 1 required positional argument: 'globalns'`
+- **Impact:** Backend fails to start on Render
 
-```bash
-cp .env.example .env
+### 2. Deployment Configuration
+- `render.yaml` has been removed to prevent conflicts
+- Using `runtime.txt` for Python version control
+- Build command: `pip install --upgrade pip && pip install -r requirements.txt`
+- Start command: `uvicorn main:app --host=0.0.0.0 --port=$PORT`
+
+## ✅ What's Working
+- Local development environment
+- Core `/prompt` endpoint with OpenAI integration
+- Basic error handling and logging
+- CORS middleware for frontend connectivity
+
+## 🔄 Next Steps (MANDATORY)
+
+### 1. Fix Python Version Enforcement
+- [ ] Verify Render is using Python 3.11.10 in build logs
+- [ ] Consider using a `Dockerfile` for strict version control
+
+### 2. Test Deployment
+- [ ] Clear Render build cache
+- [ ] Manually trigger deploy after cache clear
+- [ ] Check build logs for Python version and dependency resolution
+
+### 3. Verify Endpoints
+- [ ] Test `/` - Health check
+- [ ] Test `/docs` - OpenAPI documentation
+- [ ] Test `/prompt` - OpenAI integration
+
+## 🚀 Deployment Instructions
+
+### 1. Prerequisites
+- Docker installed on your development machine
+- Docker Hub account (for pushing images, optional)
+- Render account with Docker support
+
+### 2. Environment Variables (Set in Render Dashboard)
+```
+OPENAI_API_KEY=your_openai_key
+PORT=8000
 ```
 
-Required environment variables:
-- `OPENAI_API_KEY`: Your OpenAI API key
-- `SUPABASE_URL`: Your Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
+### 3. Local Development with Docker
 
-### 3. Supabase Database Setup
+1. **Build the Docker image**
+   ```bash
+   docker build -t patchai-backend .
+   ```
 
-Create a `messages` table in your Supabase database with the following schema:
+2. **Run the container locally**
+   ```bash
+   docker run -p 8000:8000 -e OPENAI_API_KEY=your_key_here patchai-backend
+   ```
 
-```sql
-CREATE TABLE messages (
-    id SERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-    content TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+### 4. Deployment to Render
 
--- Add index for better query performance
-CREATE INDEX idx_messages_user_id_created_at ON messages(user_id, created_at DESC);
-```
+1. **Push your code to GitHub**
+   ```bash
+   git add .
+   git commit -m "Add Docker support"
+   git push origin main
+   ```
 
-### 4. Run the Application
+2. **In Render Dashboard**:
+   - Click "New" → "Web Service"
+   - Connect your GitHub repository
+   - Configure the service:
+     - Name: patchai-backend
+     - Region: Choose closest to you
+     - Branch: main
+     - Runtime: Docker
+     - Build Command: (leave empty, Dockerfile will be used)
+     - Start Command: (leave empty, CMD in Dockerfile will be used)
+     - Environment Variables:
+       - `OPENAI_API_KEY`: your_openai_key
+       - `PORT`: 8000
+   - Click "Create Web Service"
 
-```bash
-python main.py
-```
+## 📝 Important Notes
+- **DO NOT** upgrade Python beyond 3.11.10 until Pydantic 2.x compatibility is confirmed
+- **DO NOT** add `render.yaml` back unless absolutely necessary
+- **ALWAYS** check build logs for Python version and dependency warnings
 
-Or using uvicorn directly:
+## 🔧 Troubleshooting
 
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
+### Common Issues
 
-The API will be available at `http://localhost:8000`
+1. **Docker Build Failures**
+   - Ensure Docker is running on your machine
+   - Check for network connectivity during build
+   - Run `docker system prune` if you encounter cache issues
 
-## API Documentation
+2. **Port Conflicts**
+   - If port 8000 is in use, change the port in the `docker run` command
+   - Example: `docker run -p 8001:8000 ...` to use port 8001
 
-Once running, visit `http://localhost:8000/docs` for interactive API documentation.
+3. **Environment Variables**
+   - Ensure all required environment variables are set
+   - Check for typos in variable names
 
-## Deployment
+## 📞 Support
+For assistance, please open an issue in the GitHub repository or contact the development team.
+## 🛠 Development Setup
 
-This project is configured for deployment on Render or similar platforms. The application runs on port 8000 by default and is compatible with Python 3.11.
+### Local Development
 
-### Render Deployment
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/brennanwesley/PatchAI.git
+   cd PatchAI/backend
+   ```
 
-1. Connect your repository to Render
-2. Set the build command: `pip install -r requirements.txt`
-3. Set the start command: `python main.py`
-4. Add your environment variables in the Render dashboard
+2. **Create and activate virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: .\venv\Scripts\activate
+   ```
 
-## Authentication
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-The API expects a JWT token in the Authorization header:
+4. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your actual API keys
+   ```
 
-```
-Authorization: Bearer <your-jwt-token>
-```
+5. **Run the development server**
+   ```bash
+   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+   ```
 
-For development, the token parsing is lenient and will fall back to an "anonymous" user if token parsing fails.
+6. **Access the API**
+   - Interactive docs: http://localhost:8000/docs
+   - API base URL: http://localhost:8000
 
-## API Endpoints
+## 🔄 Troubleshooting
 
-### POST /prompt
-Send messages to OpenAI and get a response.
+### Common Issues
 
-**Request:**
-```json
-{
-  "messages": [
-    {"role": "user", "content": "Hello, how are you?"}
-  ]
-}
-```
+1. **Python Version Mismatch**
+   - Ensure you're using Python 3.11.10
+   - Check with: `python --version`
+   - If needed, install Python 3.11.10 using pyenv or from python.org
 
-**Response:**
-```json
-{
-  "response": "I'm doing well, thank you for asking!"
-}
-```
+2. **Dependency Conflicts**
+   - Delete `venv` and reinstall dependencies if you encounter conflicts
+   - Ensure no global packages are conflicting with the virtual environment
 
-### POST /history
-Save conversation messages to the database.
+3. **Render Deployment Issues**
+   - Always check build logs in Render dashboard
+   - Look for Python version being used
+   - Check for dependency resolution errors
 
-**Request:**
-```json
-{
-  "user_message": "Hello, how are you?",
-  "assistant_message": "I'm doing well, thank you for asking!"
-}
-```
+## 📝 License
 
-### GET /history
-Retrieve the latest 20 messages for the authenticated user.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "user_id": "user123",
-    "role": "user",
-    "content": "Hello, how are you?",
-    "created_at": "2024-01-01T12:00:00Z"
-  },
-  {
-    "id": 2,
-    "user_id": "user123", 
-    "role": "assistant",
-    "content": "I'm doing well, thank you for asking!",
-    "created_at": "2024-01-01T12:00:01Z"
-  }
-]
-```
+## 🙏 Acknowledgments
+
+- Built with [FastAPI](https://fastapi.tiangolo.com/)
+- OpenAI API integration
+- Deployed on [Render](https://render.com/)
