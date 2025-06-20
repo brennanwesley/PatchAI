@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 from supabase import create_client, Client
 import jwt
 from datetime import datetime
@@ -42,7 +42,7 @@ if not SUPABASE_SERVICE_ROLE_KEY:
     raise ValueError("SUPABASE_SERVICE_ROLE_KEY environment variable is required")
 
 # Initialize clients
-openai.api_key = OPENAI_API_KEY
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 # Pydantic models
@@ -94,7 +94,7 @@ async def chat_completion(request: PromptRequest):
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
         
         # Call OpenAI API
-        response = openai.ChatCompletion.create(
+        response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=messages,
             max_tokens=1000,
