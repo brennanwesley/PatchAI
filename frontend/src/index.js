@@ -57,7 +57,7 @@ const PrivateRoute = ({ children }) => {
   }
 
   // Pass the user and loading state to the App component
-  return session ? React.cloneElement(children, { user, loading }) : <Navigate to="/" replace />;
+  return session ? React.cloneElement(children, { user: session.user, loading }) : <Navigate to="/" replace />;
 };
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
