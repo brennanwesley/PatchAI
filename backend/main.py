@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""
+Simplified main.py for guaranteed Render deployment success
+Uses minimal dependencies and robust error handling
+Last updated: 2025-06-20 06:48 UTC - FINAL DEPLOYMENT FIX
+"""
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
