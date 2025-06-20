@@ -230,27 +230,29 @@ function App() {
   const renderDesktopLayout = () => (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
       {/* Desktop Sidebar - Always visible */}
-      <div className="hidden md:flex md:flex-shrink-0 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <div className="flex-1 overflow-y-auto">
-          <Sidebar
-            chatHistory={chats}
-            activeChatId={activeChatId}
-            onSelectChat={handleSelectChat}
-            onNewChat={handleNewChat}
-            onDeleteChat={handleDeleteChat}
-            isCollapsed={false}
-            onToggleCollapse={() => {}}
-          />
-        </div>
+      <div className="hidden md:flex md:flex-shrink-0 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full">
+        <Sidebar
+          chatHistory={chats}
+          activeChatId={activeChatId}
+          onSelectChat={handleSelectChat}
+          onNewChat={handleNewChat}
+          onDeleteChat={handleDeleteChat}
+          isCollapsed={false}
+          onToggleCollapse={() => {}}
+        />
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-auto">
-          <ChatFeed messages={messages} isLoading={isLoading} />
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto w-full px-4 py-6">
+            <ChatFeed messages={messages} isLoading={isLoading} />
+          </div>
         </div>
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
-          <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
+        <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="max-w-3xl mx-auto w-full p-4">
+            <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
+          </div>
         </div>
       </div>
     </div>
