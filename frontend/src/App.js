@@ -33,6 +33,7 @@ function App() {
   // Layout state
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const sidebarRef = useRef(null);
   
   // Chat state
@@ -300,20 +301,26 @@ function App() {
           <FiLogOut className="w-6 h-6" />
         </button>
       </div>
-      
-      {/* Desktop sidebar toggle */}
-      <button
-        onClick={handleToggleCollapse}
-        className="hidden md:block fixed top-4 left-4 z-20 p-2 rounded-md bg-white dark:bg-gray-800 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        <FiMenu className="w-6 h-6" />
-      </button>
-      
+
+      {/* Desktop Sidebar - Always visible on desktop */}
+      <div className="hidden md:flex flex-col h-full w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="flex-1 overflow-y-auto">
+          <Sidebar
+            chatHistory={chats}
+            activeChatId={activeChatId}
+            onSelectChat={handleSelectChat}
+            onNewChat={handleNewChat}
+            onDeleteChat={handleDeleteChat}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={handleToggleCollapse}
+          />
+        </div>
+      </div>
+
       {/* Mobile Sidebar - Hidden by default */}
       <div
         ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 flex flex-col transform ${
+        className={`md:hidden fixed inset-y-0 left-0 flex flex-col transform ${
           showMobileSidebar ? 'translate-x-0' : '-translate-x-full'
         } z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
       >
@@ -324,8 +331,8 @@ function App() {
             onSelectChat={handleSelectChatWrapper}
             onNewChat={handleNewChatWrapper}
             onDeleteChat={handleDeleteChat}
-            isCollapsed={isSidebarCollapsed}
-            onToggleCollapse={handleToggleCollapse}
+            isCollapsed={false}
+            onToggleCollapse={toggleMobileSidebar}
           />
         </div>
       </div>
@@ -333,13 +340,13 @@ function App() {
       {/* Overlay for mobile */}
       {showMobileSidebar && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-20"
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-20"
           onClick={toggleMobileSidebar}
         />
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden pt-14 md:pt-0">
+      <div className="flex-1 flex flex-col h-full overflow-hidden pt-14 md:pt-0 md:ml-64">
         {/* Chat Feed with padding and scrollable area */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
           <div className="max-w-3xl mx-auto w-full pb-24">
