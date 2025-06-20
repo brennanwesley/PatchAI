@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatFeed from './components/ChatFeed';
 import ChatInput from './components/ChatInput';
@@ -6,11 +6,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { FiMenu } from 'react-icons/fi';
 import './App.css';
 
+const MOBILE_BREAKPOINT = 768;
+
 function App() {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // Layout state
+  const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const sidebarRef = useRef(null);
   
+  // Chat state
   const [chats, setChats] = useState(() => {
     const savedChats = localStorage.getItem('patchai-chats');
     return savedChats ? JSON.parse(savedChats) : [];
@@ -22,23 +26,48 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  // Toggle mobile sidebar
-  const toggleMobileSidebar = () => {
-    setShowMobileSidebar(prev => !prev);
-  };
-
-  // Handle window resize
+  // Handle window resize and mobile/desktop detection
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth >= 768) {
-        setShowMobileSidebar(false);
+      const wasMobile = isMobile;
+      const nowMobile = window.innerWidth < MOBILE_BREAKPOINT;
+      
+      if (wasMobile !== nowMobile) {
+        setIsMobile(nowMobile);
+        // Reset mobile sidebar state when switching to desktop
+        if (!nowMobile) {
+          setShowMobileSidebar(false);
+        }
       }
     };
 
+    // Initial check
+    handleResize();
+    
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, [isMobile]);
+  
+  // Toggle mobile sidebar
+  const toggleMobileSidebar = useCallback(() => {
+    setShowMobileSidebar(prev => !prev);
   }, []);
+  
+  // Close mobile sidebar when chat is selected
+  const handleSelectChatWrapper = useCallback((chatId) => {
+    handleSelectChat(chatId);
+    if (isMobile) {
+      setShowMobileSidebar(false);
+    }
+  }, [isMobile]);
+  
+  // Close mobile sidebar when new chat is created
+  const handleNewChatWrapper = useCallback(() => {
+    handleNewChat();
+    if (isMobile) {
+      setShowMobileSidebar(false);
+    }
+  }, [isMobile]);
 
   // Load messages for active chat
   useEffect(() => {
@@ -181,58 +210,24 @@ function App() {
     }
   };
 
-  return (
+  // Desktop Layout
+  const renderDesktopLayout = () => (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
-      {/* Mobile Header */}
-      {isMobile && (
-        <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 z-20">
-          <button
-            onClick={toggleMobileSidebar}
-            className="p-2 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none"
-            aria-label="Toggle sidebar"
-          >
-            <FiMenu className="w-6 h-6" />
-          </button>
-          <h1 className="ml-2 text-xl font-semibold text-gray-800 dark:text-white">PatchAI</h1>
-        </div>
-      )}
-
-      {/* Sidebar - Mobile */}
-      <div
-        ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 transform ${
-          isMobile
-            ? `${showMobileSidebar ? 'translate-x-0' : '-translate-x-full'}`
-            : 'hidden'
-        } md:relative md:translate-x-0 md:flex md:flex-shrink-0 z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
-      >
+      {/* Desktop Sidebar - Always visible */}
+      <div className="hidden md:flex md:flex-shrink-0 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
         <Sidebar
           chatHistory={chats}
           activeChatId={activeChatId}
-          onSelectChat={(chatId) => {
-            handleSelectChat(chatId);
-            if (isMobile) setShowMobileSidebar(false);
-          }}
-          onNewChat={() => {
-            handleNewChat();
-            if (isMobile) setShowMobileSidebar(false);
-          }}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={setIsSidebarCollapsed}
+          onSelectChat={handleSelectChat}
+          onNewChat={handleNewChat}
+          isCollapsed={false}
+          onToggleCollapse={() => {}}
         />
       </div>
 
-      {/* Overlay for mobile */}
-      {isMobile && showMobileSidebar && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
-          onClick={() => setShowMobileSidebar(false)}
-        />
-      )}
-
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className={`flex-1 overflow-auto ${isMobile ? 'pt-14 pb-24' : 'pb-4'}`}>
+        <div className="flex-1 overflow-auto pb-4">
           <ChatFeed messages={messages} isLoading={isLoading} />
         </div>
         <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
@@ -241,6 +236,61 @@ function App() {
       </div>
     </div>
   );
+
+  // Mobile Layout
+  const renderMobileLayout = () => (
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 z-20">
+        <button
+          onClick={toggleMobileSidebar}
+          className="p-2 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none"
+          aria-label="Toggle sidebar"
+        >
+          <FiMenu className="w-6 h-6" />
+        </button>
+        <h1 className="ml-2 text-xl font-semibold text-gray-800 dark:text-white">PatchAI</h1>
+      </div>
+
+      {/* Mobile Sidebar - Hidden by default */}
+      <div
+        ref={sidebarRef}
+        className={`fixed inset-y-0 left-0 transform ${
+          showMobileSidebar ? 'translate-x-0' : '-translate-x-full'
+        } z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
+      >
+        <Sidebar
+          chatHistory={chats}
+          activeChatId={activeChatId}
+          onSelectChat={handleSelectChatWrapper}
+          onNewChat={handleNewChatWrapper}
+          isCollapsed={false}
+          onToggleCollapse={() => {}}
+        />
+      </div>
+
+      {/* Overlay for mobile */}
+      {showMobileSidebar && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-20"
+          onClick={toggleMobileSidebar}
+        />
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <div className="flex-1 overflow-auto pt-14 pb-24">
+          <ChatFeed messages={messages} isLoading={isLoading} />
+        </div>
+        <div className="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
+          <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render the appropriate layout based on screen size
+  return isMobile ? renderMobileLayout() : renderDesktopLayout();
 }
 
 export default App;

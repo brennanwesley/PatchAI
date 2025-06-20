@@ -50,10 +50,10 @@ const ChatFeed = ({ messages = [], isLoading = false, chatTitle = "New Chat" }) 
                 </svg>
               </div>
               <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Welcome to PatchAI
+                Howdy! I'm Patch, your personal oilfield consultant.
               </h2>
               <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                Start a conversation by typing a message below. I'm here to help with your questions!
+              I'm here to help you be efficient, sharp, and ahead of the curve. Ask me anything about oilfield facility design, standard operations practices, geologic formations, hydraulic modeling, regulatory and permitting requirements, production chemical treatment options, and so much more! You focus on the field — I’ll handle the busywork.
               </p>
             </div>
           )}
