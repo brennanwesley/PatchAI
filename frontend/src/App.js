@@ -22,6 +22,24 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  // Toggle mobile sidebar
+  const toggleMobileSidebar = () => {
+    setShowMobileSidebar(prev => !prev);
+  };
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) {
+        setShowMobileSidebar(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Load messages for active chat
   useEffect(() => {
     if (activeChatId) {
