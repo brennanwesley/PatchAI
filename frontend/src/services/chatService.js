@@ -13,6 +13,12 @@ export class ChatService {
    */
   static async getUserChatSessions() {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('User not authenticated');
+        return [];
+      }
+
       // First try to get from API
       try {
         const sessions = await ApiService.getChatHistory();
@@ -38,6 +44,7 @@ export class ChatService {
             created_at
           )
         `)
+        .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
 
       if (error) {
@@ -120,6 +127,11 @@ export class ChatService {
    */
   static async addMessageToSession(chatId, role, content) {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
       // First try to save via API
       try {
         const response = await ApiService.sendPrompt([{ role, content }]);
@@ -128,14 +140,26 @@ export class ChatService {
         console.warn('Failed to save message via API, falling back to Supabase:', apiError);
       }
 
-      // Fallback to Supabase
+      // Verify chat session exists and belongs to user
+      const { data: chatSession, error: chatError } = await supabase
+        .from('chat_sessions')
+        .select('id')
+        .eq('id', chatId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (chatError || !chatSession) {
+        throw new Error('Chat session not found or access denied');
+      }
+
+      // Insert message
       const { data: message, error } = await supabase
         .from('messages')
         .insert({
           chat_id: chatId,
           role: role,
           content: content,
-          user_id: (await supabase.auth.getUser()).data.user?.id
+          user_id: user.id
         })
         .select()
         .single();
@@ -169,10 +193,17 @@ export class ChatService {
    */
   static async getSessionMessages(sessionId) {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('User not authenticated');
+        return [];
+      }
+
       const { data: messages, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('chat_session_id', sessionId)
+        .eq('chat_id', sessionId)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
       if (error) {
