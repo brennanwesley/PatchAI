@@ -269,6 +269,17 @@ function App() {
 
 
 
+  // Handle authentication redirects
+  useEffect(() => {
+    if (loading) return; // Don't process redirects while still loading
+    
+    if (!user && !location.pathname.startsWith('/auth')) {
+      navigate('/');
+    } else if (user && location.pathname === '/') {
+      navigate('/chat');
+    }
+  }, [user, location.pathname, navigate, loading]);
+
   // Show loading spinner while auth state is being determined
   if (loading) {
     return (
@@ -277,15 +288,6 @@ function App() {
       </div>
     );
   }
-
-  // If not authenticated and not on the auth page, redirect to login
-  useEffect(() => {
-    if (!user && !location.pathname.startsWith('/auth')) {
-      navigate('/');
-    } else if (user && location.pathname === '/') {
-      navigate('/chat');
-    }
-  }, [user, location.pathname, navigate]);
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
