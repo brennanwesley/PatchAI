@@ -13,19 +13,39 @@ const PrivateRoute = ({ children }) => {
   const [session, setSession] = React.useState(null);
 
   React.useEffect(() => {
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+    let mounted = true;
+
+    const checkAuth = async () => {
+      try {
+        // Check for existing session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+          setSession(session);
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
+      if (mounted) {
+        setSession(session);
+        setLoading(false);
+      }
     });
 
-    return () => subscription?.unsubscribe();
+    // Initial auth check
+    checkAuth();
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   if (loading) {
@@ -36,7 +56,8 @@ const PrivateRoute = ({ children }) => {
     );
   }
 
-  return session ? children : <Navigate to="/" replace />;
+  // Pass the user and loading state to the App component
+  return session ? React.cloneElement(children, { user, loading }) : <Navigate to="/" replace />;
 };
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

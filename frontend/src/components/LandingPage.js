@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signIn, signUp, getCurrentUser } from '../supabaseClient';
+import { supabase } from '../supabaseClient';
 import { FiActivity, FiBarChart2, FiGlobe, FiDollarSign, FiFileText, FiLogIn, FiUserPlus } from 'react-icons/fi';
 
 const LandingPage = () => {
@@ -16,8 +16,8 @@ const LandingPage = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const user = await getCurrentUser();
-        if (user) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
           navigate('/chat');
         }
       } catch (error) {
@@ -36,18 +36,25 @@ const LandingPage = () => {
     try {
       if (isLogin) {
         // Sign in
-        const { user, error: signInError } = await signIn(email, password);
-        if (signInError) throw signInError;
-        if (user) {
-          navigate('/chat');
-          return; // Exit early after navigation
-        }
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (error) throw error;
+        
+        // Navigation will be handled by the auth state change listener in PrivateRoute
+        navigate('/chat');
       } else {
         // Sign up
-        const { user, error: signUpError } = await signUp(email, password);
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        
         if (signUpError) throw signUpError;
         
-        if (user) {
+        if (data?.user) {
           // Show success message and switch to login
           setError({
             type: 'success',

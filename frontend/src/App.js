@@ -15,57 +15,29 @@ const LOCAL_STORAGE_KEYS = {
   ACTIVE_CHAT: 'patchai-active-chat'
 };
 
-function App() {
+function App({ user: propUser, loading: propLoading = false }) {
   const navigate = useNavigate();
   
-  // Auth state
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // User state (passed down from PrivateRoute)
+  const [user, setUser] = useState(propUser);
+  const [loading, setLoading] = useState(propLoading);
   
-  // Check auth state on mount
+  // Update user state when prop changes
   useEffect(() => {
-    // Check active sessions and sets the user
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        const currentUser = session?.user || null;
-        setUser(currentUser);
-        
-        if (currentUser) {
-          // User is signed in
-          setLoading(false);
-        } else {
-          // User is not signed in, redirect to landing page
-          navigate('/');
-        }
-      }
-    );
-
-    // Check for existing session
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          navigate('/');
-        }
-      } catch (error) {
-        console.error('Error checking session:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    checkSession();
-    
-    return () => {
-      // Cleanup subscription on unmount
-      subscription?.unsubscribe();
-    };
-  }, [navigate]);
+    setUser(propUser);
+  }, [propUser]);
+  
+  // Update loading state when prop changes
+  useEffect(() => {
+    setLoading(propLoading);
+  }, [propLoading]);
 
   // Handle sign out
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
       navigate('/');
     } catch (error) {
       console.error('Error signing out:', error);
