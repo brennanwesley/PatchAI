@@ -293,7 +293,7 @@ function App() {
         setMessages(validMessages);
       }
       
-      // Update the chat title if it's a new chat or if the first message has changed
+      // Update the chat title only if it's still "New Chat" (hasn't been customized)
       if (validMessages.length > 0) {
         const firstMessage = validMessages[0];
         if (firstMessage.role === 'user' && firstMessage.content) {
@@ -302,15 +302,18 @@ function App() {
           
           setChats(prevChats => 
             prevChats.map(chat => 
-              chat.id === chatId && chat.title !== newTitle
+              chat.id === chatId && (chat.title === 'New Chat' || chat.title === newTitle)
                 ? { ...chat, title: newTitle }
                 : chat
             )
           );
           
-          // Also update the chat title in the database
+          // Also update the chat title in the database only if it's a new chat
           try {
-            await ChatService.updateSessionTitle(chatId, newTitle);
+            const currentChat = chats.find(c => c.id === chatId);
+            if (currentChat && currentChat.title === 'New Chat') {
+              await ChatService.updateSessionTitle(chatId, newTitle);
+            }
           } catch (error) {
             console.error('❌ Failed to update chat title:', error);
           }
@@ -452,8 +455,17 @@ function App() {
           currentChatId = await createNewChat(userMessage);
           console.log('🆔 New chat ID:', currentChatId);
           
-          // Update the active chat ID
+          // Update the active chat ID and ensure messages stay visible
           setActiveChatId(currentChatId);
+          
+          // Ensure the user message stays visible by updating the chat in the chats array
+          setChats(prevChats => {
+            return prevChats.map(chat => 
+              chat.id === currentChatId 
+                ? { ...chat, messages: updatedMessages }
+                : chat
+            );
+          });
           
           // Update the URL to reflect the new chat
           navigate(`/chat/${currentChatId}`, { replace: true });
