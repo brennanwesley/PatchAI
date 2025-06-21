@@ -492,6 +492,43 @@ async def test_jwt_validation(request: Request):
         return {"error": f"Test failed: {str(e)}"}
 
 
+@app.get("/test-openai")
+async def test_openai():
+    """Test OpenAI connection and basic functionality"""
+    try:
+        if not openai_client:
+            return {"error": "OpenAI client not initialized"}
+        
+        # Simple test request
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Say 'Hello, OpenAI is working!'"}
+            ],
+            max_tokens=50,
+            temperature=0.7
+        )
+        
+        return {
+            "success": True,
+            "response": response.choices[0].message.content,
+            "model": response.model,
+            "usage": {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
