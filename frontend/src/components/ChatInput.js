@@ -275,15 +275,7 @@ const ChatInput = ({
         <div className="mt-2 text-xs text-center text-gray-500 dark:text-gray-400">
           {isAuthenticated ? (
             <span>
-              Press{' '}
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded">
-                Enter
-              </kbd>{' '}
-              to send,{' '}
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded">
-                Shift+Enter
-              </kbd>{' '}
-              for new line -- Patch can make mistakes. Check important info.
+              Patch can make mistakes. Check important info.
             </span>
           ) : (
             <span>Please sign in to start chatting</span>

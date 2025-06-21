@@ -205,6 +205,12 @@ function App() {
 
   // Load messages when active chat changes
   useEffect(() => {
+    // Don't load messages if we're in the middle of creating a new chat
+    if (isCreatingNewChat) {
+      console.log('🚫 Skipping message load during chat creation');
+      return;
+    }
+    
     const activeChat = chats.find(chat => chat.id === activeChatId);
     if (activeChat) {
       const chatMessages = Array.isArray(activeChat.messages) ? activeChat.messages : [];
@@ -214,7 +220,7 @@ function App() {
       console.log('📋 No active chat, clearing messages');
       setMessages([]);
     }
-  }, [activeChatId, chats]);
+  }, [activeChatId, chats, isCreatingNewChat]);
 
   const handleSendMessage = async (messageInput) => {
     console.log('🚀 SEND MESSAGE START:', messageInput);
