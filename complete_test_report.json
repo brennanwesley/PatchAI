@@ -1,0 +1,82 @@
+{
+  "timestamp": "2025-06-21T14:08:15.011170",
+  "urls": {
+    "backend": "https://patchai-backend.onrender.com",
+    "frontend": "https://patchai-frontend.vercel.app"
+  },
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "warnings": 2,
+    "total": 11,
+    "health_score": 81.81818181818183
+  },
+  "results": [
+    {
+      "test": "Backend Health",
+      "status": "PASS",
+      "details": "Version: 0.3.1",
+      "timestamp": "2025-06-21T14:08:12.384393"
+    },
+    {
+      "test": "Health Endpoint",
+      "status": "PASS",
+      "details": "Working",
+      "timestamp": "2025-06-21T14:08:13.509471"
+    },
+    {
+      "test": "CORS Configuration",
+      "status": "PASS",
+      "details": "Frontend origin allowed",
+      "timestamp": "2025-06-21T14:08:13.631122"
+    },
+    {
+      "test": "Authentication Protection",
+      "status": "PASS",
+      "details": "Protected (HTTP 403)",
+      "timestamp": "2025-06-21T14:08:13.752583"
+    },
+    {
+      "test": "API Documentation",
+      "status": "PASS",
+      "details": "Swagger docs available",
+      "timestamp": "2025-06-21T14:08:13.870516"
+    },
+    {
+      "test": "React Application",
+      "status": "PASS",
+      "details": "React framework detected",
+      "timestamp": "2025-06-21T14:08:14.424636"
+    },
+    {
+      "test": "JavaScript Bundle",
+      "status": "PASS",
+      "details": "JS bundles detected",
+      "timestamp": "2025-06-21T14:08:14.424733"
+    },
+    {
+      "test": "PatchAI Branding",
+      "status": "WARN",
+      "details": "PatchAI branding not detected",
+      "timestamp": "2025-06-21T14:08:14.424743"
+    },
+    {
+      "test": "HTML Structure",
+      "status": "PASS",
+      "details": "Proper HTML structure",
+      "timestamp": "2025-06-21T14:08:14.424749"
+    },
+    {
+      "test": "CSS Framework",
+      "status": "WARN",
+      "details": "No clear CSS framework detected",
+      "timestamp": "2025-06-21T14:08:14.424756"
+    },
+    {
+      "test": "Frontend-Backend Integration",
+      "status": "PASS",
+      "details": "CORS working, auth required",
+      "timestamp": "2025-06-21T14:08:15.011013"
+    }
+  ]
+}

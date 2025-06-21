@@ -1,0 +1,55 @@
+{
+  "timestamp": "2025-06-21T13:54:52.596156",
+  "backend_url": "https://patchai-backend.onrender.com",
+  "frontend_url": "https://patchai-frontend.vercel.app",
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "warnings": 1,
+    "total": 7
+  },
+  "results": [
+    {
+      "test": "Backend Health",
+      "status": "PASS",
+      "details": "Version: 0.3.1",
+      "timestamp": "2025-06-21T13:54:48.871456"
+    },
+    {
+      "test": "Backend Health Endpoint",
+      "status": "PASS",
+      "details": "Health check working",
+      "timestamp": "2025-06-21T13:54:49.978826"
+    },
+    {
+      "test": "CORS Configuration",
+      "status": "PASS",
+      "details": "Origin: https://patchai-frontend.vercel.app, Methods: GET, POST, PUT, DELETE, OPTIONS",
+      "timestamp": "2025-06-21T13:54:50.574638"
+    },
+    {
+      "test": "Auth Protection /prompt",
+      "status": "PASS",
+      "details": "Properly protected (HTTP 403)",
+      "timestamp": "2025-06-21T13:54:51.200882"
+    },
+    {
+      "test": "Auth Protection /history",
+      "status": "PASS",
+      "details": "Properly protected (HTTP 403)",
+      "timestamp": "2025-06-21T13:54:51.316133"
+    },
+    {
+      "test": "API Documentation",
+      "status": "PASS",
+      "details": "Swagger docs available",
+      "timestamp": "2025-06-21T13:54:52.006681"
+    },
+    {
+      "test": "Frontend Accessibility",
+      "status": "WARN",
+      "details": "React detected but PatchAI branding unclear",
+      "timestamp": "2025-06-21T13:54:52.596018"
+    }
+  ]
+}

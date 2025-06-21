@@ -1,0 +1,104 @@
+{
+  "timestamp": "2025-06-21T13:53:56.342439",
+  "results": [
+    {
+      "url": "https://patchai-backend-latest.onrender.com",
+      "description": "Main Backend",
+      "status_code": 404,
+      "headers": {
+        "date": "Sat, 21 Jun 2025 18:53:52 GMT",
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "10",
+        "connection": "keep-alive",
+        "x-content-type-options": "nosniff",
+        "x-render-routing": "no-server",
+        "cf-cache-status": "DYNAMIC",
+        "server": "cloudflare",
+        "cf-ray": "9535b610899cf07c-DFW",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_preview": "Not Found\n",
+      "timestamp": "2025-06-21T13:53:53.288025"
+    },
+    {
+      "url": "https://patchai-backend-latest.onrender.com/health",
+      "description": "Health Check",
+      "status_code": 404,
+      "headers": {
+        "date": "Sat, 21 Jun 2025 18:53:52 GMT",
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "10",
+        "connection": "keep-alive",
+        "x-content-type-options": "nosniff",
+        "x-render-routing": "no-server",
+        "cf-cache-status": "DYNAMIC",
+        "server": "cloudflare",
+        "cf-ray": "9535b6149fb4ceb7-DFW",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_preview": "Not Found\n",
+      "timestamp": "2025-06-21T13:53:53.859361"
+    },
+    {
+      "url": "https://patchai-backend-latest.onrender.com/docs",
+      "description": "API Documentation",
+      "status_code": 404,
+      "headers": {
+        "date": "Sat, 21 Jun 2025 18:53:53 GMT",
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "10",
+        "connection": "keep-alive",
+        "x-content-type-options": "nosniff",
+        "x-render-routing": "no-server",
+        "cf-cache-status": "DYNAMIC",
+        "server": "cloudflare",
+        "cf-ray": "9535b6181fb06719-DFW",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_preview": "Not Found\n",
+      "timestamp": "2025-06-21T13:53:54.425866"
+    },
+    {
+      "url": "https://patchai-backend-latest.onrender.com/",
+      "description": "Root Path",
+      "status_code": 404,
+      "headers": {
+        "date": "Sat, 21 Jun 2025 18:53:53 GMT",
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "10",
+        "connection": "keep-alive",
+        "x-content-type-options": "nosniff",
+        "x-render-routing": "no-server",
+        "cf-cache-status": "DYNAMIC",
+        "server": "cloudflare",
+        "cf-ray": "9535b61c0ceb69f9-DFW",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_preview": "Not Found\n",
+      "timestamp": "2025-06-21T13:53:55.039428"
+    },
+    {
+      "url": "https://patchai-backend.onrender.com",
+      "description": "Alternative Backend URL",
+      "status_code": 200,
+      "headers": {
+        "date": "Sat, 21 Jun 2025 18:53:54 GMT",
+        "content-type": "application/json",
+        "transfer-encoding": "chunked",
+        "connection": "keep-alive",
+        "rndr-id": "754b2b52-999a-442c",
+        "vary": "Accept-Encoding",
+        "x-correlation-id": "6bb58355-91e0-45e5-a821-62e60948aa4a",
+        "x-render-origin-server": "uvicorn",
+        "x-response-time": "0.39ms",
+        "cf-cache-status": "DYNAMIC",
+        "server": "cloudflare",
+        "cf-ray": "9535b61f7efc6781-DFW",
+        "content-encoding": "gzip",
+        "alt-svc": "h3=\":443\"; ma=86400"
+      },
+      "content_preview": "{\"message\":\"PatchAI Backend API is running\",\"version\":\"0.3.1\"}",
+      "timestamp": "2025-06-21T13:53:55.724978"
+    }
+  ]
+}

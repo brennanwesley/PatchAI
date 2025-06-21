@@ -1,0 +1,38 @@
+[
+  {
+    "test": "Backend Health Check",
+    "status": "FAIL",
+    "details": "Status: 404",
+    "timestamp": "2025-06-21T13:53:10.990524"
+  },
+  {
+    "test": "CORS Configuration",
+    "status": "FAIL",
+    "details": "No CORS headers found",
+    "timestamp": "2025-06-21T13:53:11.587908"
+  },
+  {
+    "test": "Endpoint /health",
+    "status": "WARN",
+    "details": "Unexpected status: 404",
+    "timestamp": "2025-06-21T13:53:12.142944"
+  },
+  {
+    "test": "Endpoint /prompt",
+    "status": "WARN",
+    "details": "Unexpected status: 404",
+    "timestamp": "2025-06-21T13:53:12.248088"
+  },
+  {
+    "test": "Endpoint /history",
+    "status": "WARN",
+    "details": "Unexpected status: 404",
+    "timestamp": "2025-06-21T13:53:12.338164"
+  },
+  {
+    "test": "Frontend Accessibility",
+    "status": "PASS",
+    "details": "Status: 200",
+    "timestamp": "2025-06-21T13:53:12.980584"
+  }
+]
