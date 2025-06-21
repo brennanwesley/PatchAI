@@ -37,20 +37,26 @@ class ChatService:
             if not title:
                 title = self.generate_chat_title(messages)
             
-            # Convert messages to JSON
-            messages_json = [{"role": msg.role, "content": msg.content} for msg in messages]
-            
-            # Insert into database
-            result = self.supabase.table("chat_sessions").insert({
+            # Insert chat session metadata
+            session_result = self.supabase.table("chat_sessions").insert({
                 "id": chat_id,
                 "user_id": user_id,
                 "title": title,
-                "messages": json.dumps(messages_json),
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()
             }).execute()
             
-            logger.info(f"Created new chat session {chat_id} for user {user_id}")
+            # Insert messages into separate messages table
+            for message in messages:
+                self.supabase.table("messages").insert({
+                    "chat_session_id": chat_id,
+                    "user_id": user_id,
+                    "role": message.role,
+                    "content": message.content,
+                    "created_at": datetime.utcnow().isoformat()
+                }).execute()
+            
+            logger.info(f"Created new chat session {chat_id} for user {user_id} with {len(messages)} messages")
             return chat_id
             
         except Exception as e:
@@ -60,16 +66,25 @@ class ChatService:
     async def update_chat_session(self, chat_id: str, user_id: str, messages: List[Message]) -> bool:
         """Update an existing chat session with new messages"""
         try:
-            # Convert messages to JSON
-            messages_json = [{"role": msg.role, "content": msg.content} for msg in messages]
+            # Delete existing messages
+            self.supabase.table("messages").delete().eq("chat_session_id", chat_id).execute()
             
-            # Update in database
-            result = self.supabase.table("chat_sessions").update({
-                "messages": json.dumps(messages_json),
+            # Insert new messages into separate messages table
+            for message in messages:
+                self.supabase.table("messages").insert({
+                    "chat_session_id": chat_id,
+                    "user_id": user_id,
+                    "role": message.role,
+                    "content": message.content,
+                    "created_at": datetime.utcnow().isoformat()
+                }).execute()
+            
+            # Update chat session metadata
+            session_result = self.supabase.table("chat_sessions").update({
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("id", chat_id).eq("user_id", user_id).execute()
             
-            if not result.data:
+            if not session_result.data:
                 logger.warning(f"No chat session found with id {chat_id} for user {user_id}")
                 return False
             
@@ -83,16 +98,16 @@ class ChatService:
     async def get_chat_session(self, chat_id: str, user_id: str) -> Optional[ChatSession]:
         """Get a specific chat session"""
         try:
-            result = self.supabase.table("chat_sessions").select("*").eq("id", chat_id).eq("user_id", user_id).execute()
+            session_result = self.supabase.table("chat_sessions").select("*").eq("id", chat_id).eq("user_id", user_id).execute()
             
-            if not result.data:
+            if not session_result.data:
                 return None
             
-            session_data = result.data[0]
+            session_data = session_result.data[0]
             
-            # Parse messages from JSON
-            messages_json = json.loads(session_data["messages"])
-            messages = [Message(role=msg["role"], content=msg["content"]) for msg in messages_json]
+            # Get messages from separate messages table
+            messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).execute()
+            messages = [Message(role=msg["role"], content=msg["content"]) for msg in messages_result.data]
             
             return ChatSession(
                 id=session_data["id"],
@@ -123,9 +138,13 @@ class ChatService:
     async def delete_chat_session(self, chat_id: str, user_id: str) -> bool:
         """Delete a chat session"""
         try:
-            result = self.supabase.table("chat_sessions").delete().eq("id", chat_id).eq("user_id", user_id).execute()
+            # Delete messages from separate messages table
+            self.supabase.table("messages").delete().eq("chat_session_id", chat_id).execute()
             
-            if not result.data:
+            # Delete chat session metadata
+            session_result = self.supabase.table("chat_sessions").delete().eq("id", chat_id).eq("user_id", user_id).execute()
+            
+            if not session_result.data:
                 logger.warning(f"No chat session found with id {chat_id} for user {user_id}")
                 return False
             
