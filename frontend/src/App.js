@@ -44,6 +44,18 @@ function App() {
   const [isLoadingChats, setIsLoadingChats] = useState(false); // Prevent multiple simultaneous calls
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false); // Prevent useEffect from clearing messages during chat creation
 
+  // Controlled function to refresh chats from database
+  const refreshChats = useCallback(async () => {
+    try {
+      console.log('🔄 Refreshing chats from database...');
+      const userChats = await ChatService.getUserChatSessions();
+      setChats(userChats);
+      console.log('✅ Chats refreshed:', userChats.length);
+    } catch (error) {
+      console.error('❌ Error refreshing chats:', error);
+    }
+  }, []);
+
   // Load user's chat sessions from database
   useEffect(() => {
     const loadUserChats = async () => {
@@ -72,22 +84,12 @@ function App() {
         const userChats = await ChatService.getUserChatSessions();
         setChats(userChats);
         
-        // If no active chat but chats exist, select the most recent one
-        if (!activeChatId && userChats.length > 0) {
+        // Only auto-select the most recent chat if no chat is currently active
+        if (!activeChatId && userChats.length > 0 && !isCreatingNewChat) {
           const mostRecentChat = userChats[0]; // Already sorted by updated_at DESC
           setActiveChatId(mostRecentChat.id);
           setMessages(mostRecentChat.messages || []);
-        } else if (activeChatId && !isCreatingNewChat) {
-          // Only load messages if we're not in the middle of creating a new chat
-          // Load messages for the active chat
-          const activeChat = userChats.find(chat => chat.id === activeChatId);
-          if (activeChat) {
-            setMessages(activeChat.messages || []);
-          } else {
-            // Active chat not found, reset
-            setActiveChatId(null);
-            setMessages([]);
-          }
+          console.log('🔄 Auto-selected most recent chat:', mostRecentChat.id);
         }
       } catch (error) {
         console.error('Error loading user chats:', error);
@@ -114,7 +116,18 @@ function App() {
     if (user) {
       loadUserChats();
     }
-  }, [user, chats.length, activeChatId, isCreatingNewChat]); // Added isCreatingNewChat to dependencies
+  }, [user]); // Only run when user changes to prevent interference with chat creation
+
+  // Handle URL-based chat selection
+  useEffect(() => {
+    const path = location.pathname;
+    const chatIdFromUrl = path.startsWith('/chat/') ? path.split('/chat/')[1] : null;
+    
+    if (chatIdFromUrl && chatIdFromUrl !== activeChatId) {
+      console.log('🔗 URL-based chat selection:', chatIdFromUrl);
+      handleSelectChat(chatIdFromUrl);
+    }
+  }, [location.pathname, activeChatId, handleSelectChat]);
 
   // Handle window resize and mobile/desktop detection
   useEffect(() => {
@@ -140,8 +153,19 @@ function App() {
   
   // Define handleSelectChat first since it's used in other callbacks
   const handleSelectChat = useCallback((chatId) => {
+    console.log('🔄 Selecting chat:', chatId);
     setActiveChatId(chatId);
-  }, []);
+    
+    // Find and load messages for the selected chat
+    const selectedChat = chats.find(chat => chat.id === chatId);
+    if (selectedChat) {
+      setMessages(selectedChat.messages || []);
+      console.log('📄 Loaded messages for chat:', chatId, selectedChat.messages?.length || 0);
+    } else {
+      console.warn('⚠️ Chat not found in local state:', chatId);
+      setMessages([]);
+    }
+  }, [chats]);
 
   // Define handleNewChat next since it's used in other callbacks
   const handleNewChat = useCallback(() => {
@@ -241,7 +265,9 @@ function App() {
           
           // Update state
           setActiveChatId(chatId);
-          setChats(prevChats => [newChat, ...prevChats]);
+          
+          // Refresh chats from database to ensure new chat appears in sidebar
+          await refreshChats();
           
           // Navigate to new chat
           navigate(`/chat/${chatId}`, { replace: true });
