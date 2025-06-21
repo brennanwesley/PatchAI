@@ -17,12 +17,12 @@ const MOBILE_BREAKPOINT = 768;
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout, loading } = useAuth();
+  const { user, signOut, loading } = useAuth();
   
   // Handle sign out
   const handleSignOut = async () => {
     try {
-      await logout();
+      await signOut();
       navigate('/');
     } catch (error) {
       console.error('Error signing out:', error);
