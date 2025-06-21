@@ -2,39 +2,50 @@
 """
 Simplified main.py for guaranteed Render deployment success
 Uses minimal dependencies and robust error handling
-Last updated: 2025-06-20 06:48 UTC - FINAL DEPLOYMENT FIX
+Last updated: 2025-06-21 - SECURITY FIXES APPLIED
 """
 
-from fastapi import FastAPI, HTTPException, Depends, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import List, Optional
 import os
-from dotenv import load_dotenv
 import logging
+import httpx
 import jwt
+from typing import List
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, validator
+from openai import OpenAI
 from supabase import create_client, Client
 
-# Load environment variables
-load_dotenv()
+# Configure logging - SECURITY: Remove sensitive data from logs
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
+# Initialize FastAPI
 app = FastAPI(title="PatchAI Backend API", version="1.0.0")
 
-# CORS middleware
+# CORS middleware - SECURITY: Strict origin validation
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://patchai-frontend.vercel.app"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],  # SECURITY: Limit methods
+    allow_headers=["Authorization", "Content-Type"],  # SECURITY: Limit headers
 )
 
 # Environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+
+# Validate required environment variables
+if not all([OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET]):
+    logger.error("Missing required environment variables")
+    raise RuntimeError("Missing required environment variables")
 
 # Initialize clients with error handling
 openai_client = None
@@ -101,6 +112,69 @@ except Exception as e:
     initialization_error = f"{type(e).__name__}: {str(e)}"
     # Continue without crashing - will handle in endpoints
 
+# SECURITY: Enhanced Pydantic models with validation
+class Message(BaseModel):
+    role: str
+    content: str
+    
+    @validator('role')
+    def validate_role(cls, v):
+        if v not in ['user', 'assistant', 'system']:
+            raise ValueError('Invalid role')
+        return v
+    
+    @validator('content')
+    def validate_content(cls, v):
+        if not v or len(v.strip()) == 0:
+            raise ValueError('Content cannot be empty')
+        if len(v) > 10000:  # SECURITY: Limit message length
+            raise ValueError('Content too long (max 10000 characters)')
+        return v.strip()
+
+class PromptRequest(BaseModel):
+    messages: List[Message]
+    
+    @validator('messages')
+    def validate_messages(cls, v):
+        if not v:
+            raise ValueError('Messages cannot be empty')
+        if len(v) > 50:  # SECURITY: Limit conversation length
+            raise ValueError('Too many messages (max 50)')
+        return v
+
+class PromptResponse(BaseModel):
+    response: str
+
+# SECURITY: Enhanced JWT validation
+async def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Verify JWT token with proper signature validation
+    """
+    try:
+        token = credentials.credentials
+        
+        # SECURITY: Proper JWT verification with signature
+        decoded = jwt.decode(
+            token, 
+            SUPABASE_JWT_SECRET, 
+            algorithms=["HS256"],
+            audience="authenticated"
+        )
+        
+        user_id = decoded.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
+            
+        return user_id
+        
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        logger.error(f"Token validation error: {type(e).__name__}")  # SECURITY: No token details in logs
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
 # Pydantic models
 class Message(BaseModel):
     role: str
@@ -164,33 +238,31 @@ def get_system_prompt():
 # Routes
 @app.get("/")
 async def root():
-    # Trigger deployment
     """Root endpoint for health check"""
-    return {"message": "PatchAI Backend API is running"}
+    return {"message": "PatchAI Backend API is running", "status": "healthy"}
 
 @app.get("/debug")
 async def debug_info():
     """Debug endpoint to check environment variables and client status"""
     return {
-        "openai_key_exists": OPENAI_API_KEY is not None,
-        "openai_key_length": len(OPENAI_API_KEY) if OPENAI_API_KEY else 0,
         "openai_client_initialized": openai_client is not None,
         "supabase_client_initialized": supabase_client is not None,
         "initialization_error": initialization_error,
-        "environment_vars": {
-            "PORT": os.getenv("PORT"),
-            "OPENAI_API_KEY": "***" if OPENAI_API_KEY else None,
-            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
-            "SUPABASE_SERVICE_ROLE_KEY": "***" if os.getenv("SUPABASE_SERVICE_ROLE_KEY") else None
+        "environment_check": {
+            "openai_key_configured": OPENAI_API_KEY is not None,
+            "supabase_url_configured": SUPABASE_URL is not None,
+            "supabase_key_configured": SUPABASE_SERVICE_ROLE_KEY is not None,
+            "jwt_secret_configured": SUPABASE_JWT_SECRET is not None
         }
     }
 
+# SECURITY: Add authentication to /prompt endpoint
 @app.post("/prompt", response_model=PromptResponse)
-async def chat_completion(request: PromptRequest):
+async def chat_completion(request: PromptRequest, user_id: str = Depends(verify_jwt_token)):
     if not openai_client:
         raise HTTPException(
             status_code=500,
-            detail="OpenAI client not initialized"
+            detail="OpenAI service unavailable"
         )
     try:
         # Convert messages to the format expected by the API
@@ -200,7 +272,8 @@ async def chat_completion(request: PromptRequest):
         for msg in request.messages:
             messages.append({"role": msg.role, "content": msg.content})
         
-        logger.info(f"Sending request to OpenAI with messages: {messages}")
+        # SECURITY: Log request without sensitive content
+        logger.info(f"Processing chat request for user: {user_id[:8]}...")
         
         response = openai_client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -213,43 +286,30 @@ async def chat_completion(request: PromptRequest):
         )
         
         assistant_response = response.choices[0].message.content
-        logger.info(f"Received response from OpenAI: {assistant_response[:200]}...")  # Log first 200 chars
+        logger.info(f"Chat response generated for user: {user_id[:8]}...")  # SECURITY: No content in logs
         
         return PromptResponse(response=assistant_response)
         
     except Exception as e:
-        error_msg = f"OpenAI API error: {str(e)}"
-        logger.error(error_msg)
+        error_msg = "Chat service error"  # SECURITY: Generic error message
+        logger.error(f"OpenAI API error for user {user_id[:8]}...: {type(e).__name__}")
         raise HTTPException(
             status_code=500,
             detail=error_msg
         )
 
 @app.get("/history")
-async def get_history(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_history(user_id: str = Depends(verify_jwt_token)):
     """
     Get chat history for the authenticated user
     """
     if not supabase_client:
         raise HTTPException(
             status_code=500,
-            detail="Supabase client not initialized"
+            detail="Database service unavailable"
         )
     
     try:
-        # Verify JWT token and get user ID
-        token = credentials.credentials
-        try:
-            # Decode the token to get user ID
-            # Note: In a production environment, verify the token signature
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            user_id = decoded.get("sub")
-            if not user_id:
-                raise HTTPException(status_code=401, detail="Invalid token")
-        except Exception as e:
-            logger.error(f"Token validation error: {e}")
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-        
         # Query chat_sessions for this user
         response = supabase_client.table('chat_sessions')\
             .select('*')\
@@ -259,33 +319,34 @@ async def get_history(credentials: HTTPAuthorizationCredentials = Depends(securi
             
         return {"data": response.data, "error": None}
         
-    except HTTPException:
-        raise
     except Exception as e:
-        error_msg = f"Error fetching chat history: {str(e)}"
-        logger.error(error_msg)
+        error_msg = "Error fetching chat history"
+        logger.error(f"Database error for user {user_id[:8]}...: {type(e).__name__}")
         raise HTTPException(
             status_code=500,
             detail=error_msg
         )
 
+# SECURITY: Add authentication to /history POST endpoint
 @app.post("/history")
-async def save_history(request: PromptRequest):
+async def save_history(request: PromptRequest, user_id: str = Depends(verify_jwt_token)):
     if not supabase_client:
         raise HTTPException(
             status_code=500,
-            detail="Supabase client not initialized"
+            detail="Database service unavailable"
         )
     try:
         data = {
-            "messages": request.messages,
+            "user_id": user_id,  # SECURITY: Associate with authenticated user
+            "messages": [msg.dict() for msg in request.messages],
             "response": ""
         }
         supabase_client.from_("history").insert([data]).execute()
+        logger.info(f"History saved for user: {user_id[:8]}...")
         return {"message": "History saved successfully"}
     except Exception as e:
-        error_msg = f"Supabase API error: {str(e)}"
-        logger.error(error_msg)
+        error_msg = "Error saving chat history"
+        logger.error(f"Database save error for user {user_id[:8]}...: {type(e).__name__}")
         raise HTTPException(
             status_code=500,
             detail=error_msg
