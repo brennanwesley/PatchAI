@@ -37,7 +37,10 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
             credentials.credentials, 
             SUPABASE_JWT_SECRET, 
             algorithms=["HS256"],
-            options={"verify_signature": True}  # CRITICAL: Signature verification enabled
+            options={
+                "verify_signature": True,  # CRITICAL: Signature verification enabled
+                "verify_aud": False        # FIXED: Disable audience verification for Supabase tokens
+            }
         )
         
         user_id = payload.get("sub")
