@@ -19,9 +19,10 @@ from core.logging import StructuredLogger
 from core.rate_limiter import RateLimiter
 from core.auth import verify_jwt_token
 from core.monitoring import get_health_status
-from models.schemas import PromptRequest, PromptResponse
+from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
 from services.openai_service import initialize_openai_client, get_system_prompt
 from services.supabase_service import initialize_supabase_client
+from services.chat_service import ChatService
 
 # Initialize structured logging
 structured_logger = StructuredLogger()
@@ -31,7 +32,7 @@ logger = structured_logger.logger
 app = FastAPI(
     title="PatchAI Backend API",
     description="Enterprise-grade AI assistant for drilling operations",
-    version="0.3.0"
+    version="0.3.1"
 )
 
 # CORS middleware
@@ -47,8 +48,9 @@ app.add_middleware(
 openai_client = initialize_openai_client()
 supabase_client = initialize_supabase_client()
 rate_limiter = RateLimiter()
+chat_service = ChatService(supabase_client) if supabase_client else None
 
-logger.info("PatchAI Backend initialized with enterprise architecture")
+logger.info("PatchAI Backend initialized with enterprise architecture and chat service")
 
 
 def get_client_ip(request: Request) -> str:
@@ -154,7 +156,7 @@ async def check_rate_limits(request: Request, user_id: str):
 # Routes
 @app.post("/prompt", response_model=PromptResponse)
 async def chat_completion(request: PromptRequest, req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Send prompt to OpenAI and return response - SECURITY: Now requires authentication"""
+    """Send conversation to OpenAI and return response with proper chat session management"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
@@ -162,31 +164,58 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         await check_rate_limits(req, user_id)
         
         # Validate input
-        if not request.message or not request.message.strip():
-            raise HTTPException(status_code=400, detail="Message cannot be empty")
+        if not request.messages:
+            raise HTTPException(status_code=400, detail="Messages array cannot be empty")
         
         if not openai_client:
             structured_logger.log_error(correlation_id, "OpenAI", "OpenAI client not initialized", user_id)
             raise HTTPException(status_code=503, detail="AI service temporarily unavailable")
         
+        if not chat_service:
+            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        
         # Log OpenAI request
-        structured_logger.log_openai_request(correlation_id, "gpt-4", 2)
+        structured_logger.log_openai_request(correlation_id, "gpt-4", len(request.messages))
+        
+        # Prepare messages for OpenAI (include system prompt)
+        openai_messages = [{"role": "system", "content": get_system_prompt()}]
+        
+        # Add conversation history
+        for message in request.messages:
+            openai_messages.append({
+                "role": message.role,
+                "content": message.content
+            })
         
         # Send to OpenAI
         response = openai_client.chat.completions.create(
             model="gpt-4",
-            messages=[
-                {"role": "system", "content": get_system_prompt()},
-                {"role": "user", "content": request.message}
-            ],
+            messages=openai_messages,
             max_tokens=1000,
             temperature=0.7
         )
         
         ai_response = response.choices[0].message.content
-        logger.info(f"OpenAI response generated successfully for user {user_id}")
         
-        return PromptResponse(response=ai_response)
+        # Add AI response to conversation
+        updated_messages = request.messages + [Message(role="assistant", content=ai_response)]
+        
+        # Handle chat session
+        chat_id = request.chat_id
+        if chat_id:
+            # Update existing chat session
+            success = await chat_service.update_chat_session(chat_id, user_id, updated_messages)
+            if not success:
+                # Chat not found, create new one
+                chat_id = await chat_service.create_chat_session(user_id, updated_messages)
+        else:
+            # Create new chat session
+            chat_id = await chat_service.create_chat_session(user_id, updated_messages)
+        
+        logger.info(f"OpenAI response generated for user {user_id}, chat {chat_id}")
+        
+        return PromptResponse(response=ai_response, chat_id=chat_id)
         
     except HTTPException:
         raise
@@ -198,18 +227,18 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
 
 @app.get("/history")
 async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Get chat history for authenticated user - SECURITY: JWT signature verification enabled"""
+    """Get chat sessions for authenticated user"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
-        if not supabase_client:
-            structured_logger.log_error(correlation_id, "Supabase", "Supabase client not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+        if not chat_service:
+            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
         
-        response = supabase_client.table("chat_sessions").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        sessions = await chat_service.get_user_chat_sessions(user_id)
         
-        logger.info(f"Chat history retrieved for user {user_id}: {len(response.data)} sessions")
-        return {"sessions": response.data}
+        logger.info(f"Chat sessions retrieved for user {user_id}: {len(sessions)} sessions")
+        return {"sessions": sessions}
         
     except HTTPException:
         raise
@@ -218,35 +247,93 @@ async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
         raise HTTPException(status_code=500, detail="Failed to retrieve chat history")
 
 
-@app.post("/history")
-async def save_history(request: PromptRequest, req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Save chat history - SECURITY: Now requires authentication"""
+@app.get("/history/{chat_id}")
+async def get_chat_session(chat_id: str, req: Request, user_id: str = Depends(verify_jwt_token)):
+    """Get specific chat session with full message history"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
-        if not supabase_client:
-            structured_logger.log_error(correlation_id, "Supabase", "Supabase client not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+        if not chat_service:
+            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
         
-        # Validate input
-        if not request.message or not request.message.strip():
-            raise HTTPException(status_code=400, detail="Message cannot be empty")
+        session = await chat_service.get_chat_session(chat_id, user_id)
         
-        # Save to database
-        response = supabase_client.table("chat_sessions").insert({
-            "user_id": user_id,
-            "message": request.message.strip(),
-            "created_at": "now()"
-        }).execute()
+        if not session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
         
-        logger.info(f"Chat message saved for user {user_id}")
-        return {"status": "saved", "data": response.data}
+        logger.info(f"Chat session {chat_id} retrieved for user {user_id}")
+        return {
+            "id": session.id,
+            "title": session.title,
+            "messages": [{"role": msg.role, "content": msg.content} for msg in session.messages],
+            "created_at": session.created_at.isoformat(),
+            "updated_at": session.updated_at.isoformat()
+        }
         
     except HTTPException:
         raise
     except Exception as e:
         structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Failed to save chat history")
+        raise HTTPException(status_code=500, detail="Failed to retrieve chat session")
+
+
+@app.post("/history")
+async def save_chat_session(request: SaveChatRequest, req: Request, user_id: str = Depends(verify_jwt_token)):
+    """Save or update chat session"""
+    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
+    
+    try:
+        if not chat_service:
+            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        
+        # Validate input
+        if not request.messages:
+            raise HTTPException(status_code=400, detail="Messages array cannot be empty")
+        
+        # Try to update existing session first
+        success = await chat_service.update_chat_session(request.chat_id, user_id, request.messages)
+        
+        if not success:
+            # Session doesn't exist, create new one
+            chat_id = await chat_service.create_chat_session(user_id, request.messages, request.title)
+        else:
+            chat_id = request.chat_id
+        
+        logger.info(f"Chat session saved for user {user_id}, chat {chat_id}")
+        return {"status": "saved", "chat_id": chat_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Failed to save chat session")
+
+
+@app.delete("/history/{chat_id}")
+async def delete_chat_session(chat_id: str, req: Request, user_id: str = Depends(verify_jwt_token)):
+    """Delete a chat session"""
+    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
+    
+    try:
+        if not chat_service:
+            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        
+        success = await chat_service.delete_chat_session(chat_id, user_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        
+        logger.info(f"Chat session {chat_id} deleted for user {user_id}")
+        return {"status": "deleted", "chat_id": chat_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Failed to delete chat session")
 
 
 @app.get("/metrics")
@@ -258,7 +345,7 @@ async def get_metrics():
 @app.get("/")
 async def root():
     """Root endpoint for health check"""
-    return {"message": "PatchAI Backend API is running", "version": "0.3.0"}
+    return {"message": "PatchAI Backend API is running", "version": "0.3.1"}
 
 
 @app.get("/debug")
