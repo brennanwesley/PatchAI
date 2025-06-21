@@ -97,6 +97,71 @@ export const AuthProvider = ({ children }) => {
     }
   };
   
+  // Login function (alias for signIn with better error messages)
+  const login = async (email, password) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        // Provide user-friendly error messages
+        let userMessage = 'Login failed. Please try again.';
+        
+        if (error.message.includes('Invalid login credentials')) {
+          userMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (error.message.includes('Email not confirmed')) {
+          userMessage = 'Please check your email and click the confirmation link before signing in.';
+        } else if (error.message.includes('Too many requests')) {
+          userMessage = 'Too many login attempts. Please wait a few minutes and try again.';
+        } else if (error.message.includes('Invalid email')) {
+          userMessage = 'Please enter a valid email address.';
+        }
+        
+        throw new Error(userMessage);
+      }
+      
+      setUser(data.user);
+      return { user: data.user, error: null };
+    } catch (error) {
+      console.error('Error logging in:', error);
+      throw error; // Re-throw to be caught by LandingPage
+    }
+  };
+  
+  // Sign up function with better error messages
+  const signUp = async (email, password) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      
+      if (error) {
+        // Provide user-friendly error messages
+        let userMessage = 'Sign up failed. Please try again.';
+        
+        if (error.message.includes('Password should be at least')) {
+          userMessage = 'Password must be at least 6 characters long.';
+        } else if (error.message.includes('Invalid email')) {
+          userMessage = 'Please enter a valid email address.';
+        } else if (error.message.includes('User already registered')) {
+          userMessage = 'An account with this email already exists. Please try logging in instead.';
+        } else if (error.message.includes('Signup is disabled')) {
+          userMessage = 'Account creation is currently disabled. Please contact support.';
+        }
+        
+        throw new Error(userMessage);
+      }
+      
+      return { user: data.user, error: null };
+    } catch (error) {
+      console.error('Error signing up:', error);
+      throw error; // Re-throw to be caught by LandingPage
+    }
+  };
+  
   // Sign out
   const signOut = async () => {
     try {
@@ -115,6 +180,8 @@ export const AuthProvider = ({ children }) => {
     initialized,
     signIn,
     signOut,
+    login,
+    signUp,
   };
 
   return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
