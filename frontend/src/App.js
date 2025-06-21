@@ -41,6 +41,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [chatsLoading, setChatsLoading] = useState(true);
+  const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
 
   // Handle window resize
   useEffect(() => {
@@ -77,12 +78,18 @@ function App() {
 
   // LOAD MESSAGES WHEN CHAT CHANGES - Simple and clean
   useEffect(() => {
+    // Don't load messages if we're creating a new chat (prevents race condition)
+    if (isCreatingNewChat) {
+      console.log('🚫 Skipping message load during chat creation');
+      return;
+    }
+    
     if (activeChatId) {
       loadMessages(activeChatId);
     } else {
       setMessages([]);
     }
-  }, [activeChatId]);
+  }, [activeChatId, isCreatingNewChat]);
 
   // SIMPLE CHAT LOADING
   const loadChats = async () => {
@@ -179,6 +186,8 @@ function App() {
       if (!chatId) {
         console.log('🆕 Creating new chat...');
         
+        setIsCreatingNewChat(true);
+        
         const chatTitle = messageText.substring(0, 30) + (messageText.length > 30 ? '...' : '');
         const newChat = await ChatService.createChatSession(chatTitle, userMessage);
         
@@ -197,6 +206,8 @@ function App() {
         await ChatService.addMessageToSession(chatId, userMessage.role, userMessage.content);
         console.log('✅ User message saved to existing chat');
       }
+
+      setIsCreatingNewChat(false);
 
       // STEP 3: Get AI response
       console.log('🤖 Getting AI response...');
@@ -262,6 +273,7 @@ function App() {
       setMessages(prev => [...(Array.isArray(prev) ? prev : []), errorMessage]);
     } finally {
       setIsLoading(false);
+      setIsCreatingNewChat(false);
     }
   };
 
