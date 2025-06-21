@@ -42,6 +42,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [chatsLoading, setChatsLoading] = useState(true);
   const [isLoadingChats, setIsLoadingChats] = useState(false); // Prevent multiple simultaneous calls
+  const [isCreatingNewChat, setIsCreatingNewChat] = useState(false); // Prevent useEffect from clearing messages during chat creation
 
   // Load user's chat sessions from database
   useEffect(() => {
@@ -76,7 +77,8 @@ function App() {
           const mostRecentChat = userChats[0]; // Already sorted by updated_at DESC
           setActiveChatId(mostRecentChat.id);
           setMessages(mostRecentChat.messages || []);
-        } else if (activeChatId) {
+        } else if (activeChatId && !isCreatingNewChat) {
+          // Only load messages if we're not in the middle of creating a new chat
           // Load messages for the active chat
           const activeChat = userChats.find(chat => chat.id === activeChatId);
           if (activeChat) {
@@ -91,26 +93,29 @@ function App() {
         console.error('Error loading user chats:', error);
         
         // Handle authentication errors
-        if (error.isAuthError) {
-          console.error('Authentication error - user may need to re-login:', error);
-          // Could trigger a re-authentication flow here if needed
+        if (error?.isAuthError) {
+          console.log('Authentication error detected, user needs to re-login');
+          // Don't set error state, just clear data
+          setChats([]);
+          setActiveChatId(null);
+          setMessages([]);
         } else {
-          console.error('General error loading chats:', error);
+          // For other errors, show empty state but don't break the app
+          setChats([]);
+          setActiveChatId(null);
+          setMessages([]);
         }
-        
-        // Set empty state on error
-        setChats([]);
-        setActiveChatId(null);
-        setMessages([]);
       } finally {
-        setChatsLoading(false);
         setIsLoadingChats(false);
+        setChatsLoading(false);
       }
     };
 
-    loadUserChats();
-  }, [user]); // Removed activeChatId to prevent infinite loop
-  
+    if (user) {
+      loadUserChats();
+    }
+  }, [user, chats.length, activeChatId, isCreatingNewChat]); // Added isCreatingNewChat to dependencies
+
   // Handle window resize and mobile/desktop detection
   useEffect(() => {
     const handleResize = () => {
@@ -143,6 +148,7 @@ function App() {
     console.log('🆕 Starting new chat...');
     setActiveChatId(null);
     setMessages([]);
+    setIsCreatingNewChat(false); // Reset flag when starting fresh
     // Navigate to new chat URL
     navigate('/chat', { replace: true });
   }, [navigate]);
@@ -219,6 +225,9 @@ function App() {
       if (!chatId) {
         console.log('🆕 Creating new chat...');
         
+        // Set flag to prevent useEffect from clearing messages during creation
+        setIsCreatingNewChat(true);
+        
         // Optimistically show the message
         setMessages([userMessage]);
         
@@ -240,6 +249,7 @@ function App() {
         } catch (error) {
           console.error('❌ Failed to create chat:', error);
           setMessages([]);
+          setIsCreatingNewChat(false); // Reset flag on error
           setIsLoading(false);
           return;
         }
@@ -327,6 +337,7 @@ function App() {
       console.error('❌ Send message failed:', error);
     } finally {
       setIsLoading(false);
+      setIsCreatingNewChat(false); // Reset flag
     }
   };
 
