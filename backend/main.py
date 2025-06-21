@@ -2,15 +2,18 @@
 """
 Simplified main.py for guaranteed Render deployment success
 Uses minimal dependencies and robust error handling
-Last updated: 2025-06-21 - SECURITY FIXES APPLIED
+Last updated: 2025-06-21 - SECURITY FIXES + RATE LIMITING APPLIED
 """
 
 import os
 import logging
 import httpx
 import jwt
-from typing import List
-from fastapi import FastAPI, HTTPException, Depends
+import time
+from collections import defaultdict, deque
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional, Tuple, Any
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
@@ -111,6 +114,164 @@ except Exception as e:
     logger.error(f"OpenAI key starts with: {OPENAI_API_KEY[:10] if OPENAI_API_KEY else 'None'}...")
     initialization_error = f"{type(e).__name__}: {str(e)}"
     # Continue without crashing - will handle in endpoints
+
+# RATE LIMITING SYSTEM
+class RateLimiter:
+    """High-performance memory-based rate limiter with subscription-tier awareness"""
+    
+    def __init__(self):
+        # Memory-based counters for microsecond performance
+        self.user_requests: Dict[str, deque] = defaultdict(deque)
+        self.ip_requests: Dict[str, deque] = defaultdict(deque)
+        
+        # Subscription tier limits (messages per day)
+        self.TIER_LIMITS = {
+            'free': 10,
+            'standard': 1000,
+            'premium': 5000,
+            'default': 10  # Default to free tier
+        }
+        
+        # IP-based limits (per hour to prevent abuse)
+        self.IP_LIMIT_PER_HOUR = 100
+        
+        logger.info("Rate limiter initialized with subscription-tier awareness")
+    
+    def _cleanup_old_requests(self, request_queue: deque, time_window: int) -> None:
+        """Remove requests older than time_window seconds"""
+        current_time = time.time()
+        while request_queue and current_time - request_queue[0] > time_window:
+            request_queue.popleft()
+    
+    def _get_user_tier(self, user_id: str) -> str:
+        """Get user's subscription tier - placeholder for future subscription system"""
+        # TODO: Query user's subscription from database
+        # For now, default to 'standard' for existing users, 'free' for new
+        return 'standard'  # Will be configurable per user
+    
+    def check_user_limit(self, user_id: str) -> Tuple[bool, Dict]:
+        """Check if user has exceeded their daily message limit"""
+        current_time = time.time()
+        day_in_seconds = 24 * 60 * 60
+        
+        # Clean up old requests (older than 24 hours)
+        self._cleanup_old_requests(self.user_requests[user_id], day_in_seconds)
+        
+        # Get user's subscription tier and limit
+        user_tier = self._get_user_tier(user_id)
+        daily_limit = self.TIER_LIMITS.get(user_tier, self.TIER_LIMITS['default'])
+        
+        # Count requests in last 24 hours
+        requests_today = len(self.user_requests[user_id])
+        
+        # Check if limit exceeded
+        if requests_today >= daily_limit:
+            return False, {
+                'error': 'rate_limit_exceeded',
+                'message': f'Daily message limit reached ({daily_limit} messages)',
+                'tier': user_tier,
+                'requests_today': requests_today,
+                'limit': daily_limit,
+                'reset_time': 'midnight UTC'
+            }
+        
+        # Record this request
+        self.user_requests[user_id].append(current_time)
+        
+        return True, {
+            'tier': user_tier,
+            'requests_today': requests_today + 1,
+            'limit': daily_limit,
+            'remaining': daily_limit - requests_today - 1
+        }
+    
+    def check_ip_limit(self, client_ip: str) -> Tuple[bool, Dict]:
+        """Check if IP has exceeded hourly request limit"""
+        current_time = time.time()
+        hour_in_seconds = 60 * 60
+        
+        # Clean up old requests (older than 1 hour)
+        self._cleanup_old_requests(self.ip_requests[client_ip], hour_in_seconds)
+        
+        # Count requests in last hour
+        requests_this_hour = len(self.ip_requests[client_ip])
+        
+        # Check if limit exceeded
+        if requests_this_hour >= self.IP_LIMIT_PER_HOUR:
+            return False, {
+                'error': 'ip_rate_limit_exceeded',
+                'message': f'Too many requests from this IP ({self.IP_LIMIT_PER_HOUR}/hour)',
+                'requests_this_hour': requests_this_hour,
+                'limit': self.IP_LIMIT_PER_HOUR,
+                'reset_time': '1 hour'
+            }
+        
+        # Record this request
+        self.ip_requests[client_ip].append(current_time)
+        
+        return True, {
+            'requests_this_hour': requests_this_hour + 1,
+            'limit': self.IP_LIMIT_PER_HOUR,
+            'remaining': self.IP_LIMIT_PER_HOUR - requests_this_hour - 1
+        }
+
+# Initialize rate limiter
+rate_limiter = RateLimiter()
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP address with proxy support"""
+    # Check for forwarded IP (from load balancers/proxies)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Take the first IP in the chain
+        return forwarded_for.split(",")[0].strip()
+    
+    # Check for real IP header
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    
+    # Fallback to direct client IP
+    return request.client.host if request.client else "unknown"
+
+async def check_rate_limits(request: Request, user_id: str) -> None:
+    """Check both user and IP rate limits"""
+    client_ip = get_client_ip(request)
+    
+    # Check IP-based rate limit first (prevents IP-based abuse)
+    ip_allowed, ip_info = rate_limiter.check_ip_limit(client_ip)
+    if not ip_allowed:
+        logger.warning(f"IP rate limit exceeded for {client_ip}: {ip_info}")
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": "Too many requests. Please try again later.",
+                "type": "ip_limit",
+                "retry_after": 3600  # 1 hour in seconds
+            }
+        )
+    
+    # Check user-based rate limit (subscription-tier aware)
+    user_allowed, user_info = rate_limiter.check_user_limit(user_id)
+    if not user_allowed:
+        logger.warning(f"User rate limit exceeded for {user_id}: {user_info}")
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": user_info['message'],
+                "type": "user_limit",
+                "tier": user_info['tier'],
+                "requests_today": user_info['requests_today'],
+                "limit": user_info['limit'],
+                "retry_after": 86400  # 24 hours in seconds
+            }
+        )
+    
+    # Log successful rate limit check (for monitoring)
+    logger.info(f"Rate limit check passed - User: {user_id}, IP: {client_ip}, "
+               f"User tier: {user_info['tier']}, Remaining: {user_info['remaining']}")
 
 # SECURITY: Enhanced Pydantic models with validation
 class Message(BaseModel):
@@ -236,6 +397,67 @@ def get_system_prompt():
     """
 
 # Routes
+@app.get("/health")
+async def health_check():
+    """Health check endpoint with comprehensive system status"""
+    status = {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "services": {
+            "openai": openai_client is not None,
+            "supabase": supabase_client is not None,
+            "rate_limiter": rate_limiter is not None
+        },
+        "rate_limiter": {
+            "active_users": len(rate_limiter.user_requests),
+            "active_ips": len(rate_limiter.ip_requests),
+            "tier_limits": rate_limiter.TIER_LIMITS
+        }
+    }
+    
+    if initialization_error:
+        status["initialization_error"] = initialization_error
+        status["status"] = "degraded"
+    
+    return status
+
+@app.get("/rate-limit-status")
+async def get_rate_limit_status(request: Request, user_id: str = Depends(verify_jwt_token)):
+    """Get current rate limit status for authenticated user"""
+    client_ip = get_client_ip(request)
+    
+    # Get user tier and current usage
+    user_tier = rate_limiter._get_user_tier(user_id)
+    daily_limit = rate_limiter.TIER_LIMITS.get(user_tier, rate_limiter.TIER_LIMITS['default'])
+    
+    # Clean up old requests to get accurate counts
+    current_time = time.time()
+    day_in_seconds = 24 * 60 * 60
+    hour_in_seconds = 60 * 60
+    
+    rate_limiter._cleanup_old_requests(rate_limiter.user_requests[user_id], day_in_seconds)
+    rate_limiter._cleanup_old_requests(rate_limiter.ip_requests[client_ip], hour_in_seconds)
+    
+    # Calculate current usage
+    requests_today = len(rate_limiter.user_requests[user_id])
+    requests_this_hour = len(rate_limiter.ip_requests[client_ip])
+    
+    return {
+        "user": {
+            "tier": user_tier,
+            "daily_limit": daily_limit,
+            "requests_today": requests_today,
+            "remaining_today": daily_limit - requests_today,
+            "percentage_used": round((requests_today / daily_limit) * 100, 1)
+        },
+        "ip": {
+            "hourly_limit": rate_limiter.IP_LIMIT_PER_HOUR,
+            "requests_this_hour": requests_this_hour,
+            "remaining_this_hour": rate_limiter.IP_LIMIT_PER_HOUR - requests_this_hour
+        },
+        "status": "within_limits" if requests_today < daily_limit else "limit_reached"
+    }
+
 @app.get("/")
 async def root():
     """Root endpoint for health check"""
@@ -258,7 +480,8 @@ async def debug_info():
 
 # SECURITY: Add authentication to /prompt endpoint
 @app.post("/prompt", response_model=PromptResponse)
-async def chat_completion(request: PromptRequest, user_id: str = Depends(verify_jwt_token)):
+async def chat_completion(request: Request, request_data: PromptRequest, user_id: str = Depends(verify_jwt_token)):
+    await check_rate_limits(request, user_id)
     if not openai_client:
         raise HTTPException(
             status_code=500,
@@ -269,7 +492,7 @@ async def chat_completion(request: PromptRequest, user_id: str = Depends(verify_
         messages = [{"role": "system", "content": get_system_prompt()}]
         
         # Add conversation history
-        for msg in request.messages:
+        for msg in request_data.messages:
             messages.append({"role": msg.role, "content": msg.content})
         
         # SECURITY: Log request without sensitive content
@@ -299,10 +522,11 @@ async def chat_completion(request: PromptRequest, user_id: str = Depends(verify_
         )
 
 @app.get("/history")
-async def get_history(user_id: str = Depends(verify_jwt_token)):
+async def get_history(request: Request, user_id: str = Depends(verify_jwt_token)):
     """
     Get chat history for the authenticated user
     """
+    await check_rate_limits(request, user_id)
     if not supabase_client:
         raise HTTPException(
             status_code=500,
@@ -329,7 +553,8 @@ async def get_history(user_id: str = Depends(verify_jwt_token)):
 
 # SECURITY: Add authentication to /history POST endpoint
 @app.post("/history")
-async def save_history(request: PromptRequest, user_id: str = Depends(verify_jwt_token)):
+async def save_history(request: Request, request_data: PromptRequest, user_id: str = Depends(verify_jwt_token)):
+    await check_rate_limits(request, user_id)
     if not supabase_client:
         raise HTTPException(
             status_code=500,
@@ -338,7 +563,7 @@ async def save_history(request: PromptRequest, user_id: str = Depends(verify_jwt
     try:
         data = {
             "user_id": user_id,  # SECURITY: Associate with authenticated user
-            "messages": [msg.dict() for msg in request.messages],
+            "messages": [msg.dict() for msg in request_data.messages],
             "response": ""
         }
         supabase_client.from_("history").insert([data]).execute()
