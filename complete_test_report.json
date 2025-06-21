@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-06-21T14:08:15.011170",
+  "timestamp": "2025-06-21T14:20:05.585065",
   "urls": {
     "backend": "https://patchai-backend.onrender.com",
     "frontend": "https://patchai-frontend.vercel.app"
@@ -16,67 +16,67 @@
       "test": "Backend Health",
       "status": "PASS",
       "details": "Version: 0.3.1",
-      "timestamp": "2025-06-21T14:08:12.384393"
+      "timestamp": "2025-06-21T14:20:02.839353"
     },
     {
       "test": "Health Endpoint",
       "status": "PASS",
       "details": "Working",
-      "timestamp": "2025-06-21T14:08:13.509471"
+      "timestamp": "2025-06-21T14:20:03.981109"
     },
     {
       "test": "CORS Configuration",
       "status": "PASS",
       "details": "Frontend origin allowed",
-      "timestamp": "2025-06-21T14:08:13.631122"
+      "timestamp": "2025-06-21T14:20:04.121509"
     },
     {
       "test": "Authentication Protection",
       "status": "PASS",
       "details": "Protected (HTTP 403)",
-      "timestamp": "2025-06-21T14:08:13.752583"
+      "timestamp": "2025-06-21T14:20:04.235856"
     },
     {
       "test": "API Documentation",
       "status": "PASS",
       "details": "Swagger docs available",
-      "timestamp": "2025-06-21T14:08:13.870516"
+      "timestamp": "2025-06-21T14:20:04.358277"
     },
     {
       "test": "React Application",
       "status": "PASS",
       "details": "React framework detected",
-      "timestamp": "2025-06-21T14:08:14.424636"
+      "timestamp": "2025-06-21T14:20:04.993629"
     },
     {
       "test": "JavaScript Bundle",
       "status": "PASS",
       "details": "JS bundles detected",
-      "timestamp": "2025-06-21T14:08:14.424733"
+      "timestamp": "2025-06-21T14:20:04.994031"
     },
     {
       "test": "PatchAI Branding",
       "status": "WARN",
       "details": "PatchAI branding not detected",
-      "timestamp": "2025-06-21T14:08:14.424743"
+      "timestamp": "2025-06-21T14:20:04.994082"
     },
     {
       "test": "HTML Structure",
       "status": "PASS",
       "details": "Proper HTML structure",
-      "timestamp": "2025-06-21T14:08:14.424749"
+      "timestamp": "2025-06-21T14:20:04.994107"
     },
     {
       "test": "CSS Framework",
       "status": "WARN",
       "details": "No clear CSS framework detected",
-      "timestamp": "2025-06-21T14:08:14.424756"
+      "timestamp": "2025-06-21T14:20:04.994139"
     },
     {
       "test": "Frontend-Backend Integration",
       "status": "PASS",
       "details": "CORS working, auth required",
-      "timestamp": "2025-06-21T14:08:15.011013"
+      "timestamp": "2025-06-21T14:20:05.584922"
     }
   ]
 }
