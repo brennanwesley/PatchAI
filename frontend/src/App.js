@@ -78,15 +78,16 @@ function App() {
 
   // LOAD MESSAGES WHEN CHAT CHANGES - Simple and clean
   useEffect(() => {
-    // Don't load messages if we're creating a new chat (prevents race condition)
     if (isCreatingNewChat) {
       console.log('🚫 Skipping message load during chat creation');
       return;
     }
     
     if (activeChatId) {
+      console.log('📋 Loading messages for chat:', activeChatId);
       loadMessages(activeChatId);
     } else {
+      console.log('🔄 No active chat, clearing messages');
       setMessages([]);
     }
   }, [activeChatId, isCreatingNewChat]);
@@ -130,27 +131,6 @@ function App() {
     }
   };
 
-  // SIMPLE CHAT SELECTION
-  const handleChatSelect = (chatId) => {
-    console.log('🎯 Selecting chat:', chatId);
-    setActiveChatId(chatId);
-    navigate(`/chat/${chatId}`);
-    if (isMobile) {
-      setShowMobileSidebar(false);
-    }
-  };
-
-  // SIMPLE NEW CHAT
-  const handleNewChat = () => {
-    console.log('🆕 Starting new chat');
-    setActiveChatId(null);
-    setMessages([]);
-    navigate('/chat');
-    if (isMobile) {
-      setShowMobileSidebar(false);
-    }
-  };
-
   // COMPLETELY REBUILT MESSAGE SENDING - Clean and simple
   const handleSendMessage = async (messageInput) => {
     console.log('🚀 Sending message:', messageInput);
@@ -176,13 +156,20 @@ function App() {
         files: files || []
       };
 
-      // STEP 1: Add user message to UI immediately
-      setMessages(prev => [...(Array.isArray(prev) ? prev : []), userMessage]);
+      // STEP 1: Build current conversation (BEFORE updating UI state)
+      const currentMessages = [...(Array.isArray(messages) ? messages : []), userMessage];
+      const apiMessages = currentMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // STEP 2: Add user message to UI immediately (optimistic update)
+      setMessages(currentMessages);
       console.log('✅ User message added to UI');
 
       let chatId = activeChatId;
 
-      // STEP 2: Create new chat if needed
+      // STEP 3: Create new chat if needed
       if (!chatId) {
         console.log('🆕 Creating new chat...');
         
@@ -209,15 +196,8 @@ function App() {
 
       setIsCreatingNewChat(false);
 
-      // STEP 3: Get AI response
+      // STEP 4: Get AI response
       console.log('🤖 Getting AI response...');
-      
-      const currentMessages = [...(Array.isArray(messages) ? messages : []), userMessage];
-      const apiMessages = currentMessages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-      
       console.log('📤 Sending to API:', { messages: apiMessages, chatId });
       
       const response = await ApiService.sendPrompt(apiMessages, chatId);
@@ -231,20 +211,21 @@ function App() {
         timestamp: new Date().toISOString()
       };
 
-      // STEP 4: Add AI message to UI
-      setMessages(prev => [...(Array.isArray(prev) ? prev : []), assistantMessage]);
+      // STEP 5: Add AI message to UI (build complete conversation)
+      const finalMessages = [...currentMessages, assistantMessage];
+      setMessages(finalMessages);
       console.log('✅ AI message added to UI');
 
-      // STEP 5: Save AI message to database
+      // STEP 6: Save AI message to database
       await ChatService.addMessageToSession(chatId, assistantMessage.role, assistantMessage.content);
       console.log('✅ AI message saved to database');
 
-      // STEP 6: Update chat in sidebar
+      // STEP 7: Update chat in sidebar
       setChats(prev => (Array.isArray(prev) ? prev : []).map(chat => 
         chat.id === chatId 
           ? { 
               ...chat, 
-              messages: [...(Array.isArray(chat.messages) ? chat.messages : []), userMessage, assistantMessage],
+              messages: finalMessages,
               lastMessage: assistantMessage.content,
               updatedAt: new Date().toISOString()
             }
@@ -274,6 +255,27 @@ function App() {
     } finally {
       setIsLoading(false);
       setIsCreatingNewChat(false);
+    }
+  };
+
+  // SIMPLE CHAT SELECTION
+  const handleChatSelect = (chatId) => {
+    console.log('🎯 Selecting chat:', chatId);
+    setActiveChatId(chatId);
+    navigate(`/chat/${chatId}`);
+    if (isMobile) {
+      setShowMobileSidebar(false);
+    }
+  };
+
+  // SIMPLE NEW CHAT
+  const handleNewChat = () => {
+    console.log('🆕 Starting new chat');
+    setActiveChatId(null);
+    setMessages([]);
+    navigate('/chat');
+    if (isMobile) {
+      setShowMobileSidebar(false);
     }
   };
 
