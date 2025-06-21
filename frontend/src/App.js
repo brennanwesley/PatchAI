@@ -334,42 +334,204 @@ function App() {
         <div className="mobile-sidebar-overlay" onClick={() => setShowMobileSidebar(false)} />
       )}
 
-      {/* Sidebar */}
-      <div 
-        ref={sidebarRef}
-        className={`sidebar-container ${isMobile ? 'mobile' : 'desktop'} ${
-          isMobile ? (showMobileSidebar ? 'show' : 'hide') : (isSidebarCollapsed ? 'collapsed' : 'expanded')
-        }`}
-      >
-        <Sidebar
-          chats={chats}
-          activeChatId={activeChatId}
-          onChatSelect={handleChatSelect}
-          onNewChat={handleNewChat}
-          onDeleteChat={handleDeleteChat}
-          onSignOut={handleSignOut}
-          onToggleCollapse={handleToggleCollapse}
-          isCollapsed={isSidebarCollapsed}
-          isMobile={isMobile}
-          loading={chatsLoading}
-        />
+      {/* Desktop Header - Hidden on mobile */}
+      <div className="hidden md:flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-14">
+        <h1 className="text-xl font-bold text-blue-600 dark:text-blue-400">PatchAI</h1>
+        
+        <button
+          onClick={handleSignOut}
+          className="p-2 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 focus:outline-none"
+          title="Sign out"
+        >
+          <FiLogOut className="w-6 h-6" />
+        </button>
       </div>
 
-      {/* Main Chat Area */}
-      <div className={`main-content ${isMobile ? 'mobile' : 'desktop'} ${
-        isMobile ? 'full-width' : (isSidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded')
-      }`}>
-        <div className="chat-container">
-          <ChatFeed 
-            messages={messages} 
-            isLoading={isLoading}
+      {/* Desktop Sidebar - Always visible on desktop */}
+      <div className="hidden md:flex flex-col h-full w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="flex-1 overflow-y-auto">
+          <Sidebar
+            chats={chats}
             activeChatId={activeChatId}
+            onChatSelect={handleChatSelect}
+            onNewChat={handleNewChat}
+            onDeleteChat={handleDeleteChat}
+            onSignOut={handleSignOut}
+            onToggleCollapse={handleToggleCollapse}
+            isCollapsed={isSidebarCollapsed}
+            isMobile={false}
+            loading={chatsLoading}
           />
-          <ChatInput 
-            onSendMessage={handleSendMessage}
-            disabled={isLoading}
-            placeholder={activeChatId ? "Type your message..." : "Start a new conversation..."}
+        </div>
+      </div>
+
+      {/* Mobile Sidebar - Hidden by default */}
+      <div
+        ref={sidebarRef}
+        className={`md:hidden fixed inset-y-0 left-0 flex flex-col transform ${
+          showMobileSidebar ? 'translate-x-0' : '-translate-x-full'
+        } z-30 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-transform duration-300 ease-in-out`}
+      >
+        <div className="flex-1 overflow-y-auto">
+          <Sidebar
+            chats={chats}
+            activeChatId={activeChatId}
+            onChatSelect={(chatId) => {
+              handleChatSelect(chatId);
+              setShowMobileSidebar(false);
+            }}
+            onNewChat={() => {
+              handleNewChat();
+              setShowMobileSidebar(false);
+            }}
+            onDeleteChat={handleDeleteChat}
+            onSignOut={handleSignOut}
+            onToggleCollapse={() => setShowMobileSidebar(false)}
+            isCollapsed={false}
+            isMobile={true}
+            loading={chatsLoading}
           />
+        </div>
+      </div>
+
+      {/* Overlay for mobile */}
+      {showMobileSidebar && (
+        <div 
+          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-20"
+          onClick={() => setShowMobileSidebar(false)}
+        />
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden pt-14 md:pt-0">
+        {/* Mobile Layout - Full width chat */}
+        <div className="md:hidden flex-1 overflow-y-auto overflow-x-hidden p-4">
+          <div className="max-w-3xl mx-auto w-full pb-24">
+            <ChatFeed messages={messages} isLoading={isLoading} activeChatId={activeChatId} />
+          </div>
+        </div>
+        
+        {/* Desktop Layout - Chat + Right Sidebar */}
+        <div className="hidden md:flex flex-1 h-full">
+          {/* Main Chat Area */}
+          <div className="flex-1 flex flex-col h-full min-w-0">
+            {/* Chat Feed Container with depth */}
+            <div className="flex-1 overflow-y-auto bg-gray-100 dark:bg-gray-900 p-6">
+              <div className="h-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="h-full flex flex-col">
+                  <div className="flex-1 overflow-y-auto">
+                    <div className="max-w-4xl mx-auto p-6 pb-24">
+                      <ChatFeed messages={messages} isLoading={isLoading} activeChatId={activeChatId} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Fixed input container at the bottom */}
+            <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg">
+              <div className="max-w-4xl mx-auto px-6 py-4">
+                <ChatInput 
+                  onSendMessage={handleSendMessage}
+                  disabled={isLoading}
+                  placeholder={activeChatId ? "Type your message..." : "Start a new conversation..."}
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Right Sidebar with Status Cards - Desktop Only */}
+          <div className="w-80 bg-gray-50 dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 p-6 overflow-y-auto">
+            <div className="space-y-6">
+              {/* Prompt Suggestions Card */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Quick Prompts
+                </h3>
+                <div className="space-y-2">
+                  {[
+                    "Analyze recent oil market trends",
+                    "Compare WTI vs Brent pricing",
+                    "Explain drilling techniques",
+                    "Review environmental regulations",
+                    "Assess investment opportunities"
+                  ].map((prompt, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSendMessage(prompt)}
+                      className="w-full text-left p-3 text-sm bg-gray-50 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-md border border-gray-200 dark:border-gray-600 transition-colors duration-200"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* WTI Price Card */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  WTI Price
+                </h3>
+                <div className="text-center py-4">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">$72.45</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">+1.2% today</div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">Live data coming soon</div>
+                </div>
+              </div>
+              
+              {/* Recent Acquisitions Card */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H7m2 0v-4a2 2 0 012-2h2a2 2 0 012 2v4" />
+                  </svg>
+                  Recent Deals
+                </h3>
+                <div className="space-y-2">
+                  <div className="text-sm">
+                    <div className="font-medium text-gray-900 dark:text-gray-100">ExxonMobil Acquisition</div>
+                    <div className="text-gray-500 dark:text-gray-400">$60B Permian Basin</div>
+                  </div>
+                  <div className="text-sm">
+                    <div className="font-medium text-gray-900 dark:text-gray-100">Chevron Deal</div>
+                    <div className="text-gray-500 dark:text-gray-400">$53B Hess Corp</div>
+                  </div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-2">Live data coming soon</div>
+                </div>
+              </div>
+              
+              {/* Market Insights Card */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Market Insights
+                </h3>
+                <div className="text-sm text-gray-600 dark:text-gray-300">
+                  <p className="mb-2">Oil demand expected to rise 2.4% this quarter driven by winter heating needs.</p>
+                  <div className="text-xs text-gray-400 dark:text-gray-500">AI insights coming soon</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Mobile Fixed input container at the bottom */}
+        <div className="md:hidden border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="max-w-3xl mx-auto w-full px-4 py-4">
+            <ChatInput 
+              onSendMessage={handleSendMessage}
+              disabled={isLoading}
+              placeholder={activeChatId ? "Type your message..." : "Start a new conversation..."}
+            />
+          </div>
         </div>
       </div>
     </div>
