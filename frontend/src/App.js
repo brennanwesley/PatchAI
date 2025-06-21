@@ -41,10 +41,17 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [chatsLoading, setChatsLoading] = useState(true);
+  const [isLoadingChats, setIsLoadingChats] = useState(false); // Prevent multiple simultaneous calls
 
   // Load user's chat sessions from database
   useEffect(() => {
     const loadUserChats = async () => {
+      // Prevent multiple simultaneous calls
+      if (isLoadingChats) {
+        console.log('Chat loading already in progress, skipping...');
+        return;
+      }
+
       if (!user) {
         setChats([]);
         setActiveChatId(null);
@@ -54,6 +61,7 @@ function App() {
       }
 
       try {
+        setIsLoadingChats(true);
         setChatsLoading(true);
         
         // Clear any legacy localStorage data
@@ -81,14 +89,27 @@ function App() {
         }
       } catch (error) {
         console.error('Error loading user chats:', error);
+        
+        // Handle authentication errors
+        if (error.isAuthError) {
+          console.error('Authentication error - user may need to re-login:', error);
+          // Could trigger a re-authentication flow here if needed
+        } else {
+          console.error('General error loading chats:', error);
+        }
+        
+        // Set empty state on error
         setChats([]);
+        setActiveChatId(null);
+        setMessages([]);
       } finally {
         setChatsLoading(false);
+        setIsLoadingChats(false);
       }
     };
 
     loadUserChats();
-  }, [user, activeChatId]);
+  }, [user, activeChatId]); // Removed isLoadingChats to prevent infinite loop
   
   // Handle window resize and mobile/desktop detection
   useEffect(() => {
@@ -476,10 +497,7 @@ function App() {
           // Update local state with both user and assistant messages
           const finalMessages = [...updatedMessages, assistantMessage];
           setMessages(finalMessages);
-          
-          // Update the chat in the sidebar
           updateChat(currentChatId, finalMessages);
-          
         } catch (dbError) {
           console.error('❌ Failed to save assistant message to database:', dbError);
           // Even if DB save fails, we'll still show the message to the user
@@ -491,26 +509,42 @@ function App() {
           setMessages(finalMessages);
           updateChat(currentChatId, finalMessages);
         }
-        
       } catch (apiError) {
         console.error('❌ API Error:', apiError);
         
-        // Add an error message to the chat
-        const errorMessage = {
-          id: `error-${Date.now()}`,
-          role: 'system',
-          content: 'Sorry, I encountered an error processing your request. Please try again.',
-          isError: true,
-          timestamp: new Date().toISOString()
-        };
-        
-        const finalMessages = [...updatedMessages, errorMessage];
-        setMessages(finalMessages);
-        updateChat(currentChatId, finalMessages);
-        
-        throw apiError;
+        // Handle authentication errors specifically
+        if (apiError.isAuthError) {
+          console.error('❌ Authentication error during message sending:', apiError);
+          const authErrorMessage = {
+            id: `error-${Date.now()}`,
+            role: 'system',
+            content: 'Authentication error. Please refresh the page and log in again.',
+            isError: true,
+            isAuthError: true,
+            timestamp: new Date().toISOString()
+          };
+          
+          const finalMessages = [...updatedMessages, authErrorMessage];
+          setMessages(finalMessages);
+          updateChat(currentChatId, finalMessages);
+        } else {
+          // Add an error message to the chat
+          const errorMessage = {
+            id: `error-${Date.now()}`,
+            role: 'system',
+            content: 'Sorry, I encountered an error processing your request. Please try again.',
+            isError: true,
+            timestamp: new Date().toISOString()
+          };
+          
+          const finalMessages = [...updatedMessages, errorMessage];
+          setMessages(finalMessages);
+          updateChat(currentChatId, finalMessages);
+        }
+      } finally {
+        console.log('🔄 Clearing loading state...');
+        setIsLoading(false);
       }
-
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error);
       handleMessageError(error);

@@ -1,4 +1,6 @@
 // API Configuration
+import { supabase } from '../supabaseClient';
+
 const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'https://patchai-backend.onrender.com';
 
 export const API_ENDPOINTS = {
@@ -12,10 +14,41 @@ export const DEFAULT_HEADERS = {
   'Accept': 'application/json'
 };
 
+/**
+ * Get the current user's JWT token from Supabase session
+ * @returns {Promise<string|null>} JWT token or null if not authenticated
+ */
+const getAuthToken = async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  } catch (error) {
+    console.error('Error getting auth token:', error);
+    return null;
+  }
+};
+
+/**
+ * Create headers with authentication if user is logged in
+ * @returns {Promise<Object>} Headers object with optional Authorization
+ */
+const createAuthHeaders = async () => {
+  const headers = { ...DEFAULT_HEADERS };
+  
+  const token = await getAuthToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
 export const createApiRequest = async (endpoint, method = 'GET', data = null) => {
+  const headers = await createAuthHeaders();
+  
   const options = {
     method,
-    headers: DEFAULT_HEADERS,
+    headers,
     credentials: 'include' // Important for cookies, authorization headers with HTTPS
   };
 
@@ -28,6 +61,15 @@ export const createApiRequest = async (endpoint, method = 'GET', data = null) =>
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      
+      // Handle authentication errors specifically
+      if (response.status === 401 || response.status === 403) {
+        const authError = new Error(errorData.detail || 'Authentication required');
+        authError.status = response.status;
+        authError.isAuthError = true;
+        throw authError;
+      }
+      
       throw new Error(errorData.detail || 'API request failed');
     }
 

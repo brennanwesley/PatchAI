@@ -32,10 +32,17 @@ export class ChatService {
         }
       } catch (error) {
         apiError = error;
+        
+        // If it's an authentication error, don't fall back to Supabase
+        if (error.isAuthError) {
+          console.error('Authentication error when fetching chat history:', error);
+          throw error;
+        }
+        
         console.warn('Failed to fetch chat history from API, falling back to Supabase:', error);
       }
 
-      // Fallback to Supabase if API fails
+      // Fallback to Supabase if API fails (but not for auth errors)
       try {
         const { data, error: supabaseError } = await supabase
           .from('chat_sessions')
@@ -55,7 +62,7 @@ export class ChatService {
           .order('updated_at', { ascending: false });
 
         if (supabaseError) {
-          console.error('Error fetching chat sessions from Supabase:', supabaseError);
+          console.error('Supabase error fetching chat sessions:', supabaseError);
           throw supabaseError;
         }
 
@@ -72,14 +79,25 @@ export class ChatService {
           updatedAt: session.updated_at
         }));
         
+        console.log('Fetched sessions from Supabase (fallback):', sessions);
         return sessions;
-      } catch (error) {
-        console.error('Error in Supabase fallback:', error);
-        throw error;
+      } catch (supabaseError) {
+        console.error('Failed to fetch chat sessions from both API and Supabase:', {
+          apiError,
+          supabaseError
+        });
+        
+        // If both API and Supabase fail, throw the original API error if it was auth-related
+        if (apiError?.isAuthError) {
+          throw apiError;
+        }
+        
+        // Otherwise throw the Supabase error
+        throw supabaseError;
       }
     } catch (error) {
       console.error('Error in getUserChatSessions:', error);
-      return [];
+      throw error;
     }
   }
 
