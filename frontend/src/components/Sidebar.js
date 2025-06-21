@@ -210,12 +210,12 @@ const Sidebar = ({
           <div className="flex items-center mb-3">
             <div className="flex-shrink-0">
               <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
-                {getInitials(localStorage.getItem('userName') || 'User')}
+                {getInitials(localStorage.getItem('customer_name') || 'User')}
               </div>
             </div>
             <div className="ml-3 overflow-hidden">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
-                {localStorage.getItem('userName') || 'User'}
+                {localStorage.getItem('customer_name') || 'User'}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                 {localStorage.getItem('userEmail') || 'user@example.com'}
@@ -240,12 +240,12 @@ const Sidebar = ({
               <div className="flex items-center mb-3">
                 <div className="flex-shrink-0">
                   <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
-                    {getInitials(localStorage.getItem('userName') || 'User')}
+                    {getInitials(localStorage.getItem('customer_name') || 'User')}
                   </div>
                 </div>
                 <div className="ml-3 overflow-hidden">
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
-                    {localStorage.getItem('userName') || 'User'}
+                    {localStorage.getItem('customer_name') || 'User'}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                     {localStorage.getItem('userEmail') || 'user@example.com'}
@@ -265,7 +265,7 @@ const Sidebar = ({
           ) : (
             <div className="flex justify-center">
               <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
-                {getInitials(localStorage.getItem('userName') || 'U')}
+                {getInitials(localStorage.getItem('customer_name') || 'U')}
               </div>
             </div>
           )}
