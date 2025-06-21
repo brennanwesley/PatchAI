@@ -8,7 +8,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
-  const [sessionCleared, setSessionCleared] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -18,9 +17,11 @@ export const AuthProvider = ({ children }) => {
     setUser(currentUser);
     
     // Only redirect if we're not already on the target page
-    if (currentUser && !location.pathname.startsWith('/chat')) {
-      navigate('/chat');
-    } else if (!currentUser && location.pathname !== '/') {
+    if (currentUser) {
+      if (!location.pathname.startsWith('/chat')) {
+        navigate('/chat');
+      }
+    } else if (location.pathname !== '/') {
       navigate('/');
     }
     
@@ -31,142 +32,92 @@ export const AuthProvider = ({ children }) => {
   }, [navigate, location.pathname, initialized]);
 
   useEffect(() => {
-    // Only clear sessions on the very first app load, not after successful login
+    // Initialize auth state
     const initializeAuth = async () => {
       try {
-        if (!sessionCleared) {
-          // FORCE LOGOUT ON INITIAL APP LOAD ONLY - FOR TESTING PURPOSES
-          console.log('Initial app load - clearing any existing sessions');
-          
-          // Clear any existing session
-          await supabase.auth.signOut();
-          
-          // Clear localStorage items that might contain session data
-          const keysToRemove = [];
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (key.startsWith('supabase') || key.startsWith('sb-'))) {
-              keysToRemove.push(key);
-            }
-          }
-          keysToRemove.forEach(key => localStorage.removeItem(key));
-          
-          // Clear sessionStorage as well
-          const sessionKeysToRemove = [];
-          for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key && (key.startsWith('supabase') || key.startsWith('sb-'))) {
-              sessionKeysToRemove.push(key);
-            }
-          }
-          sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
-          
-          console.log('Initial session clearing completed');
-          setSessionCleared(true);
-          
-          // Set user to null and finish loading
-          setUser(null);
-          setInitialized(true);
+        // Check for existing session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
           setLoading(false);
+          setInitialized(true);
+          return;
+        }
+        
+        if (session) {
+          // We have a valid session
+          setUser(session.user);
           
-          // Ensure we're on the login page
+          // Only redirect if we're not already on a chat page
+          if (!location.pathname.startsWith('/chat')) {
+            navigate('/chat');
+          }
+        } else {
+          // No session, redirect to login if not already there
           if (location.pathname !== '/') {
             navigate('/');
           }
-        } else {
-          // Session already cleared, just check for existing session normally
-          const { data: { session } } = await supabase.auth.getSession();
-          handleAuthChange('INITIAL_SESSION', session);
         }
         
-      } catch (error) {
-        console.error('Error during auth initialization:', error);
-        setUser(null);
         setLoading(false);
+        setInitialized(true);
+        
+        // Set up auth state change listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
+        
+        return () => {
+          subscription?.unsubscribe();
+        };
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        setLoading(false);
+        setInitialized(true);
       }
     };
-
-    // Execute auth initialization
+    
     initializeAuth();
-
-    // Set up auth state change listener for future login events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
-
-    return () => {
-      if (subscription) subscription.unsubscribe();
-    };
-  }, [handleAuthChange, navigate, location.pathname, sessionCleared]);
-
-  const login = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw error;
-  };
-
-  const signUp = async (email, password) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    if (error) throw error;
-  };
-
-  const logout = async () => {
+  }, [handleAuthChange, location.pathname, navigate]);
+  
+  // Sign in with email and password
+  const signIn = async (email, password) => {
     try {
-      // Sign out from Supabase
-      await supabase.auth.signOut();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       
-      // Clear all Supabase-related localStorage items
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith('supabase') || key.startsWith('sb-'))) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
+      if (error) throw error;
       
-      // Clear all Supabase-related sessionStorage items
-      const sessionKeysToRemove = [];
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key && (key.startsWith('supabase') || key.startsWith('sb-'))) {
-          sessionKeysToRemove.push(key);
-        }
-      }
-      sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
-      
-      // Clear chat data as well for fresh testing
-      localStorage.removeItem('patchai-chats');
-      localStorage.removeItem('patchai-active-chat');
-      
-      console.log('Complete logout - all session and app data cleared');
-      
-      // Set user to null
-      setUser(null);
-      
+      setUser(data.user);
+      return { user: data.user, error: null };
     } catch (error) {
-      console.error('Error during logout:', error);
-      // Even if there's an error, clear the user state
-      setUser(null);
+      console.error('Error signing in:', error);
+      return { user: null, error };
     }
   };
-
+  
+  // Sign out
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      return { error: null };
+    } catch (error) {
+      console.error('Error signing out:', error);
+      return { error };
+    }
+  };
+  
   const value = {
     user,
     loading,
-    login,
-    signUp,
-    logout,
+    initialized,
+    signIn,
+    signOut,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
