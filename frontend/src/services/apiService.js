@@ -4,14 +4,19 @@ export const ApiService = {
   /**
    * Send a prompt to the AI and get a response
    * @param {Array} messages - Array of message objects with role and content
-   * @returns {Promise<Object>} AI response
+   * @param {string} chatId - Optional chat session ID
+   * @returns {Promise<Object>} AI response with chat_id
    */
-  async sendPrompt(messages) {
-    return createApiRequest(API_ENDPOINTS.PROMPT, 'POST', { messages });
+  async sendPrompt(messages, chatId = null) {
+    const payload = { messages };
+    if (chatId) {
+      payload.chat_id = chatId;
+    }
+    return createApiRequest(API_ENDPOINTS.PROMPT, 'POST', payload);
   },
 
   /**
-   * Get chat history for the current user
+   * Get chat sessions for the current user
    * @returns {Promise<Array>} Array of chat sessions
    */
   async getChatHistory() {
@@ -19,12 +24,36 @@ export const ApiService = {
   },
 
   /**
-   * Save chat history
+   * Get specific chat session with full message history
+   * @param {string} chatId - Chat session ID
+   * @returns {Promise<Object>} Chat session with messages
+   */
+  async getChatSession(chatId) {
+    return createApiRequest(`${API_ENDPOINTS.HISTORY}/${chatId}`, 'GET');
+  },
+
+  /**
+   * Save or update chat session
+   * @param {string} chatId - Chat session ID
    * @param {Array} messages - Array of message objects
+   * @param {string} title - Optional chat title
    * @returns {Promise<Object>} Saved chat data
    */
-  async saveChatHistory(messages) {
-    return createApiRequest(API_ENDPOINTS.HISTORY, 'POST', { messages });
+  async saveChatSession(chatId, messages, title = null) {
+    const payload = { chat_id: chatId, messages };
+    if (title) {
+      payload.title = title;
+    }
+    return createApiRequest(API_ENDPOINTS.HISTORY, 'POST', payload);
+  },
+
+  /**
+   * Delete a chat session
+   * @param {string} chatId - Chat session ID
+   * @returns {Promise<Object>} Deletion confirmation
+   */
+  async deleteChatSession(chatId) {
+    return createApiRequest(`${API_ENDPOINTS.HISTORY}/${chatId}`, 'DELETE');
   },
 
   /**

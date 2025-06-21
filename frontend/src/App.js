@@ -316,8 +316,16 @@ function App() {
         }));
 
         console.log('📡 Sending to API:', apiMessages);
-        const response = await ApiService.sendPrompt(apiMessages);
+        const response = await ApiService.sendPrompt(apiMessages, chatId);
         console.log('✅ AI response received:', response);
+
+        // Handle chat_id from response (for new chats)
+        const responseChatId = response.chat_id || chatId;
+        if (!chatId && responseChatId) {
+          // This is a new chat, update our local chatId
+          chatId = responseChatId;
+          console.log('🆕 New chat created with ID:', chatId);
+        }
 
         const assistantMessage = {
           id: `assistant-${Date.now()}`,
