@@ -25,6 +25,13 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
             logger.error("SUPABASE_JWT_SECRET not configured")
             raise HTTPException(status_code=500, detail="Authentication configuration error")
         
+        # DEBUG: Log token details for debugging
+        token = credentials.credentials
+        logger.info(f"🔐 Attempting JWT verification...")
+        logger.info(f"🔐 Token preview: {token[:50]}...")
+        logger.info(f"🔐 JWT secret present: {bool(SUPABASE_JWT_SECRET)}")
+        logger.info(f"🔐 JWT secret preview: {SUPABASE_JWT_SECRET[:20] if SUPABASE_JWT_SECRET else 'None'}...")
+        
         # SECURITY: Verify JWT signature with secret
         payload = jwt.decode(
             credentials.credentials, 
@@ -38,14 +45,16 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
             logger.warning("JWT token missing user ID (sub claim)")
             raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
         
-        logger.info(f"JWT verification successful for user: {user_id}")
+        logger.info(f"✅ JWT verification successful for user: {user_id}")
         return user_id
         
     except jwt.ExpiredSignatureError:
         logger.warning("JWT token has expired")
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
-        logger.warning(f"JWT token validation failed: {str(e)}")
+        logger.warning(f"🚨 JWT token validation failed: {str(e)}")
+        logger.warning(f"🚨 Token type: {type(e).__name__}")
+        logger.warning(f"🚨 Full error: {repr(e)}")
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         logger.error(f"Unexpected error during JWT verification: {str(e)}")
