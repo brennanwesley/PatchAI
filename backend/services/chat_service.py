@@ -50,7 +50,6 @@ class ChatService:
             for message in messages:
                 self.supabase.table("messages").insert({
                     "chat_session_id": chat_id,
-                    "user_id": user_id,
                     "role": message.role,
                     "content": message.content,
                     "created_at": datetime.utcnow().isoformat()
@@ -73,7 +72,6 @@ class ChatService:
             for message in messages:
                 self.supabase.table("messages").insert({
                     "chat_session_id": chat_id,
-                    "user_id": user_id,
                     "role": message.role,
                     "content": message.content,
                     "created_at": datetime.utcnow().isoformat()
@@ -106,7 +104,7 @@ class ChatService:
             session_data = session_result.data[0]
             
             # Get messages from separate messages table
-            messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).execute()
+            messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).order("created_at").execute()
             messages = [Message(role=msg["role"], content=msg["content"]) for msg in messages_result.data]
             
             return ChatSession(
