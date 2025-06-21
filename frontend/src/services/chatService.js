@@ -181,8 +181,7 @@ export class ChatService {
         .insert({
           chat_session_id: chatId,
           role: role,
-          content: content,
-          user_id: user.id
+          content: content
         })
         .select()
         .single();
@@ -226,7 +225,6 @@ export class ChatService {
         .from('messages')
         .select('*')
         .eq('chat_session_id', sessionId)
-        .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
       if (error) {
