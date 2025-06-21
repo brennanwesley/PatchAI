@@ -363,7 +363,8 @@ async def debug_info():
             "openai_key_present": bool(os.getenv("OPENAI_API_KEY")),
             "supabase_url_present": bool(os.getenv("SUPABASE_URL")),
             "supabase_key_present": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
-            "jwt_secret_present": bool(os.getenv("SUPABASE_JWT_SECRET"))
+            "jwt_secret_present": bool(os.getenv("SUPABASE_JWT_SECRET")),
+            "jwt_secret_preview": os.getenv("SUPABASE_JWT_SECRET", "")[:20] + "..." if os.getenv("SUPABASE_JWT_SECRET") else "None"
         }
     }
 
