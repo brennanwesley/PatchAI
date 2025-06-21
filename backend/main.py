@@ -411,20 +411,28 @@ async def test_jwt_validation(request: Request):
         
         result = {
             "token_preview": token[:50] + "...",
+            "token_length": len(token),
             "jwt_secret_present": bool(SUPABASE_JWT_SECRET),
             "jwt_secret_preview": SUPABASE_JWT_SECRET[:20] + "..." if SUPABASE_JWT_SECRET else "None"
         }
         
+        # Try to decode header without verification to see algorithm
         try:
-            # Test JWT decode
+            header = jwt.get_unverified_header(token)
+            result["jwt_header"] = header
+        except Exception as e:
+            result["header_error"] = str(e)
+        
+        # Try HS256 (current method)
+        try:
             payload = jwt.decode(
                 token, 
                 SUPABASE_JWT_SECRET, 
                 algorithms=["HS256"],
                 options={"verify_signature": True}
             )
-            result["jwt_valid"] = True
-            result["payload"] = {
+            result["hs256_valid"] = True
+            result["hs256_payload"] = {
                 "sub": payload.get("sub"),
                 "iss": payload.get("iss"),
                 "aud": payload.get("aud"),
@@ -432,9 +440,48 @@ async def test_jwt_validation(request: Request):
                 "iat": payload.get("iat")
             }
         except Exception as e:
-            result["jwt_valid"] = False
-            result["jwt_error"] = str(e)
-            result["jwt_error_type"] = type(e).__name__
+            result["hs256_valid"] = False
+            result["hs256_error"] = str(e)
+            result["hs256_error_type"] = type(e).__name__
+        
+        # Try RS256 (alternative method)
+        try:
+            payload = jwt.decode(
+                token, 
+                SUPABASE_JWT_SECRET, 
+                algorithms=["RS256"],
+                options={"verify_signature": True}
+            )
+            result["rs256_valid"] = True
+            result["rs256_payload"] = {
+                "sub": payload.get("sub"),
+                "iss": payload.get("iss"),
+                "aud": payload.get("aud"),
+                "exp": payload.get("exp"),
+                "iat": payload.get("iat")
+            }
+        except Exception as e:
+            result["rs256_valid"] = False
+            result["rs256_error"] = str(e)
+            result["rs256_error_type"] = type(e).__name__
+        
+        # Try without signature verification to see payload
+        try:
+            payload = jwt.decode(
+                token, 
+                options={"verify_signature": False}
+            )
+            result["unverified_payload"] = {
+                "sub": payload.get("sub"),
+                "iss": payload.get("iss"),
+                "aud": payload.get("aud"),
+                "exp": payload.get("exp"),
+                "iat": payload.get("iat"),
+                "role": payload.get("role"),
+                "email": payload.get("email")
+            }
+        except Exception as e:
+            result["unverified_error"] = str(e)
         
         return result
         
