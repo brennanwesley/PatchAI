@@ -200,6 +200,7 @@ function App() {
 
       // STEP 3: Get AI response
       console.log('🤖 Getting AI response...');
+      console.log('📤 Sending to API:', { messages: apiMessages, chatId });
       
       const currentMessages = [...messages, userMessage];
       const apiMessages = currentMessages.map(msg => ({
@@ -208,7 +209,7 @@ function App() {
       }));
 
       const response = await ApiService.sendPrompt(apiMessages, chatId);
-      console.log('✅ AI response received');
+      console.log('✅ AI response received:', response);
 
       // Create AI message
       const assistantMessage = {
@@ -241,12 +242,18 @@ function App() {
 
     } catch (error) {
       console.error('❌ Send message failed:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        status: error.status,
+        isAuthError: error.isAuthError,
+        stack: error.stack
+      });
       
       // Add error message
       const errorMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: `Sorry, I encountered an error: ${error.message}. Please try again.`,
         timestamp: new Date().toISOString(),
         isError: true
       };
