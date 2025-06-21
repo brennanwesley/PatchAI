@@ -234,7 +234,8 @@ function App() {
       console.log('🆕 Creating new chat with message:', firstMessage);
       
       // Create new chat in database
-      const newChat = await ChatService.createChatSession(firstMessage.content);
+      const chatTitle = firstMessage.content.substring(0, 30) + (firstMessage.content.length > 30 ? '...' : '');
+      const newChat = await ChatService.createChatSession(chatTitle, firstMessage);
       console.log('✅ Chat created in database:', newChat);
       
       logDiagnostic('CREATE_NEW_CHAT_DB_SUCCESS', { 
