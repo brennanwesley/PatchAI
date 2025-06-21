@@ -140,9 +140,12 @@ function App() {
 
   // Define handleNewChat next since it's used in other callbacks
   const handleNewChat = useCallback(() => {
+    console.log('🆕 Starting new chat...');
     setActiveChatId(null);
     setMessages([]);
-  }, []);
+    // Navigate to new chat URL
+    navigate('/chat', { replace: true });
+  }, [navigate]);
 
   // Toggle mobile sidebar
   const toggleMobileSidebar = useCallback(() => {
@@ -174,10 +177,17 @@ function App() {
   useEffect(() => {
     const activeChat = chats.find(chat => chat.id === activeChatId);
     if (activeChat) {
-      setMessages(activeChat ? activeChat.messages : []);
-    } else {
+      // Ensure messages is always an array
+      const chatMessages = Array.isArray(activeChat.messages) ? activeChat.messages : [];
+      console.log('📋 Loading chat messages:', chatMessages);
+      setMessages(chatMessages);
+    } else if (activeChatId === null) {
+      // Only clear messages if explicitly setting to no active chat (new chat button)
+      console.log('📋 No active chat, setting empty messages array');
       setMessages([]);
     }
+    // If activeChatId is set but chat not found in chats array, don't clear messages
+    // This prevents clearing messages during new chat creation before chats array updates
   }, [activeChatId, chats]);
 
   // Create new chat session with first message
@@ -221,10 +231,7 @@ function App() {
         return updatedChats;
       });
       
-      setActiveChatId(newChat.id);
-      setMessages([firstMessage]);
-      
-      console.log('✅ Updated local state with new chat:', newChatObj);
+      console.log('✅ New chat created successfully, returning ID:', newChat.id);
       
       return newChat.id;
     } catch (error) {
@@ -365,22 +372,26 @@ function App() {
     });
     
     const errorMessageObj = {
+      id: `error-${Date.now()}`,
       role: 'assistant',
       content: `Error: ${errorMessage}`,
       timestamp: new Date().toISOString(),
       isError: true
     };
 
+    // Ensure messages is always an array before spreading to prevent recursive errors
+    const safeMessages = Array.isArray(messages) ? messages : [];
+    
     // Only update messages if we have an active chat
-    if (activeChatId && messages) {
+    if (activeChatId) {
       console.log('📝 Adding error message to chat:', activeChatId);
-      const updatedMessages = [...messages, errorMessageObj];
+      const updatedMessages = [...safeMessages, errorMessageObj];
       setMessages(updatedMessages);
       updateChat(activeChatId, updatedMessages);
     } else {
-      console.warn('⚠️ No active chat or messages array to update with error');
+      console.warn('⚠️ No active chat, adding error to current messages');
       // If there's no active chat but we need to show the error
-      setMessages(prev => [...(prev || []), errorMessageObj]);
+      setMessages([...safeMessages, errorMessageObj]);
     }
   };
 
@@ -426,8 +437,12 @@ function App() {
       // Set loading state immediately
       setIsLoading(true);
 
+      // Ensure messages is always an array before spreading
+      const safeMessages = Array.isArray(messages) ? messages : [];
+      console.log('📋 Safe messages array:', safeMessages);
+
       // Optimistically update the UI with the user's message
-      updatedMessages = currentChatId ? [...messages, userMessage] : [userMessage];
+      updatedMessages = currentChatId ? [...safeMessages, userMessage] : [userMessage];
       setMessages(updatedMessages);
 
       // If no active chat, create a new one
@@ -744,7 +759,7 @@ function App() {
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center">
                   <svg className="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                   Market Insights
                 </h3>
