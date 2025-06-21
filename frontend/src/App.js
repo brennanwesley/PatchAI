@@ -266,8 +266,8 @@ function App() {
           // Update state
           setActiveChatId(chatId);
           
-          // Refresh chats from database to ensure new chat appears in sidebar
-          await refreshChats();
+          // Add new chat to sidebar optimistically (don't refresh all chats to preserve messages)
+          setChats(prevChats => [newChat, ...prevChats]);
           
           // Navigate to new chat
           navigate(`/chat/${chatId}`, { replace: true });
