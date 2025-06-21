@@ -163,14 +163,6 @@ export class ChatService {
         throw new Error('User not authenticated');
       }
 
-      // First try to save via API
-      try {
-        const response = await ApiService.sendPrompt([{ role, content }]);
-        return response;
-      } catch (apiError) {
-        console.warn('Failed to save message via API, falling back to Supabase:', apiError);
-      }
-
       // Verify chat session exists and belongs to user
       const { data: chatSession, error: chatError } = await supabase
         .from('chat_sessions')
