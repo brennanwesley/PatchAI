@@ -395,6 +395,53 @@ async def get_rate_limit_status(request: Request, user_id: str = Depends(verify_
         raise HTTPException(status_code=500, detail="Failed to get rate limit status")
 
 
+@app.get("/test-jwt")
+async def test_jwt_validation(request: Request):
+    """Test JWT validation and return detailed error info"""
+    try:
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return {"error": "No Authorization header or invalid format"}
+        
+        token = auth_header.split(" ")[1]
+        
+        # Import JWT and auth here for testing
+        import jwt
+        from core.auth import SUPABASE_JWT_SECRET
+        
+        result = {
+            "token_preview": token[:50] + "...",
+            "jwt_secret_present": bool(SUPABASE_JWT_SECRET),
+            "jwt_secret_preview": SUPABASE_JWT_SECRET[:20] + "..." if SUPABASE_JWT_SECRET else "None"
+        }
+        
+        try:
+            # Test JWT decode
+            payload = jwt.decode(
+                token, 
+                SUPABASE_JWT_SECRET, 
+                algorithms=["HS256"],
+                options={"verify_signature": True}
+            )
+            result["jwt_valid"] = True
+            result["payload"] = {
+                "sub": payload.get("sub"),
+                "iss": payload.get("iss"),
+                "aud": payload.get("aud"),
+                "exp": payload.get("exp"),
+                "iat": payload.get("iat")
+            }
+        except Exception as e:
+            result["jwt_valid"] = False
+            result["jwt_error"] = str(e)
+            result["jwt_error_type"] = type(e).__name__
+        
+        return result
+        
+    except Exception as e:
+        return {"error": f"Test failed: {str(e)}"}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
