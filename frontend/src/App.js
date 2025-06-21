@@ -393,7 +393,20 @@ function App() {
       console.log('📝 Adding error message to chat:', activeChatId);
       const updatedMessages = [...safeMessages, errorMessageObj];
       setMessages(updatedMessages);
-      updateChat(activeChatId, updatedMessages);
+      
+      // Update the chat in chats array
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.id === activeChatId 
+            ? { 
+                ...chat, 
+                messages: updatedMessages,
+                lastMessage: errorMessageObj.content,
+                updatedAt: new Date().toISOString()
+              }
+            : chat
+        )
+      );
     } else {
       console.warn('⚠️ No active chat, adding error to current messages');
       // If there's no active chat but we need to show the error
