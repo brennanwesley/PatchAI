@@ -176,10 +176,10 @@ export class ChatService {
       }
 
       // Insert message
-      const { data: message, error } = await supabase
+      const { data, error } = await supabase
         .from('messages')
         .insert({
-          chat_id: chatId,
+          chat_session_id: chatId,
           role: role,
           content: content,
           user_id: user.id
@@ -198,10 +198,10 @@ export class ChatService {
       if (updateError) console.error('Error updating chat timestamp:', updateError);
 
       return {
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        timestamp: message.created_at
+        id: data.id,
+        role: data.role,
+        content: data.content,
+        timestamp: data.created_at
       };
     } catch (error) {
       console.error('Error in addMessageToSession:', error);
@@ -225,7 +225,7 @@ export class ChatService {
       const { data: messages, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('chat_id', sessionId)
+        .eq('chat_session_id', sessionId)
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
