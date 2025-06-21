@@ -193,7 +193,7 @@ function App() {
       setIsLoading(true);
 
       // Handle different input types
-      const messageText = typeof messageInput === 'string' ? messageInput : messageInput.message;
+      const messageText = typeof messageInput === 'string' ? messageInput : messageInput.content;
       const files = typeof messageInput === 'object' ? messageInput.files : [];
       
       if (!messageText?.trim()) {
