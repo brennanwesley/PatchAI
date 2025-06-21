@@ -118,6 +118,22 @@ function App() {
     }
   }, [user]); // Only run when user changes to prevent interference with chat creation
 
+  // Define handleSelectChat before useEffect that uses it
+  const handleSelectChat = useCallback((chatId) => {
+    console.log('🔄 Selecting chat:', chatId);
+    setActiveChatId(chatId);
+    
+    // Find and load messages for the selected chat
+    const selectedChat = chats.find(chat => chat.id === chatId);
+    if (selectedChat) {
+      setMessages(selectedChat.messages || []);
+      console.log('📄 Loaded messages for chat:', chatId, selectedChat.messages?.length || 0);
+    } else {
+      console.warn('⚠️ Chat not found in local state:', chatId);
+      setMessages([]);
+    }
+  }, [chats]);
+
   // Handle URL-based chat selection
   useEffect(() => {
     const path = location.pathname;
@@ -150,22 +166,6 @@ function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isMobile]);
-  
-  // Define handleSelectChat first since it's used in other callbacks
-  const handleSelectChat = useCallback((chatId) => {
-    console.log('🔄 Selecting chat:', chatId);
-    setActiveChatId(chatId);
-    
-    // Find and load messages for the selected chat
-    const selectedChat = chats.find(chat => chat.id === chatId);
-    if (selectedChat) {
-      setMessages(selectedChat.messages || []);
-      console.log('📄 Loaded messages for chat:', chatId, selectedChat.messages?.length || 0);
-    } else {
-      console.warn('⚠️ Chat not found in local state:', chatId);
-      setMessages([]);
-    }
-  }, [chats]);
 
   // Define handleNewChat next since it's used in other callbacks
   const handleNewChat = useCallback(() => {
