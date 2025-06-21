@@ -55,10 +55,14 @@ const ChatInput = ({
     }
 
     const trimmedMessage = message.trim();
-    if (!trimmedMessage && files.length === 0) return;
+    if (!trimmedMessage && files.length === 0) {
+      setError('Please enter a message or attach a file');
+      return;
+    }
     
     try {
-      await onSendMessage({
+      // Prepare the message object
+      const messageData = {
         content: trimmedMessage,
         files: files.map(file => ({
           name: file.name,
@@ -66,28 +70,60 @@ const ChatInput = ({
           size: file.size,
           data: file // Will be processed by the parent
         }))
+      };
+      
+      console.log('📤 Sending message:', { 
+        content: trimmedMessage, 
+        fileCount: files.length,
+        hasContent: !!trimmedMessage
       });
       
-      // Reset form
+      // Clear error state before sending
+      setError(null);
+      
+      // Call the parent's send handler
+      await onSendMessage(trimmedMessage ? messageData : { files: messageData.files });
+      
+      // Reset form only if the message was sent successfully
       setMessage('');
       setFiles([]);
-      setError(null);
+      
     } catch (err) {
-      console.error('Failed to send message:', err);
-      setError(err.message || 'Failed to send message');
+      console.error('❌ Failed to send message:', err);
+      // Show a user-friendly error message
+      const errorMessage = err.message || 'Failed to send message';
+      setError(errorMessage);
+      
+      // Auto-hide error after 5 seconds
+      const errorTimer = setTimeout(() => {
+        setError(null);
+      }, 5000);
+      
+      // Cleanup timer on component unmount
+      return () => clearTimeout(errorTimer);
     }
   };
 
   const handleKeyDown = (e) => {
-    // Submit on Enter (without Shift), new line on Shift+Enter
+    // Don't submit if the user is selecting text with shift key
+    if (e.shiftKey && e.key === 'Enter') {
+      // Allow Shift+Enter for new lines
+      return;
+    }
+    
+    // Submit on Enter (without Shift) or Cmd+Enter/Ctrl+Enter
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
-    }
-    // Also allow Cmd+Enter or Ctrl+Enter for submission
-    else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleSubmit(e);
+      
+      // Don't submit if the message is empty and there are no files
+      if (!message.trim() && files.length === 0) {
+        return;
+      }
+      
+      // Only submit if not already loading
+      if (!isLoading) {
+        handleSubmit(e);
+      }
     }
   };
 
@@ -121,6 +157,17 @@ const ChatInput = ({
   const isNearLimit = remainingChars < 100;
   const isOverLimit = remainingChars < 0;
   const isDisabled = isLoading || !isAuthenticated || (message.trim() === '' && files.length === 0) || isOverLimit;
+  
+  // Get disabled reason for tooltip
+  const getDisabledReason = () => {
+    if (!isAuthenticated) return 'Please sign in to send messages';
+    if (isLoading) return 'Sending message...';
+    if (isOverLimit) return `Message too long (max ${maxLength} characters)`;
+    if (message.trim() === '' && files.length === 0) return 'Enter a message or attach a file';
+    return '';
+  };
+  
+  const disabledReason = isDisabled ? getDisabledReason() : '';
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-t border-gray-200/50 dark:border-gray-700/50 px-4 py-3 md:py-4 md:px-6">
@@ -162,7 +209,7 @@ const ChatInput = ({
           <div className="relative">
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
               disabled={isLoading || !isAuthenticated}
               className="p-2 rounded-full text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Attach files"
@@ -192,46 +239,54 @@ const ChatInput = ({
               className="w-full px-4 py-3 pr-12 text-gray-900 dark:text-white bg-transparent border-0 focus:ring-0 resize-none overflow-hidden text-sm md:text-base"
               style={{ minHeight: '44px', maxHeight: '200px' }}
             />
-            
-            {/* Character counter */}
+
             {isNearLimit && (
-              <div className={`absolute right-2 bottom-1 text-xs ${
-                isOverLimit ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'
-              }`}>
+              <div className={`absolute right-2 bottom-1 text-xs ${isOverLimit ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}`}>
                 {remainingChars}
               </div>
             )}
           </div>
 
           {/* Send button */}
-          <button
-            type="submit"
-            disabled={isDisabled}
-            className={`p-2.5 rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${
-              isDisabled
-                ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-            aria-label="Send message"
-          >
-            {isLoading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <FiSend className="w-5 h-5" />
+          <div className="relative group">
+            <button
+              type="submit"
+              disabled={isDisabled}
+              className={`p-2.5 rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${isDisabled ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              aria-label={isDisabled ? disabledReason : 'Send message'}
+              data-tooltip={disabledReason}
+            >
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <FiSend className="w-5 h-5" />
+              )}
+            </button>
+
+            {isDisabled && disabledReason && (
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 dark:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                {disabledReason}
+              </div>
             )}
-          </button>
+          </div>
         </div>
 
         {/* Help text */}
-        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
+        <div className="mt-2 text-xs text-center text-gray-500 dark:text-gray-400">
           {isAuthenticated ? (
-            <>
-              Press {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to send • 
-              {files.length > 0 ? `${files.length} file${files.length > 1 ? 's' : ''} attached • ` : ''}
-              Patch can make mistakes, please verify important information.
-            </>
+            <span>
+              Press{' '}
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded">
+                Enter
+              </kbd>{' '}
+              to send,{' '}
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded">
+                Shift+Enter
+              </kbd>{' '}
+              for new line
+            </span>
           ) : (
-            'Please sign in to start chatting with PatchAI'
+            <span>Please sign in to start chatting</span>
           )}
         </div>
       </form>
