@@ -170,7 +170,7 @@ function App() {
       };
 
       // STEP 1: Add user message to UI immediately
-      setMessages(prev => [...prev, userMessage]);
+      setMessages(prev => [...(Array.isArray(prev) ? prev : []), userMessage]);
       console.log('✅ User message added to UI');
 
       let chatId = activeChatId;
@@ -186,7 +186,7 @@ function App() {
         setActiveChatId(chatId);
         
         // Add to chats list
-        setChats(prev => [newChat, ...prev]);
+        setChats(prev => [newChat, ...(Array.isArray(prev) ? prev : [])]);
         
         // Update URL
         navigate(`/chat/${chatId}`, { replace: true });
@@ -200,14 +200,15 @@ function App() {
 
       // STEP 3: Get AI response
       console.log('🤖 Getting AI response...');
-      console.log('📤 Sending to API:', { messages: apiMessages, chatId });
       
-      const currentMessages = [...messages, userMessage];
+      const currentMessages = [...(Array.isArray(messages) ? messages : []), userMessage];
       const apiMessages = currentMessages.map(msg => ({
         role: msg.role,
         content: msg.content
       }));
-
+      
+      console.log('📤 Sending to API:', { messages: apiMessages, chatId });
+      
       const response = await ApiService.sendPrompt(apiMessages, chatId);
       console.log('✅ AI response received:', response);
 
@@ -220,7 +221,7 @@ function App() {
       };
 
       // STEP 4: Add AI message to UI
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => [...(Array.isArray(prev) ? prev : []), assistantMessage]);
       console.log('✅ AI message added to UI');
 
       // STEP 5: Save AI message to database
@@ -228,11 +229,11 @@ function App() {
       console.log('✅ AI message saved to database');
 
       // STEP 6: Update chat in sidebar
-      setChats(prev => prev.map(chat => 
+      setChats(prev => (Array.isArray(prev) ? prev : []).map(chat => 
         chat.id === chatId 
           ? { 
               ...chat, 
-              messages: [...(chat.messages || []), userMessage, assistantMessage],
+              messages: [...(Array.isArray(chat.messages) ? chat.messages : []), userMessage, assistantMessage],
               lastMessage: assistantMessage.content,
               updatedAt: new Date().toISOString()
             }
@@ -258,7 +259,7 @@ function App() {
         isError: true
       };
       
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...(Array.isArray(prev) ? prev : []), errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -273,7 +274,7 @@ function App() {
       
       await ChatService.deleteSession(chatId);
       
-      setChats(prev => prev.filter(chat => chat.id !== chatId));
+      setChats(prev => (Array.isArray(prev) ? prev : []).filter(chat => chat.id !== chatId));
       
       if (chatId === activeChatId) {
         setActiveChatId(null);
