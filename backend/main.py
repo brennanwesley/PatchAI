@@ -429,7 +429,10 @@ async def test_jwt_validation(request: Request):
                 token, 
                 SUPABASE_JWT_SECRET, 
                 algorithms=["HS256"],
-                options={"verify_signature": True}
+                options={
+                    "verify_signature": True,  # CRITICAL: Signature verification enabled
+                    "verify_aud": False        # FIXED: Disable audience verification for Supabase tokens
+                }
             )
             result["hs256_valid"] = True
             result["hs256_payload"] = {
