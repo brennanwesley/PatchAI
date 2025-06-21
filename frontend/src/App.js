@@ -466,6 +466,7 @@ function App() {
             onSelectChat={handleSelectChat}
             onNewChat={handleNewChat}
             onDeleteChat={(chatId, e) => handleDeleteChat(chatId, e)}
+            onLogOut={handleSignOut}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={handleToggleCollapse}
           />
@@ -486,6 +487,7 @@ function App() {
             onSelectChat={handleSelectChatWrapper}
             onNewChat={handleNewChatWrapper}
             onDeleteChat={(chatId, e) => handleDeleteChat(chatId, e)}
+            onLogOut={handleSignOut}
             isCollapsed={false}
             onToggleCollapse={toggleMobileSidebar}
           />
@@ -518,7 +520,7 @@ function App() {
               <div className="h-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="h-full flex flex-col">
                   <div className="flex-1 overflow-y-auto">
-                    <div className="p-6 pb-24">
+                    <div className="max-w-4xl mx-auto p-6 pb-24">
                       <ChatFeed messages={messages} isLoading={isLoading} />
                     </div>
                   </div>
@@ -528,7 +530,7 @@ function App() {
             
             {/* Fixed input container at the bottom */}
             <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg">
-              <div className="px-6 py-4">
+              <div className="max-w-4xl mx-auto px-6 py-4">
                 <ChatInput onSendMessage={handleSendMessage} isSending={isLoading} />
               </div>
             </div>

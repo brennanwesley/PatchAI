@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { formatDistanceToNow } from 'date-fns';
+import { FiLogOut } from 'react-icons/fi';
 import PropTypes from 'prop-types';
 
 const MAX_TITLE_LENGTH = 30;
@@ -14,6 +15,7 @@ const Sidebar = ({
   onSelectChat = () => {},
   onNewChat = () => {},
   onDeleteChat = () => {},
+  onLogOut = () => {}, // Add onLogOut prop
   isCollapsed = false,
   onToggleCollapse = () => {}
 }) => {
@@ -205,7 +207,7 @@ const Sidebar = ({
       
         {/* User Info - Positioned 25% from bottom on desktop */}
         <div className="hidden md:block absolute bottom-1/4 w-full p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="flex items-center">
+          <div className="flex items-center mb-3">
             <div className="flex-shrink-0">
               <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
                 {getInitials(localStorage.getItem('userName') || 'User')}
@@ -220,25 +222,45 @@ const Sidebar = ({
               </p>
             </div>
           </div>
+          
+          {/* Log Out Button */}
+          <button
+            onClick={onLogOut}
+            className="w-full flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            <FiLogOut className="w-4 h-4 mr-3" />
+            <span>Log Out</span>
+          </button>
         </div>
         
         {/* Mobile User Info - Stays at bottom */}
         <div className="md:hidden p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mt-auto">
           {!isCollapsed ? (
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
-                  {getInitials(localStorage.getItem('userName') || 'User')}
+            <div>
+              <div className="flex items-center mb-3">
+                <div className="flex-shrink-0">
+                  <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
+                    {getInitials(localStorage.getItem('userName') || 'User')}
+                  </div>
+                </div>
+                <div className="ml-3 overflow-hidden">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
+                    {localStorage.getItem('userName') || 'User'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {localStorage.getItem('userEmail') || 'user@example.com'}
+                  </p>
                 </div>
               </div>
-              <div className="ml-3 overflow-hidden">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
-                  {localStorage.getItem('userName') || 'User'}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {localStorage.getItem('userEmail') || 'user@example.com'}
-                </p>
-              </div>
+              
+              {/* Mobile Log Out Button */}
+              <button
+                onClick={onLogOut}
+                className="w-full flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+              >
+                <FiLogOut className="w-4 h-4 mr-3" />
+                <span>Log Out</span>
+              </button>
             </div>
           ) : (
             <div className="flex justify-center">
@@ -270,6 +292,7 @@ Sidebar.propTypes = {
   onSelectChat: PropTypes.func,
   onNewChat: PropTypes.func,
   onDeleteChat: PropTypes.func,
+  onLogOut: PropTypes.func, // Add onLogOut prop type
   isCollapsed: PropTypes.bool,
   onToggleCollapse: PropTypes.func
 };
