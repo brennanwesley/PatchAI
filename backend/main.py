@@ -529,6 +529,38 @@ async def test_openai():
         }
 
 
+@app.get("/test-chat-service")
+async def test_chat_service(user_id: str = Depends(verify_jwt_token)):
+    """Test chat service functionality"""
+    try:
+        if not chat_service:
+            return {"error": "Chat service not initialized"}
+        
+        # Create test messages
+        from models.schemas import Message
+        test_messages = [
+            Message(role="user", content="Test message for chat service"),
+            Message(role="assistant", content="Test response from assistant")
+        ]
+        
+        # Test creating a chat session
+        chat_id = await chat_service.create_chat_session(user_id, test_messages, "Test Chat")
+        
+        return {
+            "success": True,
+            "chat_id": chat_id,
+            "user_id": user_id,
+            "message": "Chat service working correctly"
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
