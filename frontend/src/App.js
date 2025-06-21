@@ -43,18 +43,6 @@ function App() {
   const [chatsLoading, setChatsLoading] = useState(true);
   const [isLoadingChats, setIsLoadingChats] = useState(false); // Prevent multiple simultaneous calls
 
-  // ========== TEMPORARY DIAGNOSTIC LOGGING - REMOVE AFTER DEBUGGING ==========
-  const logDiagnostic = (step, data) => {
-    console.log(`🔍 DIAGNOSTIC [${step}]:`, {
-      timestamp: new Date().toISOString(),
-      activeChatId,
-      messagesLength: messages?.length || 0,
-      chatsLength: chats?.length || 0,
-      ...data
-    });
-  };
-  // ========== END TEMPORARY DIAGNOSTIC LOGGING ==========
-
   // Load user's chat sessions from database
   useEffect(() => {
     const loadUserChats = async () => {
@@ -121,7 +109,7 @@ function App() {
     };
 
     loadUserChats();
-  }, [user, activeChatId]); // Removed isLoadingChats to prevent infinite loop
+  }, [user]); // Removed activeChatId to prevent infinite loop
   
   // Handle window resize and mobile/desktop detection
   useEffect(() => {
@@ -152,14 +140,12 @@ function App() {
 
   // Define handleNewChat next since it's used in other callbacks
   const handleNewChat = useCallback(() => {
-    logDiagnostic('HANDLE_NEW_CHAT_START', { currentActiveChatId: activeChatId, currentMessages: messages });
     console.log('🆕 Starting new chat...');
     setActiveChatId(null);
     setMessages([]);
     // Navigate to new chat URL
     navigate('/chat', { replace: true });
-    logDiagnostic('HANDLE_NEW_CHAT_END', { newActiveChatId: null, clearedMessages: true });
-  }, [navigate, logDiagnostic, activeChatId, messages]);
+  }, [navigate]);
 
   // Toggle mobile sidebar
   const toggleMobileSidebar = useCallback(() => {
@@ -187,187 +173,160 @@ function App() {
     setIsSidebarCollapsed(prev => !prev);
   }, []);
 
-  // Load messages for active chat
+  // Load messages when active chat changes
   useEffect(() => {
-    logDiagnostic('USEEFFECT_LOAD_MESSAGES_START', { 
-      activeChatId, 
-      chatsInArray: chats.map(c => ({ id: c.id, title: c.title, messageCount: c.messages?.length }))
-    });
-    
     const activeChat = chats.find(chat => chat.id === activeChatId);
     if (activeChat) {
-      // Ensure messages is always an array
       const chatMessages = Array.isArray(activeChat.messages) ? activeChat.messages : [];
-      console.log('📋 Loading chat messages:', chatMessages);
-      logDiagnostic('USEEFFECT_FOUND_ACTIVE_CHAT', { 
-        chatId: activeChat.id, 
-        chatTitle: activeChat.title,
-        chatMessagesLength: chatMessages.length,
-        chatMessages: chatMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })),
-        currentMessagesLength: messages.length
-      });
+      console.log('📋 Loading chat messages for chat:', activeChatId);
       setMessages(chatMessages);
     } else if (activeChatId === null) {
-      // Only clear messages if explicitly setting to no active chat (new chat button)
-      console.log('📋 No active chat, setting empty messages array');
-      logDiagnostic('USEEFFECT_NO_ACTIVE_CHAT', { activeChatId, clearingMessages: true });
+      console.log('📋 No active chat, clearing messages');
       setMessages([]);
-    } else {
-      logDiagnostic('USEEFFECT_CHAT_NOT_FOUND', { 
-        activeChatId, 
-        availableChats: chats.map(c => c.id),
-        keepingCurrentMessages: true 
-      });
     }
-    // If activeChatId is set but chat not found in chats array, don't clear messages
-    // This prevents clearing messages during new chat creation before chats array updates
-  }, [activeChatId, chats, logDiagnostic, messages.length]);
+  }, [activeChatId, chats]);
 
-  // Create new chat session with first message
-  const createNewChat = async (firstMessage) => {
-    logDiagnostic('CREATE_NEW_CHAT_START', { 
-      firstMessage: { role: firstMessage.role, content: firstMessage.content?.substring(0, 50) + '...' },
-      currentChatsCount: chats.length
-    });
+  const handleSendMessage = async (messageInput) => {
+    console.log('🚀 SEND MESSAGE START:', messageInput);
     
     try {
-      console.log('🆕 Creating new chat with message:', firstMessage);
-      
-      // Create new chat in database
-      const chatTitle = firstMessage.content.substring(0, 30) + (firstMessage.content.length > 30 ? '...' : '');
-      const newChat = await ChatService.createChatSession(chatTitle, firstMessage);
-      console.log('✅ Chat created in database:', newChat);
-      
-      logDiagnostic('CREATE_NEW_CHAT_DB_SUCCESS', { 
-        newChatId: newChat.id, 
-        newChatTitle: newChat.title 
-      });
+      setIsLoading(true);
 
-      // Create chat object for local state
-      const newChatObj = {
-        id: newChat.id,
-        title: newChat.title,
-        messages: [firstMessage],
-        messageCount: 1,
-        lastMessage: firstMessage.content,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+      // Handle different input types
+      const messageText = typeof messageInput === 'string' ? messageInput : messageInput.message;
+      const files = typeof messageInput === 'object' ? messageInput.files : [];
+      
+      if (!messageText?.trim()) {
+        console.warn('⚠️ Empty message, not sending');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create user message
+      const userMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: messageText.trim(),
+        timestamp: new Date().toISOString(),
+        files: files || []
       };
       
-      logDiagnostic('CREATE_NEW_CHAT_OBJ_CREATED', { 
-        chatObj: {
-          id: newChatObj.id,
-          title: newChatObj.title,
-          messagesLength: newChatObj.messages.length,
-          firstMessageContent: newChatObj.messages[0]?.content?.substring(0, 50) + '...'
-        }
-      });
-      
-      // Update local state
-      setChats(prevChats => {
-        const updatedChats = [newChatObj, ...prevChats];
-        console.log('🔄 Updated chats list:', updatedChats);
-        logDiagnostic('CREATE_NEW_CHAT_CHATS_UPDATED', { 
-          newChatsCount: updatedChats.length,
-          newChatAdded: updatedChats[0].id === newChatObj.id
-        });
-        return updatedChats;
-      });
-      
-      console.log('✅ New chat created successfully, returning ID:', newChat.id);
-      logDiagnostic('CREATE_NEW_CHAT_SUCCESS', { returnedChatId: newChat.id });
-      
-      return newChat.id;
-    } catch (error) {
-      console.error('❌ Error creating new chat:', error);
-      // Rethrow the error to be caught by the caller
-      throw new Error(`Failed to create new chat: ${error.message || 'Unknown error'}`);
-    }
-  };
+      console.log('👤 User message created:', userMessage);
 
-  // Update chat with new messages
-  const updateChat = async (chatId, newMessages) => {
-    if (!chatId) {
-      console.warn('⚠️ Cannot update chat: No chat ID provided');
-      return;
-    }
-    
-    console.log(`🔄 Updating chat ${chatId} with ${newMessages?.length || 0} messages`);
-    
-    try {
-      // Ensure we have valid messages
-      const validMessages = Array.isArray(newMessages) ? newMessages : [];
-      
-      // Update local state immediately for responsiveness
-      setChats(prevChats => {
-        const chatExists = prevChats.some(chat => chat.id === chatId);
+      let chatId = activeChatId;
+
+      // If no active chat, create new one
+      if (!chatId) {
+        console.log('🆕 Creating new chat...');
         
-        if (!chatExists) {
-          console.log(`➕ Adding new chat ${chatId} to the list`);
-          // If this is a new chat, add it to the beginning of the list
-          return [{
-            id: chatId,
-            title: validMessages[0]?.content?.substring(0, 30) + (validMessages[0]?.content?.length > 30 ? '...' : '') || 'New Chat',
-            messages: validMessages,
-            messageCount: validMessages.length,
-            lastMessage: validMessages[validMessages.length - 1]?.content || '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }, ...prevChats];
+        // Optimistically show the message
+        setMessages([userMessage]);
+        
+        try {
+          // Create chat in database
+          const chatTitle = userMessage.content.substring(0, 30) + (userMessage.content.length > 30 ? '...' : '');
+          const newChat = await ChatService.createChatSession(chatTitle, userMessage);
+          
+          chatId = newChat.id;
+          console.log('✅ New chat created:', chatId);
+          
+          // Update state
+          setActiveChatId(chatId);
+          setChats(prevChats => [newChat, ...prevChats]);
+          
+          // Navigate to new chat
+          navigate(`/chat/${chatId}`, { replace: true });
+          
+        } catch (error) {
+          console.error('❌ Failed to create chat:', error);
+          setMessages([]);
+          setIsLoading(false);
+          return;
         }
+      } else {
+        console.log('📝 Adding to existing chat:', chatId);
         
-        // Otherwise, update the existing chat
-        return prevChats.map(chat => {
-          if (chat.id === chatId) {
-            return {
-              ...chat,
-              messages: validMessages,
-              messageCount: validMessages.length,
-              lastMessage: validMessages[validMessages.length - 1]?.content || '',
-              updatedAt: new Date().toISOString()
-            };
-          }
-          return chat;
-        });
-      });
-      
-      // If this is the active chat, update the messages
-      if (chatId === activeChatId) {
-        console.log(`🔄 Updating active chat messages (${validMessages.length} messages)`);
-        setMessages(validMessages);
-      }
-      
-      // Update the chat title only if it's still "New Chat" (hasn't been customized)
-      if (validMessages.length > 0) {
-        const firstMessage = validMessages[0];
-        if (firstMessage.role === 'user' && firstMessage.content) {
-          const newTitle = firstMessage.content.substring(0, 30) + 
-                         (firstMessage.content.length > 30 ? '...' : '');
-          
-          setChats(prevChats => 
-            prevChats.map(chat => 
-              chat.id === chatId && (chat.title === 'New Chat' || chat.title === newTitle)
-                ? { ...chat, title: newTitle }
-                : chat
-            )
-          );
-          
-          // Also update the chat title in the database only if it's a new chat
-          try {
-            const currentChat = chats.find(c => c.id === chatId);
-            if (currentChat && currentChat.title === 'New Chat') {
-              await ChatService.updateSessionTitle(chatId, newTitle);
-            }
-          } catch (error) {
-            console.error('❌ Failed to update chat title:', error);
-          }
+        // Add message to existing chat
+        setMessages(prev => [...prev, userMessage]);
+        
+        try {
+          // Save user message to database
+          await ChatService.addMessageToSession(chatId, userMessage.role, userMessage.content);
+          console.log('✅ User message saved to database');
+        } catch (error) {
+          console.error('❌ Failed to save user message:', error);
+          // Don't return here, still try to get AI response
         }
       }
-      
+
+      // Get AI response
+      try {
+        console.log('🤖 Getting AI response...');
+        
+        // Prepare messages for API (get current messages including the new user message)
+        const currentMessages = chatId ? 
+          [...(messages || []), userMessage] : 
+          [userMessage];
+          
+        const apiMessages = currentMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
+
+        console.log('📡 Sending to API:', apiMessages);
+        const response = await ApiService.sendPrompt(apiMessages);
+        console.log('✅ AI response received:', response);
+
+        const assistantMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: response.response || response.content || 'No response from assistant',
+          timestamp: new Date().toISOString()
+        };
+
+        // Add AI response to UI
+        setMessages(prev => [...prev, assistantMessage]);
+
+        // Save AI response to database
+        try {
+          await ChatService.addMessageToSession(chatId, assistantMessage.role, assistantMessage.content);
+          console.log('✅ AI response saved to database');
+        } catch (error) {
+          console.error('❌ Failed to save AI response:', error);
+        }
+
+        // Update chat in chats array
+        setChats(prevChats => 
+          prevChats.map(chat => 
+            chat.id === chatId 
+              ? { 
+                  ...chat, 
+                  messages: [...(chat.messages || []), userMessage, assistantMessage],
+                  lastMessage: assistantMessage.content,
+                  updatedAt: new Date().toISOString()
+                }
+              : chat
+          )
+        );
+
+      } catch (error) {
+        console.error('❌ AI response failed:', error);
+        
+        const errorMessage = {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: 'Sorry, I encountered an error processing your message. Please try again.',
+          timestamp: new Date().toISOString(),
+          isError: true
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
+      }
+
     } catch (error) {
-      console.error('❌ Error updating chat:', error);
-      // Even if there's an error, we don't want to break the UI
-      // The next refresh or navigation will correct any inconsistencies
+      console.error('❌ Send message failed:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -439,216 +398,6 @@ function App() {
       console.warn('⚠️ No active chat, adding error to current messages');
       // If there's no active chat but we need to show the error
       setMessages([...safeMessages, errorMessageObj]);
-    }
-  };
-
-  const handleSendMessage = async (messageInput) => {
-    logDiagnostic('HANDLE_SEND_MESSAGE_START', { 
-      messageInput: typeof messageInput === 'string' ? messageInput.substring(0, 50) + '...' : 'object',
-      currentChatId: activeChatId,
-      currentMessagesLength: messages.length
-    });
-
-    try {
-      // Set loading state immediately
-      setIsLoading(true);
-
-      // Ensure messages is always an array before spreading
-      const safeMessages = Array.isArray(messages) ? messages : [];
-      console.log('📋 Safe messages array:', safeMessages);
-      logDiagnostic('HANDLE_SEND_MESSAGE_SAFE_MESSAGES', { 
-        safeMessagesLength: safeMessages.length,
-        messagesWasArray: Array.isArray(messages)
-      });
-
-      // Handle different input types (string vs object with message and files)
-      const messageText = typeof messageInput === 'string' ? messageInput : messageInput.message;
-      const files = typeof messageInput === 'object' ? messageInput.files : [];
-      
-      if (!messageText?.trim() && (!files || files.length === 0)) {
-        console.warn('⚠️ Empty message, not sending');
-        return;
-      }
-
-      // Create user message object
-      const userMessage = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: messageText.trim(),
-        timestamp: new Date().toISOString(),
-        files: files || []
-      };
-      
-      logDiagnostic('HANDLE_SEND_MESSAGE_USER_MESSAGE_CREATED', { 
-        userMessage: {
-          id: userMessage.id,
-          role: userMessage.role,
-          content: userMessage.content.substring(0, 50) + '...',
-          hasFiles: userMessage.files.length > 0
-        }
-      });
-
-      let currentChatId = activeChatId;
-      let updatedMessages;
-
-      // Optimistically update the UI with the user's message
-      updatedMessages = currentChatId ? [...safeMessages, userMessage] : [userMessage];
-      setMessages(updatedMessages);
-      
-      logDiagnostic('HANDLE_SEND_MESSAGE_OPTIMISTIC_UPDATE', { 
-        updatedMessagesLength: updatedMessages.length,
-        isNewChat: !currentChatId
-      });
-
-      // If no active chat, create a new one
-      if (!currentChatId) {
-        console.log('🆕 Creating new chat...');
-        logDiagnostic('HANDLE_SEND_MESSAGE_CREATING_NEW_CHAT', { userMessage });
-        try {
-          currentChatId = await createNewChat(userMessage);
-          console.log('🆔 New chat ID:', currentChatId);
-          
-          logDiagnostic('HANDLE_SEND_MESSAGE_NEW_CHAT_CREATED', { 
-            newChatId: currentChatId,
-            aboutToSetActiveChatId: true
-          });
-          
-          // Update the active chat ID and ensure messages stay visible
-          setActiveChatId(currentChatId);
-          
-          logDiagnostic('HANDLE_SEND_MESSAGE_ACTIVE_CHAT_ID_SET', { 
-            newActiveChatId: currentChatId,
-            aboutToUpdateChatsArray: true
-          });
-          
-          // Ensure the user message stays visible by updating the chat in the chats array
-          setChats(prevChats => {
-            const updatedChats = prevChats.map(chat => 
-              chat.id === currentChatId 
-                ? { ...chat, messages: updatedMessages }
-                : chat
-            );
-            logDiagnostic('HANDLE_SEND_MESSAGE_CHATS_ARRAY_UPDATED', { 
-              foundChatToUpdate: updatedChats.some(c => c.id === currentChatId),
-              updatedChatsLength: updatedChats.length
-            });
-            return updatedChats;
-          });
-          
-          // Update the URL to reflect the new chat
-          navigate(`/chat/${currentChatId}`, { replace: true });
-          
-          logDiagnostic('HANDLE_SEND_MESSAGE_NAVIGATION_COMPLETE', { 
-            navigatedTo: `/chat/${currentChatId}`
-          });
-        } catch (error) {
-          console.error('❌ Failed to create new chat:', error);
-          // Remove the optimistic update if chat creation fails
-          setMessages([]);
-          throw error;
-        }
-      } else {
-        console.log('📝 Adding message to existing chat:', currentChatId);
-        try {
-          // Add user message to database
-          await ChatService.addMessageToSession(currentChatId, userMessage.role, userMessage.content);
-          console.log('✅ Message added to database');
-          
-          // Update the message with a permanent ID if needed
-          // (the backend might have assigned a new ID)
-          
-        } catch (error) {
-          console.error('❌ Failed to add message to database:', error);
-          // Remove the optimistic update if message save fails
-          setMessages(messages);
-          throw error;
-        }
-      }
-
-      // Prepare messages for API call (include all previous messages for context)
-      const apiMessages = updatedMessages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-
-      console.log('📡 Sending to API:', apiMessages);
-
-      try {
-        // Call backend API through ApiService
-        const response = await ApiService.sendPrompt(apiMessages);
-        console.log('✅ API Response received:', response);
-
-        const assistantMessage = {
-          id: `msg-${Date.now()}`,
-          role: 'assistant',
-          content: response.response || response.content || 'No response from assistant',
-          timestamp: new Date().toISOString()
-        };
-        
-        console.log('🤖 Assistant message:', assistantMessage);
-
-        try {
-          // Add AI response to database
-          await ChatService.addMessageToSession(currentChatId, assistantMessage.role, assistantMessage.content);
-          console.log('✅ AI message added to database');
-          
-          // Update local state with both user and assistant messages
-          const finalMessages = [...updatedMessages, assistantMessage];
-          setMessages(finalMessages);
-          updateChat(currentChatId, finalMessages);
-        } catch (dbError) {
-          console.error('❌ Failed to save assistant message to database:', dbError);
-          // Even if DB save fails, we'll still show the message to the user
-          // but we'll mark it as potentially unsaved
-          const finalMessages = [...updatedMessages, {
-            ...assistantMessage,
-            error: 'Failed to save to database'
-          }];
-          setMessages(finalMessages);
-          updateChat(currentChatId, finalMessages);
-        }
-      } catch (apiError) {
-        console.error('❌ API Error:', apiError);
-        
-        // Handle authentication errors specifically
-        if (apiError.isAuthError) {
-          console.error('❌ Authentication error during message sending:', apiError);
-          const authErrorMessage = {
-            id: `error-${Date.now()}`,
-            role: 'system',
-            content: 'Authentication error. Please refresh the page and log in again.',
-            isError: true,
-            isAuthError: true,
-            timestamp: new Date().toISOString()
-          };
-          
-          const finalMessages = [...updatedMessages, authErrorMessage];
-          setMessages(finalMessages);
-          updateChat(currentChatId, finalMessages);
-        } else {
-          // Add an error message to the chat
-          const errorMessage = {
-            id: `error-${Date.now()}`,
-            role: 'system',
-            content: 'Sorry, I encountered an error processing your request. Please try again.',
-            isError: true,
-            timestamp: new Date().toISOString()
-          };
-          
-          const finalMessages = [...updatedMessages, errorMessage];
-          setMessages(finalMessages);
-          updateChat(currentChatId, finalMessages);
-        }
-      } finally {
-        console.log('🔄 Clearing loading state...');
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error('❌ Error in handleSendMessage:', error);
-      handleMessageError(error);
-    } finally {
-      console.log('🔄 Clearing loading state...');
-      setIsLoading(false);
     }
   };
 
