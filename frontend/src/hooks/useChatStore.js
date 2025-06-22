@@ -43,7 +43,7 @@ function chatReducer(state, action) {
     case 'CREATE_CHAT':
       return {
         ...state,
-        chats: [action.payload, ...state.chats],
+        chats: [action.payload, ...(Array.isArray(state.chats) ? state.chats : [])],
         activeChat: action.payload,
         messages: []
       };
@@ -51,9 +51,9 @@ function chatReducer(state, action) {
     case 'UPDATE_CHAT':
       return {
         ...state,
-        chats: state.chats.map(chat => 
-          chat.id === action.payload.id ? action.payload : chat
-        ),
+        chats: Array.isArray(state.chats) 
+          ? state.chats.map(chat => chat.id === action.payload.id ? action.payload : chat)
+          : [action.payload],
         activeChat: action.payload
       };
     
