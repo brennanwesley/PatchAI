@@ -159,7 +159,7 @@ async def create_checkout_session(
                 'quantity': 1,
             }],
             mode='subscription',
-            success_url=request.success_url + '?session_id={CHECKOUT_SESSION_ID}',
+            success_url=request.success_url + ('&' if '?' in request.success_url else '?') + 'session_id={CHECKOUT_SESSION_ID}',
             cancel_url=request.cancel_url,
             metadata={
                 'user_id': user_id,
