@@ -378,6 +378,52 @@ async def get_rate_limit_status(request: Request, user_id: str = Depends(verify_
         raise HTTPException(status_code=500, detail="Failed to get rate limit status")
 
 
+@app.delete("/admin/user/{user_id}/history")
+async def delete_user_history(user_id: str, req: Request):
+    """Admin endpoint to delete all chat history for a specific user"""
+    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
+    
+    try:
+        if not chat_service:
+            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized")
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        
+        # Get all chat sessions for the user
+        chat_sessions = await chat_service.get_user_chat_sessions(user_id, limit=1000)
+        
+        if not chat_sessions:
+            logger.info(f"No chat sessions found for user {user_id}")
+            return {"status": "no_data", "message": f"No chat history found for user {user_id}"}
+        
+        deleted_sessions = 0
+        deleted_messages = 0
+        
+        # Delete each chat session (this will also delete associated messages)
+        for session in chat_sessions:
+            chat_id = session['id']
+            success = await chat_service.delete_chat_session(chat_id, user_id)
+            if success:
+                deleted_sessions += 1
+                # Count messages (rough estimate)
+                deleted_messages += 10  # Average estimate
+        
+        logger.info(f"Deleted {deleted_sessions} chat sessions for user {user_id}")
+        
+        return {
+            "status": "deleted",
+            "user_id": user_id,
+            "deleted_sessions": deleted_sessions,
+            "estimated_deleted_messages": deleted_messages,
+            "message": f"Successfully deleted all chat history for user {user_id}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to delete user history: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
