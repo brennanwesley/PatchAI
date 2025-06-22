@@ -32,23 +32,30 @@ def initialize_stripe():
 def validate_stripe_config():
     """Validate that Stripe is properly configured."""
     stripe_secret_key = os.getenv("STRIPE_API_SECRET")
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    stripe_webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    stripe_publishable_key = os.getenv("STRIPE_PUBLISHABLE_KEY")
     
-    config_status = {
-        "stripe_secret_key": bool(stripe_secret_key),
-        "webhook_secret": bool(webhook_secret),
-        "stripe_initialized": bool(stripe.api_key)
-    }
+    if not stripe_secret_key:
+        logger.error("STRIPE_API_SECRET environment variable not found")
+        return False
     
-    return config_status
+    if not stripe_webhook_secret:
+        logger.warning("STRIPE_WEBHOOK_SECRET environment variable not found")
+    
+    if not stripe_publishable_key:
+        logger.warning("STRIPE_PUBLISHABLE_KEY environment variable not found")
+    
+    return True
 
 def get_stripe_config_status():
     """Get current Stripe configuration status for health checks."""
-    config = validate_stripe_config()
-    
-    status = "healthy" if all(config.values()) else "degraded"
-    
     return {
-        "status": status,
-        "details": config
+        "stripe_secret_configured": bool(os.getenv("STRIPE_API_SECRET")),
+        "stripe_webhook_configured": bool(os.getenv("STRIPE_WEBHOOK_SECRET")),
+        "stripe_publishable_configured": bool(os.getenv("STRIPE_PUBLISHABLE_KEY")),
+        "stripe_initialized": stripe.api_key is not None
     }
+
+def get_stripe_publishable_key():
+    """Get Stripe publishable key for frontend use."""
+    return os.getenv("STRIPE_PUBLISHABLE_KEY")

@@ -13,6 +13,7 @@ import os
 from dotenv import load_dotenv
 from core.auth import verify_jwt_token
 from core.stripe_webhooks import webhook_handler
+from core.stripe_config import get_stripe_publishable_key
 
 # Load environment variables
 load_dotenv()
@@ -262,6 +263,25 @@ async def get_available_plans():
     except Exception as e:
         logger.error(f"Error getting plans: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get plans")
+
+@router.get("/config")
+async def get_payment_config():
+    """
+    Get payment configuration including Stripe publishable key
+    """
+    try:
+        publishable_key = get_stripe_publishable_key()
+        
+        if not publishable_key:
+            raise HTTPException(status_code=500, detail="Stripe publishable key not configured")
+        
+        return {
+            "stripe_publishable_key": publishable_key
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting payment config: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get payment configuration")
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
