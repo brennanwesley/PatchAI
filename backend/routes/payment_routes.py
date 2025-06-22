@@ -78,19 +78,17 @@ async def create_checkout_session(
         email = user_profile.get('email')
         existing_customer_id = user_profile.get('stripe_customer_id')
         
-        # Get plan details
-        plan_response = supabase.table("subscription_plans").select(
-            "stripe_price_id, plan_name, monthly_price"
-        ).eq("plan_id", request.plan_id).eq("active", True).single().execute()
-        
-        if not plan_response.data:
+        # Get plan details - using hardcoded configuration for now
+        # TODO: Replace with proper subscription_plans table lookup
+        if request.plan_id == "standard":
+            stripe_price_id = os.getenv("STRIPE_STANDARD_PRICE_ID", "price_1234567890")  # Replace with actual price ID
+            plan_name = "Standard Plan"
+            monthly_price = 20.00
+        else:
             raise HTTPException(status_code=404, detail="Plan not found or inactive")
         
-        plan = plan_response.data
-        stripe_price_id = plan['stripe_price_id']
-        
-        if not stripe_price_id:
-            raise HTTPException(status_code=400, detail="Plan not configured with Stripe price ID")
+        if not stripe_price_id or stripe_price_id == "price_1234567890":
+            raise HTTPException(status_code=400, detail="Stripe price ID not configured. Please set STRIPE_STANDARD_PRICE_ID environment variable.")
         
         # Create or use existing Stripe customer
         if existing_customer_id:
@@ -122,7 +120,7 @@ async def create_checkout_session(
             customer=customer.id,
             payment_method_types=['card'],
             line_items=[{
-                'price': plan['stripe_price_id'],  # Production Price ID: price_1RchcvGKwE0ADhm7uSACGHdG
+                'price': stripe_price_id,  # Production Price ID: price_1RchcvGKwE0ADhm7uSACGHdG
                 'quantity': 1,
             }],
             mode='subscription',
@@ -254,11 +252,20 @@ async def get_available_plans():
     Get all available subscription plans
     """
     try:
-        plans_response = supabase.table("subscription_plans").select(
-            "plan_id, plan_name, monthly_price, message_limit, features, active"
-        ).eq("active", True).order("monthly_price").execute()
+        # Return hardcoded plans for now
+        # TODO: Replace with proper subscription_plans table lookup
+        plans = [
+            {
+                "plan_id": "standard",
+                "plan_name": "Standard Plan",
+                "monthly_price": 20.00,
+                "message_limit": 1000,
+                "features": ["1000 messages per day", "GPT-4 access", "Chat history", "Priority support"],
+                "active": True
+            }
+        ]
         
-        return {"plans": plans_response.data}
+        return {"plans": plans}
         
     except Exception as e:
         logger.error(f"Error getting plans: {str(e)}")
