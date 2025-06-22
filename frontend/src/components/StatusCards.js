@@ -7,8 +7,8 @@ export default function StatusCards() {
   const quickPrompts = [
     {
       id: 1,
-      title: "Business Analysis",
-      prompt: "Analyze my business performance and provide key insights",
+      title: "Facility Design",
+      prompt: "Lets design a new production facility, start with volume forecast and we'll go from there.",
       icon: "📊",
       color: "bg-blue-50 border-blue-200 text-blue-800"
     },
