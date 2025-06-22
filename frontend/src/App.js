@@ -63,16 +63,39 @@ const isTestMode = () => {
 function ChatLayout() {
   const { chats, isLoading, error } = useChatStore();
   const { isMobile, sidebarOpen, toggleSidebar, closeSidebar } = useMobileLayout();
-  const { needsPayment, hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
+  const { needsPayment, hasActiveSubscription, loading: subscriptionLoading, refetch: refetchSubscription } = useSubscription();
   const { user } = useAuth();
   const [showPaywall, setShowPaywall] = React.useState(false);
 
-  // Show paywall if user needs payment
+  // Check for payment success in URL and refresh subscription
   React.useEffect(() => {
-    if (user && !subscriptionLoading && needsPayment) {
-      setShowPaywall(true);
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+    
+    if (paymentStatus === 'success') {
+      console.log('💳 Payment success detected, refreshing subscription status...');
+      // Clear the URL parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Refresh subscription status
+      setTimeout(() => {
+        refetchSubscription();
+      }, 1000); // Small delay to allow webhook processing
+      // Hide paywall immediately
+      setShowPaywall(false);
     }
-  }, [user, subscriptionLoading, needsPayment]);
+  }, [refetchSubscription]);
+
+  // Show paywall if user needs payment (but not if we just processed a successful payment)
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+    
+    if (user && !subscriptionLoading && needsPayment && paymentStatus !== 'success') {
+      setShowPaywall(true);
+    } else if (hasActiveSubscription) {
+      setShowPaywall(false);
+    }
+  }, [user, subscriptionLoading, needsPayment, hasActiveSubscription]);
 
   // Listen for paywall events (402 errors)
   React.useEffect(() => {
