@@ -6,6 +6,9 @@ export default function ChatSidebar() {
   const { chats, activeChat, createNewChat, selectChat, isLoading } = useChatStore();
   const { user, signOut } = useAuth();
 
+  // Safety check to ensure chats is always an array
+  const safeChats = Array.isArray(chats) ? chats : [];
+
   const handleNewChat = async () => {
     await createNewChat();
   };
@@ -44,7 +47,7 @@ export default function ChatSidebar() {
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-2 text-sm">Loading chats...</p>
           </div>
-        ) : (chats || []).length === 0 ? (
+        ) : safeChats.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
             <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -54,7 +57,7 @@ export default function ChatSidebar() {
           </div>
         ) : (
           <div className="p-2">
-            {(chats || []).map((chat) => (
+            {safeChats.map((chat) => (
               <button
                 key={chat.id}
                 onClick={() => selectChat(chat)}

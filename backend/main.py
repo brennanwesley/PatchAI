@@ -31,7 +31,7 @@ logger = structured_logger.logger
 # Initialize FastAPI app
 app = FastAPI(
     title="PatchAI Backend API",
-    description="Enterprise-grade AI assistant for drilling operations",
+    description="Enterprise-grade AI assistant for oilfield operations",
     version="0.3.1"
 )
 

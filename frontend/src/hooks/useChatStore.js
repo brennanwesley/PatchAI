@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { ChatService } from '../services/chatService';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -26,7 +26,7 @@ function chatReducer(state, action) {
       return { ...state, error: action.payload };
     
     case 'LOAD_CHATS':
-      return { ...state, chats: action.payload, isLoading: false };
+      return { ...state, chats: action.payload || [], isLoading: false };
     
     case 'SET_ACTIVE_CHAT':
       return { ...state, activeChat: action.payload };
@@ -53,7 +53,8 @@ function chatReducer(state, action) {
         ...state,
         chats: state.chats.map(chat => 
           chat.id === action.payload.id ? action.payload : chat
-        )
+        ),
+        activeChat: action.payload
       };
     
     default:
@@ -65,26 +66,27 @@ export function ChatProvider({ children }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { user } = useAuth();
 
-  // Load chats on mount
-  useEffect(() => {
-    if (user) {
-      loadChats();
-    }
-  }, [user]);
-
-  const loadChats = async () => {
+  // FIXED: Memoized loadChats to prevent infinite loops
+  const loadChats = useCallback(async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const chats = await ChatService.getUserChatSessions();
-      dispatch({ type: 'LOAD_CHATS', payload: chats || [] });
+      dispatch({ type: 'LOAD_CHATS', payload: chats });
     } catch (error) {
       console.error('Failed to load chats:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message });
       dispatch({ type: 'LOAD_CHATS', payload: [] });
     }
-  };
+  }, []); // Empty dependency array - function doesn't depend on state
 
-  const createNewChat = async () => {
+  // FIXED: Proper dependency array with memoized function
+  useEffect(() => {
+    if (user) {
+      loadChats();
+    }
+  }, [user, loadChats]);
+
+  const createNewChat = useCallback(async () => {
     try {
       const newChat = {
         id: `temp-${Date.now()}`,
@@ -100,27 +102,30 @@ export function ChatProvider({ children }) {
       console.error('Failed to create new chat:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message });
     }
-  };
+  }, []); // No dependencies needed
 
-  const selectChat = async (chat) => {
+  const selectChat = useCallback(async (chat) => {
     try {
       dispatch({ type: 'SET_ACTIVE_CHAT', payload: chat });
+      dispatch({ type: 'SET_LOADING', payload: true });
       
-      if (chat.messages && chat.messages.length > 0) {
-        dispatch({ type: 'SET_MESSAGES', payload: chat.messages });
+      if (chat.isNew) {
+        dispatch({ type: 'SET_MESSAGES', payload: [] });
       } else {
-        // Load messages from database
-        const chatData = await ChatService.getChatSession(chat.id);
-        const messages = chatData?.messages || [];
-        dispatch({ type: 'SET_MESSAGES', payload: messages });
+        const messages = await ChatService.getChatMessages(chat.id);
+        dispatch({ type: 'SET_MESSAGES', payload: messages || [] });
       }
+      
+      dispatch({ type: 'SET_LOADING', payload: false });
     } catch (error) {
-      console.error('Failed to select chat:', error);
+      console.error('Failed to load chat messages:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message });
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+  }, []); // No dependencies needed
 
-  const sendMessage = async (content, files = []) => {
+  // FIXED: Removed chats dependency to prevent circular dependency
+  const sendMessage = useCallback(async (content, files = []) => {
     try {
       const userMessage = {
         id: `user-${Date.now()}`,
@@ -151,44 +156,56 @@ export function ChatProvider({ children }) {
       // Show typing indicator
       dispatch({ type: 'SET_TYPING', payload: true });
 
-      // Get AI response
-      const allMessages = [...state.messages, userMessage];
-      const apiMessages = allMessages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
+      // FIXED: Use functional state update to access current messages without dependency
+      dispatch(currentState => {
+        const allMessages = [...currentState.messages];
+        const apiMessages = allMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }));
 
-      const response = await ChatService.sendPrompt(apiMessages, chatId);
-      
-      const assistantMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: response.response || response.content || 'No response received',
-        timestamp: new Date().toISOString()
-      };
+        // Get AI response (async without await to prevent blocking)
+        ChatService.sendPrompt(apiMessages)
+          .then(response => {
+            const assistantMessage = {
+              id: `assistant-${Date.now()}`,
+              role: 'assistant',
+              content: response,
+              timestamp: new Date().toISOString()
+            };
 
-      // Add AI response
-      dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
-      dispatch({ type: 'SET_TYPING', payload: false });
+            // Add AI response
+            dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
+            dispatch({ type: 'SET_TYPING', payload: false });
 
-      // Save AI response to database
-      await ChatService.addMessageToSession(chatId, assistantMessage.role, assistantMessage.content);
+            // Save AI message to database
+            if (!state.activeChat?.isNew) {
+              ChatService.addMessageToSession(chatId, 'assistant', response);
+            }
 
-      // Update chat in sidebar
-      const updatedChat = {
-        ...state.activeChat,
-        lastMessage: assistantMessage.content,
-        updatedAt: new Date().toISOString(),
-        messages: [...state.messages, userMessage, assistantMessage]
-      };
-      dispatch({ type: 'UPDATE_CHAT', payload: updatedChat });
+            // Update chat with last message
+            const updatedChat = {
+              ...state.activeChat,
+              lastMessage: assistantMessage.content,
+              updatedAt: new Date().toISOString()
+            };
+            dispatch({ type: 'UPDATE_CHAT', payload: updatedChat });
+          })
+          .catch(error => {
+            console.error('Failed to get AI response:', error);
+            dispatch({ type: 'SET_ERROR', payload: error.message });
+            dispatch({ type: 'SET_TYPING', payload: false });
+          });
+
+        return currentState; // Return unchanged state
+      });
 
     } catch (error) {
       console.error('Failed to send message:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message });
       dispatch({ type: 'SET_TYPING', payload: false });
     }
-  };
+  }, [state.activeChat]); // Only depend on activeChat
 
   const value = {
     ...state,

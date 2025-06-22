@@ -14,6 +14,26 @@ export class ChatService {
     }
   }
 
+  // Get messages for a specific chat session
+  static async getChatMessages(chatId) {
+    try {
+      console.log('🔄 ChatService: Fetching messages for chat:', chatId);
+      const response = await ApiService.get(`/history/${chatId}/messages`);
+      console.log('✅ ChatService: Retrieved messages:', response?.length || 0);
+      return response || [];
+    } catch (error) {
+      console.error('❌ ChatService: Failed to get chat messages:', error);
+      // Fallback: try to get full chat session and extract messages
+      try {
+        const chat = await this.getChatSession(chatId);
+        return chat?.messages || [];
+      } catch (fallbackError) {
+        console.error('❌ ChatService: Fallback also failed:', fallbackError);
+        return [];
+      }
+    }
+  }
+
   // Get a specific chat session with messages
   static async getChatSession(chatId) {
     try {
@@ -51,31 +71,45 @@ export class ChatService {
     try {
       console.log('🔄 ChatService: Adding message to session:', chatId);
       
-      // Get current chat
-      const chat = await this.getChatSession(chatId);
-      const messages = chat.messages || [];
-      
-      // Add new message
-      const newMessage = {
-        id: `${role}-${Date.now()}`,
+      const messageData = {
+        chat_id: chatId,
         role,
         content,
         timestamp: new Date().toISOString()
       };
-      
-      const updatedMessages = [...messages, newMessage];
-      
-      // Update chat with new messages
-      const updateData = {
-        ...chat,
-        messages: updatedMessages,
-        lastMessage: content,
-        updatedAt: new Date().toISOString()
-      };
 
-      const response = await ApiService.post('/history', updateData);
-      console.log('✅ ChatService: Message added to session');
-      return response;
+      // Try direct message addition first (more efficient)
+      try {
+        const response = await ApiService.post(`/history/${chatId}/messages`, messageData);
+        console.log('✅ ChatService: Message added directly to session');
+        return response;
+      } catch (directError) {
+        console.warn('⚠️ Direct message addition failed, falling back to full chat update');
+        
+        // Fallback: Get current chat and update with new message
+        const chat = await this.getChatSession(chatId);
+        const messages = chat.messages || [];
+        
+        const newMessage = {
+          id: `${role}-${Date.now()}`,
+          role,
+          content,
+          timestamp: new Date().toISOString()
+        };
+        
+        const updatedMessages = [...messages, newMessage];
+        
+        const updateData = {
+          ...chat,
+          messages: updatedMessages,
+          lastMessage: content,
+          updatedAt: new Date().toISOString()
+        };
+
+        const response = await ApiService.post('/history', updateData);
+        console.log('✅ ChatService: Message added via chat update');
+        return response;
+      }
     } catch (error) {
       console.error('❌ ChatService: Failed to add message to session:', error);
       throw error;
@@ -94,7 +128,20 @@ export class ChatService {
 
       const response = await ApiService.post('/prompt', requestData);
       console.log('✅ ChatService: Received AI response');
-      return response;
+      
+      // Handle multiple possible response formats
+      if (typeof response === 'string') {
+        return response; // Direct string response
+      } else if (response?.response) {
+        return response.response; // { response: "..." } format
+      } else if (response?.content) {
+        return response.content; // { content: "..." } format
+      } else if (response?.message) {
+        return response.message; // { message: "..." } format
+      } else {
+        console.warn('⚠️ Unexpected AI response format:', response);
+        return response?.toString() || 'No response received';
+      }
     } catch (error) {
       console.error('❌ ChatService: Failed to send prompt:', error);
       throw error;
@@ -130,6 +177,35 @@ export class ChatService {
       return response;
     } catch (error) {
       console.error('❌ ChatService: Failed to update chat session:', error);
+      throw error;
+    }
+  }
+
+  // Health check method for debugging
+  static async healthCheck() {
+    try {
+      console.log('🔄 ChatService: Checking backend health');
+      const response = await ApiService.get('/');
+      console.log('✅ ChatService: Backend is healthy:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ ChatService: Backend health check failed:', error);
+      throw error;
+    }
+  }
+
+  // Test authentication method
+  static async testAuth() {
+    try {
+      console.log('🔄 ChatService: Testing authentication');
+      const response = await ApiService.get('/history');
+      console.log('✅ ChatService: Authentication successful');
+      return true;
+    } catch (error) {
+      console.error('❌ ChatService: Authentication failed:', error);
+      if (error.status === 401 || error.status === 403) {
+        throw new Error('Authentication failed. Please log in again.');
+      }
       throw error;
     }
   }

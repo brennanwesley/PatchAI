@@ -25,8 +25,8 @@ export default function ChatWindow() {
           <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
-          <h3 className="text-xl font-medium text-gray-900 mb-2">Welcome to PatchAI</h3>
-          <p className="text-gray-600">Select a chat or start a new conversation</p>
+          <h3 className="text-xl font-medium text-gray-900 mb-2">Hello! I'm Patch, your personal oilfield consultant.</h3>
+          <p className="text-gray-600">I'm here to help you be efficient, sharp, and ahead of the curve. Ask me anything about oilfield operations, production facility design, hydraulic modeling, regulatory and permitting, production chemical requirements, and so much more! You focus on the field - I'll handle the busy work.</p>
         </div>
       </div>
     );
