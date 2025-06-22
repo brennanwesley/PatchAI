@@ -127,6 +127,21 @@ export function ChatProvider({ children }) {
   // FIXED: Removed chats dependency to prevent circular dependency
   const sendMessage = useCallback(async (content, files = []) => {
     try {
+      console.log('🚀 Starting sendMessage with content:', content);
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // If no active chat exists, create one first
+      if (!state.activeChat) {
+        console.log('📝 No active chat found, creating new chat...');
+        const newChat = await createNewChat();
+        if (!newChat) {
+          throw new Error('Failed to create new chat');
+        }
+      }
+
       const userMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -139,18 +154,28 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
 
       let chatId = state.activeChat?.id;
+      let currentChat = state.activeChat;
 
-      // Create chat if it's new
-      if (state.activeChat?.isNew) {
+      // If no active chat or it's a new chat, create it first
+      if (!currentChat || currentChat.isNew) {
+        console.log('📝 Creating new chat session...');
         const title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
         const newChat = await ChatService.createChatSession(title, userMessage);
         chatId = newChat.id;
+        currentChat = { ...newChat, isNew: false };
         
-        dispatch({ type: 'UPDATE_CHAT', payload: { ...newChat, isNew: false } });
-        dispatch({ type: 'SET_ACTIVE_CHAT', payload: { ...newChat, isNew: false } });
+        dispatch({ type: 'UPDATE_CHAT', payload: currentChat });
+        dispatch({ type: 'SET_ACTIVE_CHAT', payload: currentChat });
+        console.log('✅ New chat created with ID:', chatId);
       } else {
         // Save to existing chat
+        console.log('💾 Adding message to existing chat:', chatId);
         await ChatService.addMessageToSession(chatId, userMessage.role, userMessage.content);
+      }
+
+      // Ensure we have a valid chatId before proceeding
+      if (!chatId) {
+        throw new Error('Failed to create or get chat session');
       }
 
       // Show typing indicator
