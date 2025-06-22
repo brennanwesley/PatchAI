@@ -34,8 +34,8 @@ export default function ChatWindow() {
 
   return (
     <div className="flex-1 flex flex-col bg-white">
-      {/* Chat Header */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-white">
+      {/* Chat Header - Hidden on mobile */}
+      <div className="hidden md:block px-6 py-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold text-gray-900">

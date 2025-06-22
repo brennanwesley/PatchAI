@@ -8,7 +8,7 @@ export default function StatusCards() {
     {
       id: 1,
       title: "Facility Design",
-      prompt: "Lets design a new production facility, start with volume forecast and we'll go from there.",
+      prompt: "Lets design a new production facility, start with volume forecast.",
       icon: "📊",
       color: "bg-blue-50 border-blue-200 text-blue-800"
     },

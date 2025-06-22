@@ -51,7 +51,7 @@ export default function InputBar() {
   };
 
   return (
-    <div className="border-t border-gray-200 bg-white px-6 py-4">
+    <div className="border-t border-gray-200 bg-white px-4 md:px-6 py-3 md:py-4">
       {/* File Attachments */}
       {files.length > 0 && (
         <div className="mb-3">
@@ -77,15 +77,15 @@ export default function InputBar() {
       )}
 
       {/* Input Form */}
-      <form onSubmit={handleSubmit} className="flex items-end gap-3">
+      <form onSubmit={handleSubmit} className="flex items-end gap-2 md:gap-3">
         {/* File Upload Button */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200 rounded-lg hover:bg-gray-100"
+          className="flex-shrink-0 p-2 md:p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200 rounded-lg hover:bg-gray-100 touch-manipulation"
           title="Attach file"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
           </svg>
         </button>
@@ -108,11 +108,11 @@ export default function InputBar() {
             onChange={handleTextareaChange}
             onKeyDown={handleKeyDown}
             placeholder="Ask Patch anything..."
-            className="w-full resize-none border border-gray-300 rounded-lg px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200"
-            style={{ minHeight: '48px', maxHeight: '120px' }}
+            className="w-full resize-none border border-gray-300 rounded-lg px-3 md:px-4 py-2 md:py-3 pr-10 md:pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 text-base"
+            style={{ minHeight: '44px', maxHeight: '120px' }}
             disabled={isTyping}
           />
-          <div className="absolute bottom-2 right-2 text-xs text-gray-400">
+          <div className="hidden md:block absolute bottom-2 right-2 text-xs text-gray-400">
             <span>Shift+Enter for new line</span>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function InputBar() {
         <button
           type="submit"
           disabled={!message.trim() || isTyping}
-          className={`flex-shrink-0 p-3 rounded-lg transition-colors duration-200 ${
+          className={`flex-shrink-0 p-2 md:p-3 rounded-lg transition-colors duration-200 touch-manipulation ${
             message.trim() && !isTyping
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -138,8 +138,8 @@ export default function InputBar() {
         </button>
       </form>
 
-      {/* Helper Text */}
-      <div className="mt-2 text-xs text-gray-500 text-center">
+      {/* Helper Text - Hidden on mobile for space */}
+      <div className="hidden md:block mt-2 text-xs text-gray-500 text-center">
         Patch can help with business insights, data analysis, and strategic planning
       </div>
     </div>

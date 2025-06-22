@@ -1,9 +1,11 @@
 import React, { useEffect } from 'react';
 import { ChatProvider, useChatStore } from './hooks/useChatStore';
+import { useMobileLayout } from './hooks/useMobileLayout';
 import ChatSidebar from './components/ChatSidebar';
 import ChatWindow from './components/ChatWindow';
 import InputBar from './components/InputBar';
 import StatusCards from './components/StatusCards';
+import MobileHeader from './components/MobileHeader';
 import BackendTest from './components/BackendTest';
 import './App.css';
 
@@ -55,6 +57,7 @@ const isTestMode = () => {
 // Main Chat Layout Component
 function ChatLayout() {
   const { chats, isLoading, error } = useChatStore();
+  const { isMobile, sidebarOpen, toggleSidebar, closeSidebar } = useMobileLayout();
 
   // Show backend test if test mode is enabled
   if (isTestMode()) {
@@ -107,10 +110,38 @@ function ChatLayout() {
     );
   }
 
+  if (isMobile) {
+    // Mobile Layout
+    return (
+      <div className="h-screen flex flex-col bg-gray-100">
+        {/* Mobile Header with Hamburger */}
+        <MobileHeader onToggleSidebar={toggleSidebar} />
+        
+        {/* Mobile Sidebar (Overlay) */}
+        <ChatSidebar 
+          isOpen={sidebarOpen} 
+          onClose={closeSidebar} 
+          isMobile={true} 
+        />
+        
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col">
+          <ChatWindow />
+          <InputBar />
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop Layout
   return (
     <div className="h-screen flex bg-gray-100">
       {/* Left Sidebar - Chat List */}
-      <ChatSidebar />
+      <ChatSidebar 
+        isOpen={true} 
+        onClose={() => {}} 
+        isMobile={false} 
+      />
       
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
@@ -118,7 +149,7 @@ function ChatLayout() {
         <InputBar />
       </div>
       
-      {/* Right Sidebar - Status Cards */}
+      {/* Right Sidebar - Status Cards (Desktop Only) */}
       <StatusCards />
     </div>
   );
