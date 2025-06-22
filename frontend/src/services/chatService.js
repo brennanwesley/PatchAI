@@ -1,160 +1,136 @@
-import { supabase } from '../supabaseClient';
-import { ApiService } from './apiService';
-
-/**
- * REBUILT Chat Service - Clean and Simple
- * Handles all chat operations with proper error handling
- */
+import { ApiService } from '../config/api';
 
 export class ChatService {
-  /**
-   * Get all chat sessions for the current user
-   */
+  // Get all chat sessions for the current user
   static async getUserChatSessions() {
     try {
-      console.log('📂 ChatService: Getting user chat sessions');
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('❌ User not authenticated');
-        return [];
-      }
-
-      const response = await ApiService.getChatHistory();
-      const chats = response.data || response || [];
-      
-      console.log(`✅ ChatService: Retrieved ${chats.length} chat sessions`);
-      return chats;
-      
+      console.log('🔄 ChatService: Fetching user chat sessions');
+      const response = await ApiService.get('/history');
+      console.log('✅ ChatService: Retrieved chat sessions:', response?.length || 0);
+      return response || [];
     } catch (error) {
-      console.error('❌ ChatService: Failed to get chat sessions:', error);
-      
-      // Don't throw auth errors, just return empty array
-      if (error.isAuthError) {
-        console.log('🔐 Authentication error, returning empty chats');
-        return [];
-      }
-      
-      return [];
-    }
-  }
-
-  /**
-   * Create a new chat session
-   */
-  static async createChatSession(title, firstMessage) {
-    try {
-      console.log('🆕 ChatService: Creating new chat session');
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Create the chat by sending the first message
-      const messages = [{
-        role: firstMessage.role,
-        content: firstMessage.content
-      }];
-      
-      const response = await ApiService.sendPrompt(messages);
-      
-      if (!response.chat_id) {
-        throw new Error('No chat_id returned from API');
-      }
-      
-      const newChat = {
-        id: response.chat_id,
-        title: title,
-        messages: [firstMessage], // Include the first message
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastMessage: firstMessage.content
-      };
-      
-      console.log('✅ ChatService: Chat session created:', newChat.id);
-      return newChat;
-      
-    } catch (error) {
-      console.error('❌ ChatService: Failed to create chat session:', error);
+      console.error('❌ ChatService: Failed to get user chat sessions:', error);
       throw error;
     }
   }
 
-  /**
-   * Get a specific chat session
-   */
-  static async getChatSession(sessionId) {
+  // Get a specific chat session with messages
+  static async getChatSession(chatId) {
     try {
-      console.log('📋 ChatService: Getting chat session:', sessionId);
-      
-      const response = await ApiService.getChatSession(sessionId);
-      const chatData = response.data || response;
-      
-      console.log('✅ ChatService: Chat session retrieved');
-      return chatData;
-      
+      console.log('🔄 ChatService: Fetching chat session:', chatId);
+      const response = await ApiService.get(`/history/${chatId}`);
+      console.log('✅ ChatService: Retrieved chat session');
+      return response;
     } catch (error) {
       console.error('❌ ChatService: Failed to get chat session:', error);
       throw error;
     }
   }
 
-  /**
-   * Add a message to an existing chat session
-   * SIMPLIFIED - Just save to backend, don't complicate it
-   */
-  static async addMessageToSession(sessionId, role, content) {
+  // Create a new chat session
+  static async createChatSession(title, firstMessage) {
     try {
-      console.log('💾 ChatService: Adding message to session:', sessionId);
+      console.log('🔄 ChatService: Creating new chat session:', title);
       
-      // Create message object
-      const message = {
-        role: role,
-        content: content,
+      const chatData = {
+        title,
+        messages: [firstMessage]
+      };
+
+      const response = await ApiService.post('/history', chatData);
+      console.log('✅ ChatService: Created new chat session:', response.id);
+      return response;
+    } catch (error) {
+      console.error('❌ ChatService: Failed to create chat session:', error);
+      throw error;
+    }
+  }
+
+  // Add a message to an existing chat session
+  static async addMessageToSession(chatId, role, content) {
+    try {
+      console.log('🔄 ChatService: Adding message to session:', chatId);
+      
+      // Get current chat
+      const chat = await this.getChatSession(chatId);
+      const messages = chat.messages || [];
+      
+      // Add new message
+      const newMessage = {
+        id: `${role}-${Date.now()}`,
+        role,
+        content,
         timestamp: new Date().toISOString()
       };
       
-      // Get current session
-      const session = await this.getChatSession(sessionId);
-      const currentMessages = session.messages || [];
+      const updatedMessages = [...messages, newMessage];
       
-      // Add new message
-      const updatedMessages = [...currentMessages, message];
-      
-      // Save updated session
-      await ApiService.saveChatSession(sessionId, updatedMessages);
-      
+      // Update chat with new messages
+      const updateData = {
+        ...chat,
+        messages: updatedMessages,
+        lastMessage: content,
+        updatedAt: new Date().toISOString()
+      };
+
+      const response = await ApiService.post('/history', updateData);
       console.log('✅ ChatService: Message added to session');
-      
+      return response;
     } catch (error) {
-      console.error('❌ ChatService: Failed to add message:', error);
+      console.error('❌ ChatService: Failed to add message to session:', error);
       throw error;
     }
   }
 
-  /**
-   * Delete a chat session
-   */
-  static async deleteSession(sessionId) {
+  // Send prompt to AI and get response
+  static async sendPrompt(messages, chatId = null) {
     try {
-      console.log('🗑️ ChatService: Deleting session:', sessionId);
+      console.log('🔄 ChatService: Sending prompt to AI');
       
-      await ApiService.deleteChatSession(sessionId);
-      
-      console.log('✅ ChatService: Session deleted');
-      
+      const requestData = {
+        messages,
+        ...(chatId && { chat_id: chatId })
+      };
+
+      const response = await ApiService.post('/prompt', requestData);
+      console.log('✅ ChatService: Received AI response');
+      return response;
     } catch (error) {
-      console.error('❌ ChatService: Failed to delete session:', error);
+      console.error('❌ ChatService: Failed to send prompt:', error);
       throw error;
     }
   }
 
-  /**
-   * Clear any cached data
-   */
-  static clearLocalStorageData() {
-    console.log('🧹 ChatService: Clearing local data');
-    // Nothing to clear since we use backend API
+  // Delete a chat session
+  static async deleteChatSession(chatId) {
+    try {
+      console.log('🔄 ChatService: Deleting chat session:', chatId);
+      await ApiService.delete(`/history/${chatId}`);
+      console.log('✅ ChatService: Chat session deleted');
+    } catch (error) {
+      console.error('❌ ChatService: Failed to delete chat session:', error);
+      throw error;
+    }
+  }
+
+  // Update chat session (title, etc.)
+  static async updateChatSession(chatId, updates) {
+    try {
+      console.log('🔄 ChatService: Updating chat session:', chatId);
+      
+      const chat = await this.getChatSession(chatId);
+      const updatedChat = {
+        ...chat,
+        ...updates,
+        updatedAt: new Date().toISOString()
+      };
+
+      const response = await ApiService.post('/history', updatedChat);
+      console.log('✅ ChatService: Chat session updated');
+      return response;
+    } catch (error) {
+      console.error('❌ ChatService: Failed to update chat session:', error);
+      throw error;
+    }
   }
 }
