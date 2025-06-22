@@ -20,7 +20,7 @@ from core.rate_limiter import RateLimiter
 from core.auth import verify_jwt_token
 from core.monitoring import get_health_status
 from core.subscription_middleware import enforce_subscription
-from core.stripe_config import validate_stripe_config, get_stripe_config
+from core.stripe_config import validate_stripe_config, get_stripe_config_status
 from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
 from services.openai_service import initialize_openai_client, get_system_prompt
 from services.supabase_service import initialize_supabase_client
@@ -60,8 +60,8 @@ chat_service = ChatService(supabase_client) if supabase_client else None
 # Validate Stripe configuration
 try:
     validate_stripe_config()
-    stripe_config = get_stripe_config()
-    logger.info(f"Stripe configured: API key={stripe_config['api_key_configured']}, Webhook={stripe_config['webhook_secret_configured']}")
+    stripe_config = get_stripe_config_status()
+    logger.info(f"Stripe configured: API key={stripe_config['stripe_secret_configured']}, Webhook={stripe_config['stripe_webhook_configured']}")
 except Exception as e:
     logger.warning(f"Stripe configuration warning: {str(e)}")
 
@@ -387,17 +387,17 @@ async def health_check():
     
     # Add Stripe configuration status
     try:
-        stripe_config = get_stripe_config()
+        stripe_config = get_stripe_config_status()
         health_status["stripe"] = {
-            "configured": stripe_config['api_key_configured'] and stripe_config['webhook_secret_configured'],
-            "api_key_configured": stripe_config['api_key_configured'],
-            "webhook_secret_configured": stripe_config['webhook_secret_configured']
+            "configured": stripe_config['stripe_secret_configured'] and stripe_config['stripe_webhook_configured'],
+            "stripe_secret_configured": stripe_config['stripe_secret_configured'],
+            "stripe_webhook_configured": stripe_config['stripe_webhook_configured'],
+            "stripe_publishable_configured": stripe_config['stripe_publishable_configured'],
+            "stripe_initialized": stripe_config['stripe_initialized']
         }
     except Exception as e:
-        health_status["stripe"] = {
-            "configured": False,
-            "error": str(e)
-        }
+        logger.error(f"Error getting Stripe config status: {str(e)}")
+        health_status["stripe"] = {"configured": False, "error": str(e)}
     
     return health_status
 
