@@ -299,32 +299,77 @@ class StripeWebhookHandler:
             raise
     
     async def process_webhook_event(self, event: dict):
-        """
-        Process webhook event based on type
-        
-        Args:
-            event: Verified Stripe webhook event
-        """
+        """Process webhook event based on type"""
         event_type = event['type']
-        data = event['data']['object']
+        self.logger.info(f" Processing webhook event: {event_type}")
         
         try:
-            if event_type == 'customer.subscription.created':
-                await self.handle_customer_subscription_created(data)
+            if event_type == 'checkout.session.completed':
+                await self.handle_checkout_session_completed(event['data']['object'])
+            elif event_type == 'customer.subscription.created':
+                await self.handle_customer_subscription_created(event['data']['object'])
             elif event_type == 'customer.subscription.updated':
-                await self.handle_customer_subscription_updated(data)
+                await self.handle_customer_subscription_updated(event['data']['object'])
             elif event_type == 'customer.subscription.deleted':
-                await self.handle_customer_subscription_deleted(data)
+                await self.handle_customer_subscription_deleted(event['data']['object'])
             elif event_type == 'invoice.payment_succeeded':
-                await self.handle_invoice_payment_succeeded(data)
+                await self.handle_invoice_payment_succeeded(event['data']['object'])
             elif event_type == 'invoice.payment_failed':
-                await self.handle_invoice_payment_failed(data)
+                await self.handle_invoice_payment_failed(event['data']['object'])
             else:
                 self.logger.info(f" Unhandled webhook event type: {event_type}")
                 
         except Exception as e:
             self.logger.error(f" Error processing webhook event {event_type}: {str(e)}")
             self.logger.error(f" Event data: {event}")
+            import traceback
+            self.logger.error(f" Traceback: {traceback.format_exc()}")
+            raise
+    
+    async def handle_checkout_session_completed(self, session: dict):
+        """Handle completed checkout session - this is the first event after payment"""
+        try:
+            self.logger.info(f" Processing checkout session: {session['id']}")
+            
+            # Check if this is a subscription checkout
+            if session.get('mode') != 'subscription':
+                self.logger.info(f" Skipping non-subscription checkout: {session['mode']}")
+                return
+            
+            # Get user info from metadata
+            user_id = session.get('metadata', {}).get('user_id')
+            if not user_id:
+                self.logger.error(f" No user_id in checkout session metadata")
+                return
+            
+            self.logger.info(f" Processing checkout for user: {user_id}")
+            
+            # If subscription is already created, get it
+            if session.get('subscription'):
+                subscription_id = session['subscription']
+                self.logger.info(f" Subscription already exists: {subscription_id}")
+                
+                # Retrieve the full subscription object from Stripe
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                await self.handle_customer_subscription_created(subscription)
+            else:
+                # Subscription might be created shortly after checkout completion
+                # We'll wait for the customer.subscription.created event
+                self.logger.info(f" Subscription not yet created, waiting for subscription.created event")
+                
+                # Update user profile to indicate payment was successful
+                try:
+                    profile_update = {
+                        "subscription_status": "processing",
+                        "updated_at": datetime.utcnow().isoformat()
+                    }
+                    supabase.table("user_profiles").update(profile_update).eq("id", user_id).execute()
+                    self.logger.info(f" Updated user profile to processing status")
+                except Exception as e:
+                    self.logger.error(f" Failed to update user profile: {str(e)}")
+                    
+        except Exception as e:
+            self.logger.error(f" Error handling checkout session: {str(e)}")
             import traceback
             self.logger.error(f" Traceback: {traceback.format_exc()}")
             raise
