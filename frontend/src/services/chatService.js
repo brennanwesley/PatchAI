@@ -221,4 +221,25 @@ export class ChatService {
       throw error;
     }
   }
+
+  // Send messages to AI and get response
+  static async sendPrompt(messages, chatId = null) {
+    try {
+      console.log('🔄 ChatService: Sending prompt to AI with', messages.length, 'messages');
+      
+      const payload = {
+        messages: messages,
+        chat_id: chatId
+      };
+
+      const response = await ApiService.post('/prompt', payload);
+      console.log('✅ ChatService: Received AI response');
+      
+      // Return just the response text
+      return response.response;
+    } catch (error) {
+      console.error('❌ ChatService: Failed to send prompt:', error);
+      throw error;
+    }
+  }
 }
