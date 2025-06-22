@@ -304,6 +304,32 @@ async def get_available_plans():
         logger.error(f"Error getting plans: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get plans")
 
+@router.get("/config-status")
+async def get_payment_config_status():
+    """
+    Get payment system configuration status for debugging
+    """
+    try:
+        stripe_secret_key = os.getenv("STRIPE_SECRET_KEY")
+        stripe_standard_price_id = os.getenv("STRIPE_STANDARD_PRICE_ID")
+        stripe_webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+        stripe_publishable_key = os.getenv("STRIPE_PUBLISHABLE_KEY")
+        
+        return {
+            "stripe_secret_key_configured": bool(stripe_secret_key),
+            "stripe_secret_key_format": stripe_secret_key[:7] + "..." if stripe_secret_key else None,
+            "stripe_standard_price_id_configured": bool(stripe_standard_price_id),
+            "stripe_standard_price_id": stripe_standard_price_id,
+            "stripe_webhook_secret_configured": bool(stripe_webhook_secret),
+            "stripe_publishable_key_configured": bool(stripe_publishable_key),
+            "stripe_api_initialized": stripe.api_key is not None,
+            "supabase_url_configured": bool(supabase_url),
+            "supabase_service_role_configured": bool(supabase_service_role_key)
+        }
+    except Exception as e:
+        logger.error(f"Error getting config status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/config")
 async def get_payment_config():
     """

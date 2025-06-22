@@ -18,10 +18,10 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 def initialize_stripe():
     """Initialize Stripe with API key from environment variables."""
-    stripe_secret_key = os.getenv("STRIPE_API_SECRET")
+    stripe_secret_key = os.getenv("STRIPE_SECRET_KEY")  # Fixed: Use standard name
     
     if not stripe_secret_key:
-        logger.error("STRIPE_API_SECRET environment variable not found")
+        logger.error("STRIPE_SECRET_KEY environment variable not found")
         return False
     
     try:
@@ -34,12 +34,12 @@ def initialize_stripe():
 
 def validate_stripe_config():
     """Validate that Stripe is properly configured."""
-    stripe_secret_key = os.getenv("STRIPE_API_SECRET")
+    stripe_secret_key = os.getenv("STRIPE_SECRET_KEY")  # Fixed: Use standard name
     stripe_webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
     stripe_publishable_key = os.getenv("STRIPE_PUBLISHABLE_KEY")
     
     if not stripe_secret_key:
-        logger.error("STRIPE_API_SECRET environment variable not found")
+        logger.error("STRIPE_SECRET_KEY environment variable not found")
         return False
     
     if not stripe_webhook_secret:
@@ -53,7 +53,7 @@ def validate_stripe_config():
 def get_stripe_config_status():
     """Get current Stripe configuration status for health checks."""
     return {
-        "stripe_secret_configured": bool(os.getenv("STRIPE_API_SECRET")),
+        "stripe_secret_configured": bool(os.getenv("STRIPE_SECRET_KEY")),
         "stripe_webhook_configured": bool(os.getenv("STRIPE_WEBHOOK_SECRET")),
         "stripe_publishable_configured": bool(os.getenv("STRIPE_PUBLISHABLE_KEY")),
         "stripe_initialized": stripe.api_key is not None
