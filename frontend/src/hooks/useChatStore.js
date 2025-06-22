@@ -48,6 +48,29 @@ function chatReducer(state, action) {
         messages: []
       };
     
+    case 'UPDATE_CHAT_TITLE':
+      return {
+        ...state,
+        chats: state.chats.map(chat => 
+          chat.id === action.payload.chatId 
+            ? { ...chat, title: action.payload.title }
+            : chat
+        ),
+        activeChat: state.activeChat?.id === action.payload.chatId 
+          ? { ...state.activeChat, title: action.payload.title }
+          : state.activeChat
+      };
+    
+    case 'DELETE_CHAT':
+      const updatedChats = state.chats.filter(chat => chat.id !== action.payload);
+      const wasActiveChat = state.activeChat?.id === action.payload;
+      return {
+        ...state,
+        chats: updatedChats,
+        activeChat: wasActiveChat ? null : state.activeChat,
+        messages: wasActiveChat ? [] : state.messages
+      };
+    
     case 'UPDATE_CHAT':
       return {
         ...state,
@@ -264,12 +287,27 @@ export function ChatProvider({ children }) {
     }
   }, [state.activeChat]); // Only depend on activeChat
 
+  // Update chat title (frontend only)
+  const updateChatTitle = useCallback((chatId, newTitle) => {
+    dispatch({ 
+      type: 'UPDATE_CHAT_TITLE', 
+      payload: { chatId, title: newTitle } 
+    });
+  }, []);
+
+  // Delete chat (frontend only)
+  const deleteChat = useCallback((chatId) => {
+    dispatch({ type: 'DELETE_CHAT', payload: chatId });
+  }, []);
+
   const value = {
     ...state,
     loadChats,
     createNewChat,
     selectChat,
-    sendMessage
+    sendMessage,
+    updateChatTitle,
+    deleteChat
   };
 
   return (

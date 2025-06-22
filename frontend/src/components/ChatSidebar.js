@@ -1,9 +1,10 @@
 import React from 'react';
 import { useChatStore } from '../hooks/useChatStore';
 import { useAuth } from '../contexts/AuthContext';
+import ChatItem from './ChatItem';
 
 export default function ChatSidebar({ isOpen, onClose, isMobile }) {
-  const { chats, activeChat, createNewChat, selectChat, isLoading } = useChatStore();
+  const { chats, activeChat, createNewChat, selectChat, updateChatTitle, deleteChat, isLoading } = useChatStore();
   const { user, signOut } = useAuth();
 
   // Safety check to ensure chats is always an array
@@ -104,29 +105,15 @@ export default function ChatSidebar({ isOpen, onClose, isMobile }) {
           ) : (
             <div className="p-2">
               {safeChats.map((chat) => (
-                <button
+                <ChatItem
                   key={chat.id}
-                  onClick={() => handleSelectChat(chat)}
-                  className={`w-full text-left p-3 rounded-lg mb-2 transition-colors duration-200 ${
-                    activeChat?.id === chat.id
-                      ? 'bg-blue-100 border border-blue-200'
-                      : 'hover:bg-gray-100 border border-transparent'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-medium text-gray-900 text-sm truncate flex-1">
-                      {chat.title || 'New Chat'}
-                    </h3>
-                    <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
-                      {formatDate(chat.createdAt)}
-                    </span>
-                  </div>
-                  {chat.lastMessage && (
-                    <p className="text-xs text-gray-600 truncate">
-                      {chat.lastMessage}
-                    </p>
-                  )}
-                </button>
+                  chat={chat}
+                  isActive={activeChat?.id === chat.id}
+                  onSelect={handleSelectChat}
+                  onEdit={updateChatTitle}
+                  onDelete={deleteChat}
+                  formatDate={formatDate}
+                />
               ))}
             </div>
           )}
