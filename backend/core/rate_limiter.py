@@ -40,7 +40,12 @@ class RateLimiter:
     def _get_user_tier(self, user_id: str) -> str:
         """Get user's subscription tier - placeholder for future subscription system"""
         # TODO: Replace with actual subscription tier lookup from database
-        # For now, return 'free' for all users
+        
+        # Upgrade specific user to standard tier
+        if user_id == "tharaldson.brennan@gmail.com":
+            return 'standard'
+        
+        # For now, return 'free' for all other users
         return 'free'
     
     def check_user_limit(self, user_id: str) -> Tuple[bool, int, int]:

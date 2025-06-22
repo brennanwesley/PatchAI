@@ -65,6 +65,8 @@ const ChatFeed = ({ messages = [], isLoading = false, chatTitle = "New Chat" }) 
               role={message.role}
               content={message.content}
               timestamp={message.timestamp}
+              isError={message.isError}
+              isRateLimitError={message.isRateLimitError}
             />
           ))}
 

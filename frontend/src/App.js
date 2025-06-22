@@ -242,13 +242,45 @@ function App() {
         stack: error.stack
       });
       
-      // Add error message
+      // Create user-friendly error message based on error type
+      let errorContent = '';
+      let isRateLimitError = false;
+      
+      if (error.message.includes('Daily message limit exceeded')) {
+        isRateLimitError = true;
+        const match = error.message.match(/\((\d+)\/(\d+)\)/);
+        const used = match ? match[1] : '?';
+        const limit = match ? match[2] : '?';
+        
+        errorContent = `🚫 **Daily Message Limit Reached**\n\n` +
+          `You've used ${used} of ${limit} daily messages.\n\n` +
+          `**What you can do:**\n` +
+          `• Wait until tomorrow for your limit to reset\n` +
+          `• Contact support to upgrade your account\n` +
+          `• Email: support@patchai.com for higher limits\n\n` +
+          `*Your current plan: Free (${limit} messages/day)*`;
+      } else if (error.message.includes('Authentication')) {
+        errorContent = `🔐 **Authentication Error**\n\n` +
+          `Please sign out and sign back in to continue.\n\n` +
+          `If the problem persists, contact support.`;
+      } else if (error.message.includes('Network')) {
+        errorContent = `🌐 **Connection Error**\n\n` +
+          `Unable to connect to PatchAI servers.\n\n` +
+          `Please check your internet connection and try again.`;
+      } else {
+        errorContent = `⚠️ **Unexpected Error**\n\n` +
+          `${error.message}\n\n` +
+          `Please try again. If the problem persists, contact support.`;
+      }
+      
+      // Add error message to chat
       const errorMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: `Sorry, I encountered an error: ${error.message}. Please try again.`,
+        content: errorContent,
         timestamp: new Date().toISOString(),
-        isError: true
+        isError: true,
+        isRateLimitError: isRateLimitError
       };
       
       setMessages(prev => [...(Array.isArray(prev) ? prev : []), errorMessage]);
