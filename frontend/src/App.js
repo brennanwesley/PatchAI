@@ -43,6 +43,55 @@ function App() {
   const [chatsLoading, setChatsLoading] = useState(true);
   const [isCreatingNewChat, setIsCreatingNewChat] = useState(false);
 
+  // SIMPLE CHAT LOADING - MEMOIZED TO PREVENT INFINITE LOOPS
+  const loadChats = useCallback(async () => {
+    try {
+      console.log('📂 Loading chats...');
+      setChatsLoading(true);
+      const userChats = await ChatService.getUserChatSessions();
+      console.log('✅ Chats loaded:', userChats?.length);
+      setChats(userChats || []);
+    } catch (error) {
+      console.error('❌ Failed to load chats:', error);
+      setChats([]);
+    } finally {
+      setChatsLoading(false);
+    }
+  }, []);
+
+  // SIMPLE MESSAGE LOADING - MEMOIZED TO PREVENT INFINITE LOOPS
+  const loadMessages = useCallback(async (chatId) => {
+    try {
+      console.log('📋 Loading messages for chat:', chatId);
+      
+      // During chat creation, don't interfere with the process
+      if (isCreatingNewChat) {
+        console.log('🚫 Skipping message load - chat creation in progress');
+        return;
+      }
+      
+      const chat = chats.find(c => c.id === chatId);
+      if (chat && chat.messages) {
+        setMessages(Array.isArray(chat.messages) ? chat.messages : []);
+        console.log('✅ Messages loaded from local chat:', chat.messages.length);
+      } else {
+        // Fallback: load from database only if not creating a new chat
+        console.log('📋 Chat not found locally, loading from database...');
+        const chatData = await ChatService.getChatSession(chatId);
+        if (chatData && chatData.messages) {
+          setMessages(Array.isArray(chatData.messages) ? chatData.messages : []);
+          console.log('✅ Messages loaded from database:', chatData.messages.length);
+        } else {
+          console.log('📋 No messages found for chat:', chatId);
+          setMessages([]);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to load messages:', error);
+      setMessages([]);
+    }
+  }, [chats, isCreatingNewChat]);
+
   // Handle window resize
   useEffect(() => {
     const handleResize = () => {
@@ -94,55 +143,6 @@ function App() {
       }
     }
   }, [activeChatId, isCreatingNewChat, loadMessages]);
-
-  // SIMPLE CHAT LOADING - MEMOIZED TO PREVENT INFINITE LOOPS
-  const loadChats = useCallback(async () => {
-    try {
-      console.log('📂 Loading chats...');
-      setChatsLoading(true);
-      const userChats = await ChatService.getUserChatSessions();
-      console.log('✅ Chats loaded:', userChats?.length);
-      setChats(userChats || []);
-    } catch (error) {
-      console.error('❌ Failed to load chats:', error);
-      setChats([]);
-    } finally {
-      setChatsLoading(false);
-    }
-  }, []);
-
-  // SIMPLE MESSAGE LOADING - MEMOIZED TO PREVENT INFINITE LOOPS
-  const loadMessages = useCallback(async (chatId) => {
-    try {
-      console.log('📋 Loading messages for chat:', chatId);
-      
-      // During chat creation, don't interfere with the process
-      if (isCreatingNewChat) {
-        console.log('🚫 Skipping message load - chat creation in progress');
-        return;
-      }
-      
-      const chat = chats.find(c => c.id === chatId);
-      if (chat && chat.messages) {
-        setMessages(Array.isArray(chat.messages) ? chat.messages : []);
-        console.log('✅ Messages loaded from local chat:', chat.messages.length);
-      } else {
-        // Fallback: load from database only if not creating a new chat
-        console.log('📋 Chat not found locally, loading from database...');
-        const chatData = await ChatService.getChatSession(chatId);
-        if (chatData && chatData.messages) {
-          setMessages(Array.isArray(chatData.messages) ? chatData.messages : []);
-          console.log('✅ Messages loaded from database:', chatData.messages.length);
-        } else {
-          console.log('📋 No messages found for chat:', chatId);
-          setMessages([]);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Failed to load messages:', error);
-      setMessages([]);
-    }
-  }, [chats, isCreatingNewChat]);
 
   // COMPLETELY REBUILT MESSAGE SENDING - Clean and simple
   const handleSendMessage = async (messageInput) => {
