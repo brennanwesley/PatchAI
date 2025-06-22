@@ -22,15 +22,16 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
     """Verify JWT token and return user ID - SECURITY: Signature verification enabled"""
     try:
         if not SUPABASE_JWT_SECRET:
-            logger.error("SUPABASE_JWT_SECRET not configured")
-            raise HTTPException(status_code=500, detail="Authentication configuration error")
+            logger.error("🚨 SUPABASE_JWT_SECRET not configured - this will cause authentication failures")
+            logger.error("🚨 Please set SUPABASE_JWT_SECRET environment variable in Render")
+            raise HTTPException(status_code=500, detail="Authentication configuration error - JWT secret missing")
         
         # DEBUG: Log token details for debugging
         token = credentials.credentials
         logger.info(f"🔐 Attempting JWT verification...")
         logger.info(f"🔐 Token preview: {token[:50]}...")
         logger.info(f"🔐 JWT secret present: {bool(SUPABASE_JWT_SECRET)}")
-        logger.info(f"🔐 JWT secret preview: {SUPABASE_JWT_SECRET[:20] if SUPABASE_JWT_SECRET else 'None'}...")
+        logger.info(f"🔐 JWT secret length: {len(SUPABASE_JWT_SECRET) if SUPABASE_JWT_SECRET else 0}")
         
         # SECURITY: Verify JWT signature with secret
         payload = jwt.decode(
@@ -55,10 +56,12 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
         logger.warning("JWT token has expired")
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
-        logger.warning(f"🚨 JWT token validation failed: {str(e)}")
-        logger.warning(f"🚨 Token type: {type(e).__name__}")
-        logger.warning(f"🚨 Full error: {repr(e)}")
-        raise HTTPException(status_code=401, detail="Invalid token")
+        logger.error(f"🚨 JWT token validation failed: {str(e)}")
+        logger.error(f"🚨 Token type: {type(e).__name__}")
+        logger.error(f"🚨 Full error: {repr(e)}")
+        logger.error(f"🚨 This usually means SUPABASE_JWT_SECRET is incorrect or missing")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error during JWT verification: {str(e)}")
-        raise HTTPException(status_code=500, detail="Authentication error")
+        logger.error(f"🚨 Unexpected error during JWT verification: {str(e)}")
+        logger.error(f"🚨 Error type: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=f"Authentication error: {str(e)}")
