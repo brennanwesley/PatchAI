@@ -121,7 +121,7 @@ async def create_checkout_session(
             customer=customer.id,
             payment_method_types=['card'],
             line_items=[{
-                'price': stripe_price_id,
+                'price': plan['stripe_price_id'],  # Production Price ID: price_1RchcvGKwE0ADhm7uSACGHdG
                 'quantity': 1,
             }],
             mode='subscription',
