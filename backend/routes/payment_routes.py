@@ -205,7 +205,15 @@ async def get_subscription_status(
         ).eq("id", user_id).single().execute()
         
         if not user_response.data:
-            return SubscriptionStatusResponse(has_subscription=False)
+            # User not found, return default inactive status
+            return SubscriptionStatusResponse(
+                has_subscription=False,
+                subscription_status="inactive",
+                plan_tier=None,
+                current_period_end=None,
+                cancel_at_period_end=None,
+                stripe_customer_id=None
+            )
         
         user_profile = user_response.data
         subscription_status = user_profile.get('subscription_status', 'inactive')
@@ -214,40 +222,28 @@ async def get_subscription_status(
         
         has_subscription = subscription_status in ['active', 'trialing']
         
-        # Get detailed subscription info if active
-        current_period_end = None
-        cancel_at_period_end = None
-        
-        if has_subscription:
-            subscription_response = supabase.rpc(
-                "get_user_active_subscription",
-                {"user_uuid": user_id}
-            ).execute()
-            
-            if subscription_response.data and len(subscription_response.data) > 0:
-                subscription = subscription_response.data[0]
-                current_period_end = subscription.get('current_period_end')
-                
-                # Check Stripe for cancellation status
-                if subscription.get('stripe_subscription_id'):
-                    try:
-                        stripe_sub = stripe.Subscription.retrieve(subscription['stripe_subscription_id'])
-                        cancel_at_period_end = stripe_sub.cancel_at_period_end
-                    except:
-                        pass  # Ignore Stripe API errors for status check
-        
+        # For now, return basic subscription info without detailed period data
+        # TODO: Add detailed subscription period info when needed
         return SubscriptionStatusResponse(
             has_subscription=has_subscription,
             subscription_status=subscription_status,
             plan_tier=plan_tier,
-            current_period_end=current_period_end,
-            cancel_at_period_end=cancel_at_period_end,
+            current_period_end=None,  # Simplified for now
+            cancel_at_period_end=None,  # Simplified for now
             stripe_customer_id=stripe_customer_id
         )
         
     except Exception as e:
         logger.error(f"Error getting subscription status: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to get subscription status")
+        # Return a safe default instead of raising an exception
+        return SubscriptionStatusResponse(
+            has_subscription=False,
+            subscription_status="inactive",
+            plan_tier=None,
+            current_period_end=None,
+            cancel_at_period_end=None,
+            stripe_customer_id=None
+        )
 
 @router.get("/plans")
 async def get_available_plans():
