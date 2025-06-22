@@ -402,6 +402,12 @@ async def health_check():
     return health_status
 
 
+@app.get("/healthz")
+async def health_check_render():
+    """Simple health check endpoint for Render"""
+    return {"status": "ok"}
+
+
 @app.get("/rate-limit-status")
 async def get_rate_limit_status(request: Request, user_id: str = Depends(verify_jwt_token)):
     """Get current rate limit status for authenticated user"""
