@@ -81,14 +81,17 @@ async def create_checkout_session(
         # Get plan details - using hardcoded configuration for now
         # TODO: Replace with proper subscription_plans table lookup
         if request.plan_id == "standard":
-            stripe_price_id = os.getenv("STRIPE_STANDARD_PRICE_ID", "price_1234567890")  # Replace with actual price ID
+            stripe_price_id = os.getenv("STRIPE_STANDARD_PRICE_ID")
             plan_name = "Standard Plan"
             monthly_price = 20.00
         else:
             raise HTTPException(status_code=404, detail="Plan not found or inactive")
         
-        if not stripe_price_id or stripe_price_id == "price_1234567890":
-            raise HTTPException(status_code=400, detail="Stripe price ID not configured. Please set STRIPE_STANDARD_PRICE_ID environment variable.")
+        if not stripe_price_id:
+            raise HTTPException(
+                status_code=503, 
+                detail="Payment system is currently being configured. Please try again later or contact support."
+            )
         
         # Create or use existing Stripe customer
         if existing_customer_id:
