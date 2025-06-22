@@ -89,3 +89,33 @@ export async function createPortalSession(returnUrl) {
     throw error;
   }
 }
+
+/**
+ * Manually sync subscription status from Stripe (for debugging/admin)
+ */
+export async function syncSubscriptionManually(email = null) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated');
+
+    const response = await fetch(`${API_BASE_URL}/payments/sync-subscription`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email, // Optional: sync specific user (admin feature)
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error syncing subscription:', error);
+    throw error;
+  }
+}

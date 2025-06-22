@@ -1,35 +1,64 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSubscription } from '../hooks/useSubscription';
-import { createPortalSession } from '../services/paymentService';
+import { createPortalSession, syncSubscriptionManually } from '../services/paymentService';
 
 export default function SubscriptionStatus() {
   const { 
     subscription, 
     hasActiveSubscription, 
-    isTrialing, 
-    isPastDue, 
-    loading, 
+    isLoading, 
     error,
     refetch 
   } = useSubscription();
+  
+  const [isCreatingPortal, setIsCreatingPortal] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleManageSubscription = async () => {
     try {
-      const { portal_url } = await createPortalSession(
-        window.location.origin
-      );
-      window.open(portal_url, '_blank');
+      setIsCreatingPortal(true);
+      const { url } = await createPortalSession(window.location.href);
+      window.location.href = url;
     } catch (error) {
       console.error('Error opening customer portal:', error);
+      alert('Failed to open subscription management. Please try again.');
+    } finally {
+      setIsCreatingPortal(false);
     }
   };
 
-  if (loading) {
+  const handleSyncSubscription = async () => {
+    try {
+      setIsSyncing(true);
+      console.log('🔄 Manually syncing subscription from Stripe...');
+      const result = await syncSubscriptionManually();
+      console.log('✅ Sync result:', result);
+      
+      // Refresh subscription data after sync
+      await refetch();
+      
+      if (result.success) {
+        alert('Subscription synced successfully!');
+      } else {
+        alert('Sync completed, but no changes detected.');
+      }
+    } catch (error) {
+      console.error('❌ Error syncing subscription:', error);
+      alert('Failed to sync subscription. Please try again or contact support.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  if (isLoading) {
     return (
-      <div className="p-4 bg-gray-50 rounded-lg">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+      <div className="bg-gray-50 rounded-lg p-4">
+        <div className="animate-pulse flex space-x-4">
+          <div className="rounded-full bg-gray-200 h-10 w-10"></div>
+          <div className="flex-1 space-y-2 py-1">
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </div>
         </div>
       </div>
     );
@@ -37,114 +66,111 @@ export default function SubscriptionStatus() {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-red-800">Subscription Error</p>
-            <p className="text-xs text-red-600">Unable to load subscription status</p>
+            <h3 className="text-sm font-medium text-red-800">Subscription Error</h3>
+            <p className="text-sm text-red-600 mt-1">
+              Unable to load subscription status
+            </p>
           </div>
-          <button
-            onClick={refetch}
-            className="text-red-600 hover:text-red-800 text-sm font-medium"
-          >
-            Retry
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={handleSyncSubscription}
+              disabled={isSyncing}
+              className="inline-flex items-center px-3 py-1.5 border border-red-300 text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 disabled:opacity-50"
+            >
+              {isSyncing ? '⏳ Syncing...' : '🔄 Sync'}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Format next billing date
+  if (!hasActiveSubscription) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-yellow-800">No Active Subscription</h3>
+            <p className="text-sm text-yellow-600 mt-1">
+              Subscribe to access premium features
+            </p>
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={handleSyncSubscription}
+              disabled={isSyncing}
+              className="inline-flex items-center px-3 py-1.5 border border-yellow-300 text-xs font-medium rounded text-yellow-700 bg-white hover:bg-yellow-50 disabled:opacity-50"
+              title="Sync subscription status from Stripe"
+            >
+              {isSyncing ? '⏳ Syncing...' : '🔄 Sync'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const formatDate = (dateString) => {
-    if (!dateString) return null;
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
-    } catch {
-      return null;
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'active': return 'text-green-600 bg-green-50 border-green-200';
+      case 'trialing': return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'past_due': return 'text-orange-600 bg-orange-50 border-orange-200';
+      case 'canceled': return 'text-red-600 bg-red-50 border-red-200';
+      default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
   };
 
-  const nextBillingDate = subscription?.current_period_end 
-    ? formatDate(subscription.current_period_end)
-    : null;
-
-  if (hasActiveSubscription) {
-    return (
-      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm font-semibold text-green-800">
-                {isTrialing ? 'Trial Active' : 'Pro Plan Active'}
-              </span>
-            </div>
-            
-            <p className="text-xs text-green-700 mb-2">
-              {subscription?.plan_tier || 'Standard'} • Unlimited messages
-            </p>
-            
-            {nextBillingDate && (
-              <p className="text-xs text-green-600">
-                {isTrialing ? 'Trial ends' : 'Next billing'}: {nextBillingDate}
-              </p>
-            )}
-            
-            {subscription?.cancel_at_period_end && (
-              <p className="text-xs text-orange-600 mt-1">
-                ⚠️ Cancels at period end
-              </p>
-            )}
-          </div>
-          
-          <button
-            onClick={handleManageSubscription}
-            className="text-xs text-green-700 hover:text-green-900 font-medium border border-green-300 hover:border-green-400 px-2 py-1 rounded transition-colors"
-          >
-            Manage
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-            <span className="text-sm font-semibold text-yellow-800">
-              {isPastDue ? 'Payment Past Due' : 'Free Plan'}
-            </span>
-          </div>
-          
-          <p className="text-xs text-yellow-700 mb-2">
-            {isPastDue 
-              ? 'Please update your payment method' 
-              : 'Limited messages • Upgrade for unlimited access'
-            }
-          </p>
-          
-          {subscription?.subscription_status && (
-            <p className="text-xs text-yellow-600 capitalize">
-              Status: {subscription.subscription_status}
-            </p>
-          )}
+    <div className={`border rounded-lg p-4 ${getStatusColor(subscription?.status)}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center space-x-2">
+          <div className="w-2 h-2 bg-current rounded-full"></div>
+          <h3 className="text-sm font-medium">
+            {subscription?.plan_tier?.charAt(0).toUpperCase() + subscription?.plan_tier?.slice(1)} Plan
+          </h3>
         </div>
+        <span className="text-xs font-medium px-2 py-1 rounded-full bg-current bg-opacity-20">
+          {subscription?.status?.toUpperCase()}
+        </span>
+      </div>
+      
+      {subscription?.next_billing_date && (
+        <p className="text-xs mb-3">
+          Next billing: {formatDate(subscription.next_billing_date)}
+        </p>
+      )}
+      
+      {subscription?.cancel_at_period_end && (
+        <p className="text-xs text-orange-600 mb-3">
+          ⚠️ Subscription will cancel at period end
+        </p>
+      )}
+      
+      <div className="flex space-x-2">
+        <button
+          onClick={handleManageSubscription}
+          disabled={isCreatingPortal}
+          className="flex-1 inline-flex items-center justify-center px-3 py-1.5 border border-current text-xs font-medium rounded hover:bg-current hover:bg-opacity-10 disabled:opacity-50"
+        >
+          {isCreatingPortal ? '⏳ Loading...' : '⚙️ Manage'}
+        </button>
         
-        {subscription?.stripe_customer_id && (
-          <button
-            onClick={handleManageSubscription}
-            className="text-xs text-yellow-700 hover:text-yellow-900 font-medium border border-yellow-300 hover:border-yellow-400 px-2 py-1 rounded transition-colors"
-          >
-            {isPastDue ? 'Update Payment' : 'Manage'}
-          </button>
-        )}
+        <button
+          onClick={handleSyncSubscription}
+          disabled={isSyncing}
+          className="inline-flex items-center px-3 py-1.5 border border-current text-xs font-medium rounded hover:bg-current hover:bg-opacity-10 disabled:opacity-50"
+          title="Sync subscription status from Stripe"
+        >
+          {isSyncing ? '⏳' : '🔄'}
+        </button>
       </div>
     </div>
   );

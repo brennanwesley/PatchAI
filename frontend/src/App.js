@@ -76,14 +76,43 @@ function ChatLayout() {
       console.log('💳 Payment success detected, refreshing subscription status...');
       // Clear the URL parameter
       window.history.replaceState({}, document.title, window.location.pathname);
-      // Refresh subscription status
-      setTimeout(() => {
-        refetchSubscription();
-      }, 1000); // Small delay to allow webhook processing
-      // Hide paywall immediately
+      
+      // Hide paywall immediately for better UX
       setShowPaywall(false);
+      
+      // Retry subscription refresh with exponential backoff
+      const retrySubscriptionRefresh = async (attempt = 1, maxAttempts = 5) => {
+        try {
+          console.log(`🔄 Refreshing subscription status (attempt ${attempt}/${maxAttempts})...`);
+          await refetchSubscription();
+          
+          // Check if subscription is now active
+          if (hasActiveSubscription) {
+            console.log('✅ Subscription status confirmed active');
+            return;
+          }
+          
+          // If not active yet and we have more attempts, retry
+          if (attempt < maxAttempts) {
+            const delay = Math.min(1000 * Math.pow(2, attempt), 10000); // Exponential backoff, max 10s
+            console.log(`⏳ Subscription not active yet, retrying in ${delay}ms...`);
+            setTimeout(() => retrySubscriptionRefresh(attempt + 1, maxAttempts), delay);
+          } else {
+            console.warn('⚠️ Subscription sync may be delayed. Please refresh the page if paywall persists.');
+          }
+        } catch (error) {
+          console.error('❌ Error refreshing subscription:', error);
+          if (attempt < maxAttempts) {
+            const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+            setTimeout(() => retrySubscriptionRefresh(attempt + 1, maxAttempts), delay);
+          }
+        }
+      };
+      
+      // Start the retry process after a small initial delay
+      setTimeout(() => retrySubscriptionRefresh(), 1000);
     }
-  }, [refetchSubscription]);
+  }, [refetchSubscription, hasActiveSubscription]);
 
   // Show paywall if user needs payment (but not if we just processed a successful payment)
   React.useEffect(() => {
