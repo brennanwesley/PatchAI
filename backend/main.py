@@ -20,6 +20,7 @@ from core.rate_limiter import RateLimiter
 from core.auth import verify_jwt_token
 from core.monitoring import get_health_status
 from core.subscription_middleware import enforce_subscription
+# Fixed import: get_stripe_config_status (not get_stripe_config)
 from core.stripe_config import validate_stripe_config, get_stripe_config_status
 from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
 from services.openai_service import initialize_openai_client, get_system_prompt
