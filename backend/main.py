@@ -296,14 +296,16 @@ async def save_chat_session(request: SaveChatRequest, req: Request, user_id: str
         if not request.messages:
             raise HTTPException(status_code=400, detail="Messages array cannot be empty")
         
-        # Try to update existing session first
-        success = await chat_service.update_chat_session(request.chat_id, user_id, request.messages)
+        # Check if chat session exists first
+        existing_chat = await chat_service.get_chat_session(request.chat_id, user_id)
         
-        if not success:
+        if existing_chat:
+            # Session exists, update it
+            success = await chat_service.update_chat_session(request.chat_id, user_id, request.messages)
+            chat_id = request.chat_id
+        else:
             # Session doesn't exist, create new one
             chat_id = await chat_service.create_chat_session(user_id, request.messages, request.title)
-        else:
-            chat_id = request.chat_id
         
         logger.info(f"Chat session saved for user {user_id}, chat {chat_id}")
         return {"status": "saved", "chat_id": chat_id}
