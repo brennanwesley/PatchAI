@@ -386,29 +386,67 @@ async def get_payment_config():
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
     """
-    Handle Stripe webhook events
+    Handle Stripe webhook events with comprehensive debugging
     """
     try:
-        body = await request.body()
-        sig_header = request.headers.get('stripe-signature')
+        # Log incoming request
+        logger.info("🎯 WEBHOOK: Incoming request received")
         
-        if not sig_header:
-            logger.error("❌ Missing stripe-signature header")
-            raise HTTPException(status_code=400, detail="Missing signature")
+        # Get raw body and headers
+        body = await request.body()
+        headers = dict(request.headers)
+        
+        logger.info(f"🎯 WEBHOOK: Body length: {len(body)}")
+        logger.info(f"🎯 WEBHOOK: Headers: {headers}")
+        
+        # Check for Stripe signature
+        stripe_signature = headers.get('stripe-signature')
+        if not stripe_signature:
+            logger.error("❌ WEBHOOK: Missing Stripe signature header")
+            raise HTTPException(status_code=400, detail="Missing Stripe signature")
+        
+        logger.info(f"🎯 WEBHOOK: Stripe signature present: {stripe_signature[:50]}...")
         
         # Verify webhook signature
-        event = webhook_handler.verify_webhook_signature(body, sig_header)
-        
-        if event:
-            logger.info(f"🔔 Received webhook event: {event['type']}")
-            await webhook_handler.process_webhook_event(event)
-            return {"status": "success"}
-        else:
-            logger.error("❌ Invalid webhook signature")
-            raise HTTPException(status_code=400, detail="Invalid signature")
+        try:
+            event = stripe.Webhook.construct_event(
+                body, stripe_signature, os.getenv("STRIPE_WEBHOOK_SECRET")
+            )
+            logger.info(f"✅ WEBHOOK: Signature verified successfully")
+            logger.info(f"🎯 WEBHOOK: Event type: {event['type']}")
+            logger.info(f"🎯 WEBHOOK: Event ID: {event['id']}")
             
+        except ValueError as e:
+            logger.error(f"❌ WEBHOOK: Invalid payload: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid payload")
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"❌ WEBHOOK: Signature verification failed: {str(e)}")
+            logger.error(f"❌ WEBHOOK: Expected signature: {stripe_signature}")
+            logger.error(f"❌ WEBHOOK: Webhook secret configured: {'Yes' if os.getenv('STRIPE_WEBHOOK_SECRET') else 'No'}")
+            raise HTTPException(status_code=400, detail="Invalid signature")
+        
+        # Process the event
+        try:
+            logger.info(f"🎯 WEBHOOK: Processing event {event['type']}")
+            await webhook_handler.process_webhook_event(event)
+            logger.info(f"✅ WEBHOOK: Event {event['type']} processed successfully")
+            
+            return {"status": "success", "event_type": event['type']}
+            
+        except Exception as e:
+            logger.error(f"❌ WEBHOOK: Event processing failed: {str(e)}")
+            import traceback
+            logger.error(f"❌ WEBHOOK: Full traceback: {traceback.format_exc()}")
+            
+            # Return 200 to prevent Stripe retries for application errors
+            return {"status": "error", "message": str(e)}
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"💥 Webhook processing error: {str(e)}")
+        logger.error(f"💥 WEBHOOK: Unexpected error: {str(e)}")
+        import traceback
+        logger.error(f"💥 WEBHOOK: Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 @router.post("/webhook-test")
