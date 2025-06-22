@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Stripe configuration constants
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+
 def initialize_stripe():
     """Initialize Stripe with API key from environment variables."""
     stripe_secret_key = os.getenv("STRIPE_API_SECRET")
