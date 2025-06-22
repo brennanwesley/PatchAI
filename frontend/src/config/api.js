@@ -84,3 +84,26 @@ export const createApiRequest = async (endpoint, method = 'GET', data = null) =>
     throw error;
   }
 };
+
+// ApiService class for easy method access
+export class ApiService {
+  static async get(endpoint) {
+    const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+    return await createApiRequest(fullUrl, 'GET');
+  }
+
+  static async post(endpoint, data) {
+    const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+    return await createApiRequest(fullUrl, 'POST', data);
+  }
+
+  static async put(endpoint, data) {
+    const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+    return await createApiRequest(fullUrl, 'PUT', data);
+  }
+
+  static async delete(endpoint) {
+    const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+    return await createApiRequest(fullUrl, 'DELETE');
+  }
+}
