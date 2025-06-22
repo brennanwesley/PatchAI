@@ -63,6 +63,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://patchai.app",        # Production domain
+        "https://www.patchai.app",    # Production domain with www
         "https://patchai-frontend.vercel.app",
         "http://localhost:3000",  # For local development
         "https://localhost:3000"  # For local HTTPS development
