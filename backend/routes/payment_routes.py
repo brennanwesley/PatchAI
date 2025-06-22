@@ -49,12 +49,13 @@ class CustomerPortalResponse(BaseModel):
     portal_url: str
 
 class SubscriptionStatusResponse(BaseModel):
-    has_subscription: bool
+    has_active_subscription: bool
     subscription_status: Optional[str] = None
     plan_tier: Optional[str] = None
     current_period_end: Optional[str] = None
     cancel_at_period_end: Optional[bool] = None
     stripe_customer_id: Optional[str] = None
+    subscription: Optional[dict] = None
 
 @router.post("/create-checkout-session", response_model=CheckoutResponse)
 async def create_checkout_session(
@@ -241,12 +242,13 @@ async def get_subscription_status(
         if not user_response.data:
             # User not found, return default inactive status
             return SubscriptionStatusResponse(
-                has_subscription=False,
+                has_active_subscription=False,
                 subscription_status="inactive",
                 plan_tier=None,
                 current_period_end=None,
                 cancel_at_period_end=None,
-                stripe_customer_id=None
+                stripe_customer_id=None,
+                subscription=None
             )
         
         user_profile = user_response.data
@@ -254,29 +256,58 @@ async def get_subscription_status(
         plan_tier = user_profile.get('plan_tier')
         stripe_customer_id = user_profile.get('stripe_customer_id')
         
-        has_subscription = subscription_status in ['active', 'trialing']
+        has_active_subscription = subscription_status in ['active', 'trialing']
         
-        # For now, return basic subscription info without detailed period data
-        # TODO: Add detailed subscription period info when needed
+        # Get detailed subscription info if user has active subscription
+        subscription_details = None
+        current_period_end = None
+        cancel_at_period_end = None
+        
+        if has_active_subscription and stripe_customer_id:
+            try:
+                # Get subscription details from database
+                sub_response = supabase.table("user_subscriptions").select(
+                    "stripe_subscription_id, status, current_period_start, current_period_end, cancel_at_period_end"
+                ).eq("user_id", user_id).eq("status", "active").single().execute()
+                
+                if sub_response.data:
+                    sub_data = sub_response.data
+                    current_period_end = sub_data.get('current_period_end')
+                    cancel_at_period_end = sub_data.get('cancel_at_period_end', False)
+                    
+                    # Create subscription object for frontend compatibility
+                    subscription_details = {
+                        "id": sub_data.get('stripe_subscription_id'),
+                        "status": sub_data.get('status'),
+                        "current_period_start": sub_data.get('current_period_start'),
+                        "current_period_end": current_period_end,
+                        "cancel_at_period_end": cancel_at_period_end
+                    }
+                    
+            except Exception as sub_error:
+                logger.warning(f"Could not fetch detailed subscription info: {str(sub_error)}")
+        
         return SubscriptionStatusResponse(
-            has_subscription=has_subscription,
+            has_active_subscription=has_active_subscription,
             subscription_status=subscription_status,
             plan_tier=plan_tier,
-            current_period_end=None,  # Simplified for now
-            cancel_at_period_end=None,  # Simplified for now
-            stripe_customer_id=stripe_customer_id
+            current_period_end=current_period_end,
+            cancel_at_period_end=cancel_at_period_end,
+            stripe_customer_id=stripe_customer_id,
+            subscription=subscription_details
         )
         
     except Exception as e:
         logger.error(f"Error getting subscription status: {str(e)}")
         # Return a safe default instead of raising an exception
         return SubscriptionStatusResponse(
-            has_subscription=False,
+            has_active_subscription=False,
             subscription_status="inactive",
             plan_tier=None,
             current_period_end=None,
             cancel_at_period_end=None,
-            stripe_customer_id=None
+            stripe_customer_id=None,
+            subscription=None
         )
 
 @router.get("/plans")
