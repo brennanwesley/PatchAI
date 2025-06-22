@@ -67,6 +67,13 @@ export const createApiRequest = async (endpoint, method = 'GET', data = null) =>
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       
+      console.error(`API Error ${response.status}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        url: endpoint,
+        errorData
+      });
+      
       // Handle authentication errors specifically
       if (response.status === 401 || response.status === 403) {
         const authError = new Error(errorData.detail || 'Authentication required');
@@ -75,12 +82,25 @@ export const createApiRequest = async (endpoint, method = 'GET', data = null) =>
         throw authError;
       }
       
+      // Handle validation errors (422)
+      if (response.status === 422) {
+        const validationError = new Error(errorData.detail || 'Validation error');
+        validationError.status = response.status;
+        validationError.validationDetails = errorData;
+        throw validationError;
+      }
+      
       throw new Error(errorData.detail || 'API request failed');
     }
 
     return await response.json();
   } catch (error) {
-    console.error('API request failed:', error);
+    console.error('API request failed:', {
+      message: error.message,
+      status: error.status,
+      isAuthError: error.isAuthError,
+      stack: error.stack
+    });
     throw error;
   }
 };
