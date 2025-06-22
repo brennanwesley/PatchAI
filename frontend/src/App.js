@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ChatProvider, useChatStore } from './hooks/useChatStore';
 import Login from './components/Login';
@@ -65,38 +65,36 @@ function ProtectedRoute({ children }) {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <div className="App">
-          <Routes>
-            <Route 
-              path="/" 
-              element={
-                <ProtectedRoute>
-                  <Navigate to="/chat" replace />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/chat" 
-              element={
-                <ProtectedRoute>
-                  <ChatLayout />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/chat/:chatId" 
-              element={
-                <ProtectedRoute>
-                  <ChatLayout />
-                </ProtectedRoute>
-              } 
-            />
-            <Route path="/login" element={<Login />} />
-            <Route path="*" element={<Navigate to="/chat" replace />} />
-          </Routes>
-        </div>
-      </Router>
+      <div className="App">
+        <Routes>
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <Navigate to="/chat" replace />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/chat" 
+            element={
+              <ProtectedRoute>
+                <ChatLayout />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/chat/:chatId" 
+            element={
+              <ProtectedRoute>
+                <ChatLayout />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/chat" replace />} />
+        </Routes>
+      </div>
     </AuthProvider>
   );
 }
