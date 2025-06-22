@@ -52,14 +52,26 @@ export class ChatService {
     try {
       console.log('🔄 ChatService: Creating new chat session:', title);
       
+      // Generate a temporary chat ID for new sessions
+      const tempChatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       const chatData = {
+        chat_id: tempChatId,
         title,
         messages: [firstMessage]
       };
 
       const response = await ApiService.post('/history', chatData);
-      console.log('✅ ChatService: Created new chat session:', response.id);
-      return response;
+      console.log('✅ ChatService: Created new chat session:', response.chat_id);
+      
+      // Return the chat object with the ID from the backend
+      return {
+        id: response.chat_id,
+        title,
+        messages: [firstMessage],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
     } catch (error) {
       console.error('❌ ChatService: Failed to create chat session:', error);
       throw error;
