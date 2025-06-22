@@ -21,7 +21,7 @@ from core.auth import verify_jwt_token
 from core.monitoring import get_health_status
 from core.subscription_middleware import enforce_subscription
 # Fixed import: get_stripe_config_status (not get_stripe_config)
-from core.stripe_config import validate_stripe_config, get_stripe_config_status
+from core.stripe_config import validate_stripe_config, get_stripe_config_status, initialize_stripe
 from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
 from services.openai_service import initialize_openai_client, get_system_prompt
 from services.supabase_service import initialize_supabase_client
@@ -31,6 +31,26 @@ from routes.payment_routes import router as payment_router
 # Initialize structured logging
 structured_logger = StructuredLogger()
 logger = structured_logger.logger
+
+# Initialize services
+logger.info("🚀 Initializing PatchAI Backend services...")
+
+# Initialize OpenAI
+if not initialize_openai_client():
+    logger.error("❌ Failed to initialize OpenAI client")
+    
+# Initialize Supabase
+if not initialize_supabase_client():
+    logger.error("❌ Failed to initialize Supabase client")
+
+# Initialize Stripe
+logger.info("💳 Initializing Stripe...")
+if initialize_stripe():
+    logger.info("✅ Stripe initialized successfully")
+else:
+    logger.error("❌ Failed to initialize Stripe - payment features may not work")
+
+logger.info("✅ Service initialization complete")
 
 # Initialize FastAPI app
 app = FastAPI(
