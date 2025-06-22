@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ChatProvider, useChatStore } from './hooks/useChatStore';
 import { useMobileLayout } from './hooks/useMobileLayout';
 import ChatSidebar from './components/ChatSidebar';
@@ -135,7 +135,7 @@ function ChatLayout() {
 
   // Desktop Layout
   return (
-    <div className="h-screen flex bg-gray-100">
+    <div className="h-screen flex bg-gray-100 overflow-hidden">
       {/* Left Sidebar - Chat List */}
       <ChatSidebar 
         isOpen={true} 
@@ -144,7 +144,7 @@ function ChatLayout() {
       />
       
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <ChatWindow />
         <InputBar />
       </div>

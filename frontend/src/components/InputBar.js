@@ -51,7 +51,7 @@ export default function InputBar() {
   };
 
   return (
-    <div className="border-t border-gray-200 bg-white px-4 md:px-6 py-3 md:py-4">
+    <div className="border-t border-gray-200 bg-white px-4 md:px-6 py-3 md:py-4 flex-shrink-0">
       {/* File Attachments */}
       {files.length > 0 && (
         <div className="mb-3">
