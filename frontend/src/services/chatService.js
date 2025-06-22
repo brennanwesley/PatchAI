@@ -81,49 +81,41 @@ export class ChatService {
   // Add a message to an existing chat session
   static async addMessageToSession(chatId, role, content) {
     try {
-      console.log('🔄 ChatService: Adding message to session:', chatId);
+      console.log('🔄 CHATSERVICE: Adding message to session:', chatId);
       
-      const messageData = {
-        chat_id: chatId,
+      // Get current chat and update with new message
+      const chat = await this.getChatSession(chatId);
+      const messages = chat.messages || [];
+      
+      const newMessage = {
+        id: `${role}-${Date.now()}`,
         role,
         content,
         timestamp: new Date().toISOString()
       };
+      
+      const updatedMessages = [...messages, newMessage];
+      
+      // FIXED: Send only the fields that backend expects (SaveChatRequest schema)
+      const updateData = {
+        chat_id: chatId,
+        messages: updatedMessages,
+        title: chat.title || 'Chat Session'
+      };
 
-      // Try direct message addition first (more efficient)
-      try {
-        const response = await ApiService.post(`/history/${chatId}/messages`, messageData);
-        console.log('✅ ChatService: Message added directly to session');
-        return response;
-      } catch (directError) {
-        console.warn('⚠️ Direct message addition failed, falling back to full chat update');
-        
-        // Fallback: Get current chat and update with new message
-        const chat = await this.getChatSession(chatId);
-        const messages = chat.messages || [];
-        
-        const newMessage = {
-          id: `${role}-${Date.now()}`,
-          role,
-          content,
-          timestamp: new Date().toISOString()
-        };
-        
-        const updatedMessages = [...messages, newMessage];
-        
-        const updateData = {
-          ...chat,
-          messages: updatedMessages,
-          lastMessage: content,
-          updatedAt: new Date().toISOString()
-        };
+      console.log('📤 CHATSERVICE: Sending update payload to /history:', updateData);
 
-        const response = await ApiService.post('/history', updateData);
-        console.log('✅ ChatService: Message added via chat update');
-        return response;
-      }
+      const response = await ApiService.post('/history', updateData);
+      console.log('✅ CHATSERVICE: Message added to session successfully');
+      return response;
     } catch (error) {
-      console.error('❌ ChatService: Failed to add message to session:', error);
+      console.error('❌ CHATSERVICE: Failed to add message to session:', error);
+      console.error('❌ CHATSERVICE: Error details:', {
+        message: error.message,
+        status: error.status,
+        chatId: chatId,
+        role: role
+      });
       throw error;
     }
   }
