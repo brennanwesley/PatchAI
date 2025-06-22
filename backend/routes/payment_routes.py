@@ -66,17 +66,27 @@ async def create_checkout_session(
     Create Stripe checkout session for subscription
     """
     try:
+        logger.info(f"🛒 Creating checkout session for user {user_id}, plan: {request.plan_id}")
+        
         # Get user profile to check for existing customer
+        logger.info(f"🔍 Fetching user profile for user {user_id}")
         user_response = supabase.table("user_profiles").select(
             "stripe_customer_id, email"
         ).eq("id", user_id).single().execute()
         
         if not user_response.data:
+            logger.error(f"❌ User profile not found for user {user_id}")
             raise HTTPException(status_code=404, detail="User profile not found")
         
         user_profile = user_response.data
         email = user_profile.get('email')
         existing_customer_id = user_profile.get('stripe_customer_id')
+        
+        logger.info(f"👤 User profile found - Email: {email}, Existing Customer: {bool(existing_customer_id)}")
+        
+        if not email:
+            logger.error(f"❌ User profile missing email for user {user_id}")
+            raise HTTPException(status_code=400, detail="User profile missing email address")
         
         # Get plan details - using hardcoded configuration for now
         # TODO: Replace with proper subscription_plans table lookup
@@ -84,10 +94,13 @@ async def create_checkout_session(
             stripe_price_id = os.getenv("STRIPE_STANDARD_PRICE_ID")
             plan_name = "Standard Plan"
             monthly_price = 20.00
+            logger.info(f"💰 Plan configured - Price ID: {stripe_price_id[:20] if stripe_price_id else 'None'}...")
         else:
+            logger.error(f"❌ Invalid plan_id: {request.plan_id}")
             raise HTTPException(status_code=404, detail="Plan not found or inactive")
         
         if not stripe_price_id:
+            logger.error("❌ STRIPE_STANDARD_PRICE_ID environment variable not set")
             raise HTTPException(
                 status_code=503, 
                 detail="Payment system is currently being configured. Please try again later or contact support."
@@ -96,29 +109,44 @@ async def create_checkout_session(
         # Create or use existing Stripe customer
         if existing_customer_id:
             try:
+                logger.info(f"🔍 Retrieving existing Stripe customer: {existing_customer_id}")
                 customer = stripe.Customer.retrieve(existing_customer_id)
-            except stripe.error.InvalidRequestError:
+                logger.info(f"✅ Retrieved existing customer: {customer.id}")
+            except stripe.error.InvalidRequestError as e:
+                logger.warning(f"⚠️ Existing customer not found in Stripe: {e}")
                 # Customer doesn't exist in Stripe, create new one
+                logger.info(f"🆕 Creating new Stripe customer for email: {email}")
                 customer = stripe.Customer.create(
                     email=email,
                     metadata={"user_id": user_id}
                 )
+                logger.info(f"✅ Created new customer: {customer.id}")
                 # Update user profile with new customer ID
                 supabase.table("user_profiles").update({
                     "stripe_customer_id": customer.id
                 }).eq("id", user_id).execute()
+                logger.info(f"✅ Updated user profile with customer ID")
         else:
             # Create new Stripe customer
+            logger.info(f"🆕 Creating new Stripe customer for email: {email}")
             customer = stripe.Customer.create(
                 email=email,
                 metadata={"user_id": user_id}
             )
+            logger.info(f"✅ Created new customer: {customer.id}")
             # Update user profile with customer ID
             supabase.table("user_profiles").update({
                 "stripe_customer_id": customer.id
             }).eq("id", user_id).execute()
+            logger.info(f"✅ Updated user profile with customer ID")
         
         # Create checkout session
+        logger.info(f"🛒 Creating Stripe checkout session...")
+        logger.info(f"🛒 Customer ID: {customer.id}")
+        logger.info(f"🛒 Price ID: {stripe_price_id}")
+        logger.info(f"🛒 Success URL: {request.success_url}")
+        logger.info(f"🛒 Cancel URL: {request.cancel_url}")
+        
         checkout_session = stripe.checkout.Session.create(
             customer=customer.id,
             payment_method_types=['card'],
@@ -141,7 +169,8 @@ async def create_checkout_session(
             }
         )
         
-        logger.info(f"Created checkout session for user {user_id}: {checkout_session.id}")
+        logger.info(f"✅ Created checkout session for user {user_id}: {checkout_session.id}")
+        logger.info(f"🔗 Checkout URL: {checkout_session.url}")
         
         return CheckoutResponse(
             checkout_url=checkout_session.url,
@@ -150,9 +179,14 @@ async def create_checkout_session(
         
     except HTTPException:
         raise
+    except stripe.error.StripeError as e:
+        logger.error(f"💳 Stripe API error: {str(e)}")
+        logger.error(f"💳 Stripe error type: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=f"Payment processing error: {str(e)}")
     except Exception as e:
-        logger.error(f"Error creating checkout session: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to create checkout session")
+        logger.error(f"❌ Unexpected error creating checkout session: {str(e)}")
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
 
 @router.post("/create-customer-portal", response_model=CustomerPortalResponse)
 async def create_customer_portal(
