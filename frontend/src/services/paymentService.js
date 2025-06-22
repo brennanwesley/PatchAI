@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
 /**
  * Get current user's subscription status
@@ -10,7 +10,7 @@ export async function getSubscriptionStatus() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Not authenticated');
 
-    const response = await fetch(`${API_BASE_URL}/api/payments/subscription-status`, {
+    const response = await fetch(`${API_BASE_URL}/payments/subscription-status`, {
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
@@ -29,29 +29,28 @@ export async function getSubscriptionStatus() {
 }
 
 /**
- * Create Stripe checkout session for Standard Plan
+ * Create Stripe checkout session for subscription
  */
-export async function createCheckoutSession(successUrl, cancelUrl) {
+export async function createCheckoutSession(planId, successUrl, cancelUrl) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Not authenticated');
 
-    const response = await fetch(`${API_BASE_URL}/api/payments/create-checkout-session`, {
+    const response = await fetch(`${API_BASE_URL}/payments/create-checkout-session`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        plan_name: 'standard',
+        plan_id: planId,
         success_url: successUrl,
         cancel_url: cancelUrl,
       }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     return await response.json();
@@ -69,7 +68,7 @@ export async function createPortalSession(returnUrl) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Not authenticated');
 
-    const response = await fetch(`${API_BASE_URL}/api/payments/create-portal-session`, {
+    const response = await fetch(`${API_BASE_URL}/payments/create-portal-session`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -81,8 +80,7 @@ export async function createPortalSession(returnUrl) {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     return await response.json();
