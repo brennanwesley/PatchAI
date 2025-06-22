@@ -13,6 +13,7 @@ export default function Paywall({ onClose }) {
 
       // Create checkout session
       const { checkout_url } = await createCheckoutSession(
+        'standard', // plan_id
         `${window.location.origin}/dashboard?payment=success`,
         `${window.location.origin}/dashboard?payment=cancelled`
       );
