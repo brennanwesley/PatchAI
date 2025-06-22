@@ -74,7 +74,7 @@ function App() {
     if (user) {
       loadChats();
     }
-  }, [user]);
+  }, [user, loadChats]);
 
   // LOAD MESSAGES WHEN CHAT CHANGES - Simple and clean
   useEffect(() => {
@@ -93,26 +93,26 @@ function App() {
         setMessages([]);
       }
     }
-  }, [activeChatId, isCreatingNewChat]);
+  }, [activeChatId, isCreatingNewChat, loadMessages]);
 
-  // SIMPLE CHAT LOADING
-  const loadChats = async () => {
+  // SIMPLE CHAT LOADING - MEMOIZED TO PREVENT INFINITE LOOPS
+  const loadChats = useCallback(async () => {
     try {
       console.log('📂 Loading chats...');
       setChatsLoading(true);
       const userChats = await ChatService.getUserChatSessions();
-      console.log('✅ Chats loaded:', userChats.length);
-      setChats(userChats);
+      console.log('✅ Chats loaded:', userChats?.length);
+      setChats(userChats || []);
     } catch (error) {
       console.error('❌ Failed to load chats:', error);
       setChats([]);
     } finally {
       setChatsLoading(false);
     }
-  };
+  }, []);
 
-  // SIMPLE MESSAGE LOADING
-  const loadMessages = async (chatId) => {
+  // SIMPLE MESSAGE LOADING - MEMOIZED TO PREVENT INFINITE LOOPS
+  const loadMessages = useCallback(async (chatId) => {
     try {
       console.log('📋 Loading messages for chat:', chatId);
       
@@ -140,12 +140,9 @@ function App() {
       }
     } catch (error) {
       console.error('❌ Failed to load messages:', error);
-      // Don't clear messages on error during chat creation
-      if (!isCreatingNewChat) {
-        setMessages([]);
-      }
+      setMessages([]);
     }
-  };
+  }, [chats, isCreatingNewChat]);
 
   // COMPLETELY REBUILT MESSAGE SENDING - Clean and simple
   const handleSendMessage = async (messageInput) => {
