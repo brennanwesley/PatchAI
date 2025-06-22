@@ -1,4 +1,5 @@
 import { ApiService } from '../config/api';
+import { paywallEvents, PAYWALL_EVENTS } from '../utils/paywallEvents';
 
 export class ChatService {
   // Get all chat sessions for the current user
@@ -161,6 +162,22 @@ export class ChatService {
         isAuthError: error.isAuthError,
         stack: error.stack
       });
+
+      // Handle 402 Payment Required - trigger paywall
+      if (error.status === 402) {
+        console.log('💳 CHATSERVICE: Payment required - triggering paywall');
+        paywallEvents.emit(PAYWALL_EVENTS.PAYMENT_REQUIRED, {
+          message: error.message || 'Subscription required to continue',
+          timestamp: new Date().toISOString()
+        });
+        
+        // Create a specific paywall error
+        const paywallError = new Error('Subscription required to continue chatting. Please upgrade to the Standard Plan.');
+        paywallError.isPaywallError = true;
+        paywallError.status = 402;
+        throw paywallError;
+      }
+
       throw error;
     }
   }

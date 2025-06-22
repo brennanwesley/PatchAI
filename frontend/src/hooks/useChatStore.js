@@ -268,6 +268,7 @@ export function ChatProvider({ children }) {
         message: error.message,
         status: error.status,
         isAuthError: error.isAuthError,
+        isPaywallError: error.isPaywallError,
         stack: error.stack
       });
       
@@ -275,12 +276,20 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'SET_TYPING', payload: false });
       
       // Show user-friendly error message
+      let errorContent = 'Sorry, I encountered an error processing your request. Please try again.';
+      
+      // Special handling for paywall errors
+      if (error.isPaywallError || error.status === 402) {
+        errorContent = '💳 Subscription required to continue chatting. Please upgrade to the Standard Plan to keep using PatchAI.';
+      }
+      
       const errorMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        content: errorContent,
         timestamp: new Date().toISOString(),
-        isError: true
+        isError: true,
+        isPaywallError: error.isPaywallError || error.status === 402
       };
       dispatch({ type: 'ADD_MESSAGE', payload: errorMessage });
       console.log('📝 AI_FLOW: Error message added to chat');

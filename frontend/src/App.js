@@ -1,12 +1,17 @@
 import React from 'react';
 import { ChatProvider, useChatStore } from './hooks/useChatStore';
 import { useMobileLayout } from './hooks/useMobileLayout';
+import { useSubscription } from './hooks/useSubscription';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { paywallEvents, PAYWALL_EVENTS } from './utils/paywallEvents';
 import ChatSidebar from './components/ChatSidebar';
 import ChatWindow from './components/ChatWindow';
 import InputBar from './components/InputBar';
 import StatusCards from './components/StatusCards';
 import MobileHeader from './components/MobileHeader';
 import BackendTest from './components/BackendTest';
+import Paywall from './components/Paywall';
+import SubscriptionStatus from './components/SubscriptionStatus';
 import './App.css';
 
 // Error Boundary Component
@@ -58,6 +63,28 @@ const isTestMode = () => {
 function ChatLayout() {
   const { chats, isLoading, error } = useChatStore();
   const { isMobile, sidebarOpen, toggleSidebar, closeSidebar } = useMobileLayout();
+  const { needsPayment, hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
+  const { user } = useAuth();
+  const [showPaywall, setShowPaywall] = React.useState(false);
+
+  // Show paywall if user needs payment
+  React.useEffect(() => {
+    if (user && !subscriptionLoading && needsPayment) {
+      setShowPaywall(true);
+    }
+  }, [user, subscriptionLoading, needsPayment]);
+
+  // Listen for paywall events (402 errors)
+  React.useEffect(() => {
+    const unsubscribe = paywallEvents.subscribe((eventType, data) => {
+      if (eventType === PAYWALL_EVENTS.PAYMENT_REQUIRED) {
+        console.log('💳 App: Payment required event received, showing paywall');
+        setShowPaywall(true);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   // Show backend test if test mode is enabled
   if (isTestMode()) {
@@ -129,6 +156,11 @@ function ChatLayout() {
           <ChatWindow />
           <InputBar />
         </div>
+
+        {/* Paywall Modal */}
+        {showPaywall && (
+          <Paywall onClose={() => setShowPaywall(false)} />
+        )}
       </div>
     );
   }
@@ -150,7 +182,22 @@ function ChatLayout() {
       </div>
       
       {/* Right Sidebar - Status Cards (Desktop Only) */}
-      <StatusCards />
+      <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
+        {/* Subscription Status at top */}
+        <div className="p-4 border-b border-gray-200">
+          <SubscriptionStatus />
+        </div>
+        
+        {/* Status Cards below */}
+        <div className="flex-1 overflow-y-auto">
+          <StatusCards />
+        </div>
+      </div>
+
+      {/* Paywall Modal */}
+      {showPaywall && (
+        <Paywall onClose={() => setShowPaywall(false)} />
+      )}
     </div>
   );
 }
@@ -159,9 +206,11 @@ function ChatLayout() {
 function App() {
   return (
     <ErrorBoundary>
-      <ChatProvider>
-        <ChatLayout />
-      </ChatProvider>
+      <AuthProvider>
+        <ChatProvider>
+          <ChatLayout />
+        </ChatProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }

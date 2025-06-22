@@ -81,11 +81,17 @@ export default function ChatWindow() {
                   <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                     message.role === 'user' 
                       ? 'bg-blue-600 text-white' 
-                      : 'bg-gray-100 text-gray-600'
+                      : message.isPaywallError
+                        ? 'bg-orange-100 text-orange-600'
+                        : 'bg-gray-100 text-gray-600'
                   }`}>
                     {message.role === 'user' ? (
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                      </svg>
+                    ) : message.isPaywallError ? (
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                       </svg>
                     ) : (
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -99,7 +105,9 @@ export default function ChatWindow() {
                     <div className={`px-4 py-2 rounded-2xl ${
                       message.role === 'user'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-900'
+                        : message.isPaywallError
+                          ? 'bg-orange-50 text-orange-900 border border-orange-200'
+                          : 'bg-gray-100 text-gray-900'
                     }`}>
                       {message.role === 'assistant' ? (
                         <div className="prose prose-sm max-w-none">
