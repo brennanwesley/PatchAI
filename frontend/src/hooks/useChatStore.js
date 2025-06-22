@@ -126,109 +126,141 @@ export function ChatProvider({ children }) {
 
   // FIXED: Removed chats dependency to prevent circular dependency
   const sendMessage = useCallback(async (content, files = []) => {
-    try {
-      console.log('🚀 Starting sendMessage with content:', content);
+    console.log('🚀 SENDMESSAGE: Starting with content:', content);
+    
+    if (!user) {
+      console.error('❌ SENDMESSAGE: User not authenticated');
+      throw new Error('User not authenticated');
+    }
+
+    // If no active chat exists, create one first
+    if (!state.activeChat) {
+      console.log('📝 SENDMESSAGE: No active chat found, creating new chat...');
+      const newChat = await createNewChat();
+      if (!newChat) {
+        console.error('❌ SENDMESSAGE: Failed to create new chat');
+        throw new Error('Failed to create new chat');
+      }
+    }
+
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content,
+      files,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('✅ SENDMESSAGE: Created user message:', userMessage);
+
+    // Add user message immediately (optimistic UI)
+    dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
+    console.log('✅ SENDMESSAGE: User message added to state');
+
+    let chatId = state.activeChat?.id;
+    let currentChat = state.activeChat;
+
+    console.log('🔍 SENDMESSAGE: Current chat state:', { chatId, isNew: currentChat?.isNew });
+
+    // If no active chat or it's a new chat, create it first
+    if (!currentChat || currentChat.isNew) {
+      console.log('📝 SENDMESSAGE: Creating new chat session...');
+      const title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+      const newChat = await ChatService.createChatSession(title, userMessage);
+      chatId = newChat.id;
+      currentChat = { ...newChat, isNew: false };
       
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
+      dispatch({ type: 'UPDATE_CHAT', payload: currentChat });
+      dispatch({ type: 'SET_ACTIVE_CHAT', payload: currentChat });
+      console.log('✅ SENDMESSAGE: New chat created with ID:', chatId);
+    } else {
+      // Save to existing chat
+      console.log('💾 SENDMESSAGE: Adding message to existing chat:', chatId);
+      await ChatService.addMessageToSession(chatId, userMessage.role, userMessage.content);
+    }
 
-      // If no active chat exists, create one first
-      if (!state.activeChat) {
-        console.log('📝 No active chat found, creating new chat...');
-        const newChat = await createNewChat();
-        if (!newChat) {
-          throw new Error('Failed to create new chat');
-        }
-      }
+    // Ensure we have a valid chatId before proceeding
+    if (!chatId) {
+      console.error('❌ SENDMESSAGE: No valid chatId available');
+      throw new Error('Failed to create or get chat session');
+    }
 
-      const userMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content,
-        files,
+    console.log('🔍 SENDMESSAGE: Final chatId for AI call:', chatId);
+
+    // Show typing indicator
+    dispatch({ type: 'SET_TYPING', payload: true });
+    console.log('⏳ SENDMESSAGE: Typing indicator set to true');
+
+    try {
+      console.log('🤖 AI_FLOW: Starting AI response request...');
+      
+      // Get current messages for AI context
+      const allMessages = [...state.messages, userMessage];
+      const apiMessages = allMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      console.log('📤 AI_FLOW: Prepared API messages:', apiMessages);
+      console.log('📤 AI_FLOW: Calling ChatService.sendPrompt with chatId:', chatId);
+
+      // STEP 2: Call sendPrompt with correct parameters (messages + chatId)
+      const aiResponse = await ChatService.sendPrompt(apiMessages, chatId);
+      console.log('✅ AI_FLOW: AI response received:', aiResponse);
+
+      // STEP 3: Proper state management - Create assistant message
+      const assistantMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: aiResponse,
         timestamp: new Date().toISOString()
       };
 
-      // Add user message immediately (optimistic UI)
-      dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
+      console.log('📝 AI_FLOW: Created assistant message:', assistantMessage);
 
-      let chatId = state.activeChat?.id;
-      let currentChat = state.activeChat;
+      // Add AI response to state
+      dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
+      dispatch({ type: 'SET_TYPING', payload: false });
+      console.log('✅ AI_FLOW: Assistant message added to state, typing indicator cleared');
 
-      // If no active chat or it's a new chat, create it first
-      if (!currentChat || currentChat.isNew) {
-        console.log('📝 Creating new chat session...');
-        const title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
-        const newChat = await ChatService.createChatSession(title, userMessage);
-        chatId = newChat.id;
-        currentChat = { ...newChat, isNew: false };
-        
-        dispatch({ type: 'UPDATE_CHAT', payload: currentChat });
-        dispatch({ type: 'SET_ACTIVE_CHAT', payload: currentChat });
-        console.log('✅ New chat created with ID:', chatId);
-      } else {
-        // Save to existing chat
-        console.log('💾 Adding message to existing chat:', chatId);
-        await ChatService.addMessageToSession(chatId, userMessage.role, userMessage.content);
-      }
+      // Save AI message to database
+      console.log('💾 AI_FLOW: Saving AI response to database...');
+      await ChatService.addMessageToSession(chatId, 'assistant', aiResponse);
+      console.log('✅ AI_FLOW: AI response saved to database');
 
-      // Ensure we have a valid chatId before proceeding
-      if (!chatId) {
-        throw new Error('Failed to create or get chat session');
-      }
-
-      // Show typing indicator
-      dispatch({ type: 'SET_TYPING', payload: true });
-
-      // FIXED: Use functional state update to access current messages without dependency
-      dispatch(currentState => {
-        const allMessages = [...currentState.messages];
-        const apiMessages = allMessages.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }));
-
-        // Get AI response (async without await to prevent blocking)
-        ChatService.sendPrompt(apiMessages)
-          .then(response => {
-            const assistantMessage = {
-              id: `assistant-${Date.now()}`,
-              role: 'assistant',
-              content: response,
-              timestamp: new Date().toISOString()
-            };
-
-            // Add AI response
-            dispatch({ type: 'ADD_MESSAGE', payload: assistantMessage });
-            dispatch({ type: 'SET_TYPING', payload: false });
-
-            // Save AI message to database
-            if (!state.activeChat?.isNew) {
-              ChatService.addMessageToSession(chatId, 'assistant', response);
-            }
-
-            // Update chat with last message
-            const updatedChat = {
-              ...state.activeChat,
-              lastMessage: assistantMessage.content,
-              updatedAt: new Date().toISOString()
-            };
-            dispatch({ type: 'UPDATE_CHAT', payload: updatedChat });
-          })
-          .catch(error => {
-            console.error('Failed to get AI response:', error);
-            dispatch({ type: 'SET_ERROR', payload: error.message });
-            dispatch({ type: 'SET_TYPING', payload: false });
-          });
-
-        return currentState; // Return unchanged state
-      });
+      // Update chat with last message
+      const updatedChat = {
+        ...currentChat,
+        lastMessage: assistantMessage.content,
+        updatedAt: new Date().toISOString()
+      };
+      dispatch({ type: 'UPDATE_CHAT', payload: updatedChat });
+      console.log('✅ AI_FLOW: Chat updated with last message');
+      
+      console.log('🎉 AI_FLOW: Complete flow finished successfully!');
 
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('❌ AI_FLOW: Failed to get AI response:', error);
+      console.error('❌ AI_FLOW: Error details:', {
+        message: error.message,
+        status: error.status,
+        isAuthError: error.isAuthError,
+        stack: error.stack
+      });
+      
       dispatch({ type: 'SET_ERROR', payload: error.message });
       dispatch({ type: 'SET_TYPING', payload: false });
+      
+      // Show user-friendly error message
+      const errorMessage = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        timestamp: new Date().toISOString(),
+        isError: true
+      };
+      dispatch({ type: 'ADD_MESSAGE', payload: errorMessage });
+      console.log('📝 AI_FLOW: Error message added to chat');
     }
   }, [state.activeChat]); // Only depend on activeChat
 

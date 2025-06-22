@@ -131,31 +131,44 @@ export class ChatService {
   // Send prompt to AI and get response
   static async sendPrompt(messages, chatId = null) {
     try {
-      console.log('🔄 ChatService: Sending prompt to AI');
+      console.log('🔄 CHATSERVICE: sendPrompt called');
+      console.log('🔄 CHATSERVICE: Messages count:', messages.length);
+      console.log('🔄 CHATSERVICE: Messages:', messages);
+      console.log('🔄 CHATSERVICE: Chat ID:', chatId);
       
-      const requestData = {
-        messages,
-        ...(chatId && { chat_id: chatId })
+      const payload = {
+        messages: messages,
+        chat_id: chatId
       };
 
-      const response = await ApiService.post('/prompt', requestData);
-      console.log('✅ ChatService: Received AI response');
+      console.log('📤 CHATSERVICE: Sending payload to /prompt:', payload);
+
+      const response = await ApiService.post('/prompt', payload);
+      console.log('📡 CHATSERVICE: Raw API response:', response);
       
-      // Handle multiple possible response formats
-      if (typeof response === 'string') {
-        return response; // Direct string response
-      } else if (response?.response) {
-        return response.response; // { response: "..." } format
-      } else if (response?.content) {
-        return response.content; // { content: "..." } format
-      } else if (response?.message) {
-        return response.message; // { message: "..." } format
-      } else {
-        console.warn('⚠️ Unexpected AI response format:', response);
-        return response?.toString() || 'No response received';
+      if (!response) {
+        console.error('❌ CHATSERVICE: No response received from API');
+        throw new Error('No response received from server');
       }
+
+      if (!response.response) {
+        console.error('❌ CHATSERVICE: Response missing "response" field:', response);
+        throw new Error('Invalid response format from server');
+      }
+
+      console.log('✅ CHATSERVICE: AI response text:', response.response);
+      console.log('✅ CHATSERVICE: Returned chat_id:', response.chat_id);
+      
+      // Return just the response text
+      return response.response;
     } catch (error) {
-      console.error('❌ ChatService: Failed to send prompt:', error);
+      console.error('❌ CHATSERVICE: sendPrompt failed:', error);
+      console.error('❌ CHATSERVICE: Error details:', {
+        message: error.message,
+        status: error.status,
+        isAuthError: error.isAuthError,
+        stack: error.stack
+      });
       throw error;
     }
   }
@@ -218,27 +231,6 @@ export class ChatService {
       if (error.status === 401 || error.status === 403) {
         throw new Error('Authentication failed. Please log in again.');
       }
-      throw error;
-    }
-  }
-
-  // Send messages to AI and get response
-  static async sendPrompt(messages, chatId = null) {
-    try {
-      console.log('🔄 ChatService: Sending prompt to AI with', messages.length, 'messages');
-      
-      const payload = {
-        messages: messages,
-        chat_id: chatId
-      };
-
-      const response = await ApiService.post('/prompt', payload);
-      console.log('✅ ChatService: Received AI response');
-      
-      // Return just the response text
-      return response.response;
-    } catch (error) {
-      console.error('❌ ChatService: Failed to send prompt:', error);
       throw error;
     }
   }
