@@ -15,16 +15,18 @@ from .stripe_config import STRIPE_WEBHOOK_SECRET
 # Load environment variables
 load_dotenv()
 
-logger = logging.getLogger(__name__)
+# Initialize Stripe
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
 
-# Initialize Supabase client
+# Initialize Supabase
 supabase_url = os.getenv("SUPABASE_URL")
 supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+supabase: Client = create_client(supabase_url, supabase_service_role_key)
 
 if not supabase_url or not supabase_service_role_key:
     raise ValueError("Supabase configuration missing for webhook handlers")
 
-supabase: Client = create_client(supabase_url, supabase_service_role_key)
+logger = logging.getLogger(__name__)
 
 class StripeWebhookHandler:
     """Handles Stripe webhook events for subscription management"""
@@ -66,17 +68,23 @@ class StripeWebhookHandler:
             subscription_id = subscription['id']
             status = subscription['status']
             
+            self.logger.info(f" Processing subscription created: {subscription_id} for customer {customer_id}")
+            
             # Get customer to find user_id
             customer = stripe.Customer.retrieve(customer_id)
             user_id = customer.metadata.get('user_id')
             
             if not user_id:
-                self.logger.error(f"No user_id found in customer metadata for {customer_id}")
+                self.logger.error(f" No user_id found in customer metadata for {customer_id}")
+                self.logger.error(f" Customer metadata: {customer.metadata}")
                 return
+            
+            self.logger.info(f" Found user_id: {user_id}")
             
             # Get plan info from subscription items
             if subscription['items']['data']:
                 price_id = subscription['items']['data'][0]['price']['id']
+                self.logger.info(f" Looking up plan for price_id: {price_id}")
                 
                 # Find matching plan in our database
                 plan_response = supabase.table("subscription_plans").select("*").eq(
@@ -84,37 +92,63 @@ class StripeWebhookHandler:
                 ).single().execute()
                 
                 if not plan_response.data:
-                    self.logger.error(f"No plan found for price_id: {price_id}")
+                    self.logger.error(f" No plan found for price_id: {price_id}")
+                    # List all available plans for debugging
+                    all_plans = supabase.table("subscription_plans").select("plan_id, stripe_price_id").execute()
+                    self.logger.error(f" Available plans: {all_plans.data}")
                     return
                 
                 plan = plan_response.data
+                self.logger.info(f" Found plan: {plan['plan_name']} ({plan['plan_id']})")
+                
+                # Check if subscription already exists
+                existing_sub = supabase.table("user_subscriptions").select("id").eq(
+                    "stripe_subscription_id", subscription_id
+                ).execute()
+                
+                if existing_sub.data:
+                    self.logger.info(f" Subscription {subscription_id} already exists in database")
+                    return
+                
+                # Get period dates from subscription items or main subscription
+                item = subscription['items']['data'][0]
+                current_period_start = item.get('current_period_start') or subscription.get('current_period_start')
+                current_period_end = item.get('current_period_end') or subscription.get('current_period_end')
                 
                 # Create subscription record
                 subscription_data = {
                     "user_id": user_id,
-                    "plan_id": plan['plan_id'],
+                    "plan_id": plan['id'],  # Use UUID id field, not string plan_id
                     "stripe_subscription_id": subscription_id,
                     "status": status,
-                    "current_period_start": datetime.fromtimestamp(subscription['current_period_start']).isoformat(),
-                    "current_period_end": datetime.fromtimestamp(subscription['current_period_end']).isoformat(),
+                    "current_period_start": datetime.fromtimestamp(current_period_start).isoformat() if current_period_start else None,
+                    "current_period_end": datetime.fromtimestamp(current_period_end).isoformat() if current_period_end else None,
                     "trial_start": datetime.fromtimestamp(subscription['trial_start']).isoformat() if subscription.get('trial_start') else None,
                     "trial_end": datetime.fromtimestamp(subscription['trial_end']).isoformat() if subscription.get('trial_end') else None,
                     "created_at": datetime.fromtimestamp(subscription['created']).isoformat()
                 }
                 
+                self.logger.info(f" Creating subscription record: {subscription_data}")
                 supabase.table("user_subscriptions").insert(subscription_data).execute()
                 
-                # Update user_profiles with subscription info
-                supabase.table("user_profiles").update({
+                # Update user profile
+                profile_update = {
                     "subscription_status": status,
-                    "plan_tier": plan['plan_id'],
-                    "stripe_customer_id": customer_id
-                }).eq("id", user_id).execute()
+                    "plan_tier": plan['plan_id'],  # Use string plan_id for plan_tier
+                    "updated_at": datetime.utcnow().isoformat()
+                }
                 
-                self.logger.info(f"Created subscription for user {user_id}: {plan['plan_id']} plan")
+                self.logger.info(f" Updating user profile: {profile_update}")
+                supabase.table("user_profiles").update(profile_update).eq("id", user_id).execute()
+                
+                self.logger.info(f" Successfully processed subscription creation for user {user_id}")
                 
         except Exception as e:
-            self.logger.error(f"Error handling subscription creation: {str(e)}")
+            self.logger.error(f" Error handling subscription creation: {str(e)}")
+            self.logger.error(f" Subscription data: {subscription}")
+            import traceback
+            self.logger.error(f" Traceback: {traceback.format_exc()}")
+            raise
     
     async def handle_customer_subscription_updated(self, subscription: dict):
         """Handle subscription updates (status changes, plan changes, etc.)"""
@@ -147,10 +181,14 @@ class StripeWebhookHandler:
                 "stripe_subscription_id", subscription_id
             ).execute()
             
-            self.logger.info(f"Updated subscription {subscription_id}: status={status}")
+            self.logger.info(f" Updated subscription {subscription_id}: status={status}")
             
         except Exception as e:
-            self.logger.error(f"Error handling subscription update: {str(e)}")
+            self.logger.error(f" Error handling subscription update: {str(e)}")
+            self.logger.error(f" Subscription data: {subscription}")
+            import traceback
+            self.logger.error(f" Traceback: {traceback.format_exc()}")
+            raise
     
     async def handle_customer_subscription_deleted(self, subscription: dict):
         """Handle subscription cancellation/deletion"""
@@ -164,10 +202,14 @@ class StripeWebhookHandler:
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("stripe_subscription_id", subscription_id).execute()
             
-            self.logger.info(f"Canceled subscription {subscription_id}")
+            self.logger.info(f" Canceled subscription {subscription_id}")
             
         except Exception as e:
-            self.logger.error(f"Error handling subscription deletion: {str(e)}")
+            self.logger.error(f" Error handling subscription deletion: {str(e)}")
+            self.logger.error(f" Subscription data: {subscription}")
+            import traceback
+            self.logger.error(f" Traceback: {traceback.format_exc()}")
+            raise
     
     async def handle_invoice_payment_succeeded(self, invoice: dict):
         """Handle successful payment"""
@@ -206,10 +248,14 @@ class StripeWebhookHandler:
                         "last_payment_at": datetime.utcnow().isoformat()
                     }).eq("id", user_id).execute()
                     
-                    self.logger.info(f"Recorded successful payment for user {user_id}: ${amount/100}")
+                    self.logger.info(f" Recorded successful payment for user {user_id}: ${amount/100}")
             
         except Exception as e:
-            self.logger.error(f"Error handling payment success: {str(e)}")
+            self.logger.error(f" Error handling payment success: {str(e)}")
+            self.logger.error(f" Invoice data: {invoice}")
+            import traceback
+            self.logger.error(f" Traceback: {traceback.format_exc()}")
+            raise
     
     async def handle_invoice_payment_failed(self, invoice: dict):
         """Handle failed payment"""
@@ -243,10 +289,14 @@ class StripeWebhookHandler:
                     
                     supabase.table("payment_transactions").insert(transaction_data).execute()
                     
-                    self.logger.warning(f"Recorded failed payment for user {user_id}: ${amount/100}")
+                    self.logger.warning(f" Recorded failed payment for user {user_id}: ${amount/100}")
             
         except Exception as e:
-            self.logger.error(f"Error handling payment failure: {str(e)}")
+            self.logger.error(f" Error handling payment failure: {str(e)}")
+            self.logger.error(f" Invoice data: {invoice}")
+            import traceback
+            self.logger.error(f" Traceback: {traceback.format_exc()}")
+            raise
     
     async def process_webhook_event(self, event: dict):
         """
@@ -270,11 +320,57 @@ class StripeWebhookHandler:
             elif event_type == 'invoice.payment_failed':
                 await self.handle_invoice_payment_failed(data)
             else:
-                self.logger.info(f"Unhandled webhook event type: {event_type}")
+                self.logger.info(f" Unhandled webhook event type: {event_type}")
                 
         except Exception as e:
-            self.logger.error(f"Error processing webhook event {event_type}: {str(e)}")
+            self.logger.error(f" Error processing webhook event {event_type}: {str(e)}")
+            self.logger.error(f" Event data: {event}")
+            import traceback
+            self.logger.error(f" Traceback: {traceback.format_exc()}")
             raise
+    
+    async def sync_subscription_from_stripe(self, user_email: str):
+        """Manually sync a user's subscription from Stripe - useful for fixing stuck subscriptions"""
+        try:
+            self.logger.info(f" Manual sync for user: {user_email}")
+            
+            # Find user in database
+            user_response = supabase.table("user_profiles").select("*").eq("email", user_email).execute()
+            if not user_response.data:
+                self.logger.error(f" User not found: {user_email}")
+                return False
+                
+            user = user_response.data[0]
+            user_id = user['id']
+            stripe_customer_id = user.get('stripe_customer_id')
+            
+            if not stripe_customer_id:
+                self.logger.error(f" No Stripe customer ID for user: {user_email}")
+                return False
+            
+            # Get active subscriptions from Stripe
+            subscriptions = stripe.Subscription.list(customer=stripe_customer_id, status='active')
+            
+            if not subscriptions.data:
+                self.logger.info(f" No active subscriptions found for {user_email}")
+                return False
+            
+            # Process the first active subscription
+            subscription = subscriptions.data[0]
+            self.logger.info(f" Processing subscription: {subscription.id}")
+            
+            # Simulate webhook event processing
+            await self.handle_customer_subscription_created(subscription)
+            
+            self.logger.info(f" Manual sync completed for {user_email}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f" Error in manual sync: {str(e)}")
+            self.logger.error(f" User email: {user_email}")
+            import traceback
+            self.logger.error(f" Traceback: {traceback.format_exc()}")
+            return False
 
 # Global instance
 webhook_handler = StripeWebhookHandler()

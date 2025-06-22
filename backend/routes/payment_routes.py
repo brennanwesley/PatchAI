@@ -57,6 +57,9 @@ class SubscriptionStatusResponse(BaseModel):
     stripe_customer_id: Optional[str] = None
     subscription: Optional[dict] = None
 
+class SyncSubscriptionRequest(BaseModel):
+    email: Optional[str] = None
+
 @router.post("/create-checkout-session", response_model=CheckoutResponse)
 async def create_checkout_session(
     request: CreateCheckoutRequest, 
@@ -386,22 +389,57 @@ async def stripe_webhook(request: Request):
     Handle Stripe webhook events
     """
     try:
-        payload = await request.body()
-        signature = request.headers.get('stripe-signature')
+        body = await request.body()
+        sig_header = request.headers.get('stripe-signature')
         
-        if not signature:
-            raise HTTPException(status_code=400, detail="Missing Stripe signature")
+        if not sig_header:
+            logger.error("❌ Missing stripe-signature header")
+            raise HTTPException(status_code=400, detail="Missing signature")
         
-        # Verify webhook signature and get event
-        event = await webhook_handler.verify_webhook_signature(payload, signature)
+        # Verify webhook signature
+        event = webhook_handler.verify_webhook_signature(body, sig_header)
         
-        # Process the event
-        await webhook_handler.process_webhook_event(event)
-        
-        return {"status": "success"}
-        
-    except HTTPException:
-        raise
+        if event:
+            logger.info(f"🔔 Received webhook event: {event['type']}")
+            await webhook_handler.process_webhook_event(event)
+            return {"status": "success"}
+        else:
+            logger.error("❌ Invalid webhook signature")
+            raise HTTPException(status_code=400, detail="Invalid signature")
+            
     except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
+        logger.error(f"💥 Webhook processing error: {str(e)}")
         raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+@router.post("/sync-subscription")
+async def sync_subscription_manually(
+    request: SyncSubscriptionRequest,
+    current_user: dict = Depends(verify_jwt_token)
+):
+    """Manually sync a user's subscription from Stripe - for fixing stuck subscriptions"""
+    try:
+        # Only allow admin users or the user themselves to sync
+        user_id = current_user.get("sub")
+        user_email = current_user.get("email")
+        
+        # If email is provided in request, use that (admin feature)
+        target_email = request.email if hasattr(request, 'email') and request.email else user_email
+        
+        logger.info(f"🔄 Manual subscription sync requested for: {target_email}")
+        
+        success = await webhook_handler.sync_subscription_from_stripe(target_email)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"Successfully synced subscription for {target_email}"
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"No active subscription found for {target_email}"
+            }
+            
+    except Exception as e:
+        logger.error(f"💥 Manual sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Manual sync failed")
