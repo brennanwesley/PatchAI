@@ -270,8 +270,8 @@ async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
-        # Enforce subscription access (PAYWALL)
-        await enforce_subscription(req, user_id)
+        # NOTE: Removed enforce_subscription() to allow new users to load empty chat history
+        # Paywall enforcement happens at /prompt endpoint when user tries to chat
         
         if not chat_service:
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
@@ -295,8 +295,8 @@ async def get_chat_session(chat_id: str, req: Request, user_id: str = Depends(ve
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
-        # Enforce subscription access (PAYWALL)
-        await enforce_subscription(req, user_id)
+        # NOTE: Removed enforce_subscription() to allow new users to view chat history
+        # Paywall enforcement happens at /prompt endpoint when user tries to chat
         
         if not chat_service:
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
