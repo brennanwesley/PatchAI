@@ -6,34 +6,49 @@ Handles Stripe SDK initialization and configuration
 import os
 import stripe
 from dotenv import load_dotenv
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Stripe with secret key
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-
-# Stripe configuration constants
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-
-def get_stripe_config():
-    """Get Stripe configuration for validation"""
-    return {
-        "api_key_configured": bool(stripe.api_key),
-        "webhook_secret_configured": bool(STRIPE_WEBHOOK_SECRET),
-        "api_key_prefix": stripe.api_key[:7] + "..." if stripe.api_key else None
-    }
+def initialize_stripe():
+    """Initialize Stripe with API key from environment variables."""
+    stripe_secret_key = os.getenv("STRIPE_API_SECRET")
+    
+    if not stripe_secret_key:
+        logger.error("STRIPE_API_SECRET environment variable not found")
+        return False
+    
+    try:
+        stripe.api_key = stripe_secret_key
+        logger.info("Stripe initialized successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to initialize Stripe: {e}")
+        return False
 
 def validate_stripe_config():
-    """Validate that Stripe is properly configured"""
-    if not stripe.api_key:
-        raise ValueError("STRIPE_SECRET_KEY environment variable is not set")
+    """Validate that Stripe is properly configured."""
+    stripe_secret_key = os.getenv("STRIPE_API_SECRET")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
     
-    if not STRIPE_WEBHOOK_SECRET:
-        raise ValueError("STRIPE_WEBHOOK_SECRET environment variable is not set")
+    config_status = {
+        "stripe_secret_key": bool(stripe_secret_key),
+        "webhook_secret": bool(webhook_secret),
+        "stripe_initialized": bool(stripe.api_key)
+    }
     
-    # Validate API key format
-    if not stripe.api_key.startswith(('sk_test_', 'sk_live_')):
-        raise ValueError("Invalid Stripe secret key format")
+    return config_status
+
+def get_stripe_config_status():
+    """Get current Stripe configuration status for health checks."""
+    config = validate_stripe_config()
     
-    return True
+    status = "healthy" if all(config.values()) else "degraded"
+    
+    return {
+        "status": status,
+        "details": config
+    }
