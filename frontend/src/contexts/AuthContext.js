@@ -131,7 +131,7 @@ export const AuthProvider = ({ children }) => {
   };
   
   // Sign up function with better error messages
-  const signUp = async (email, password) => {
+  const signUp = async (email, password, displayName = null) => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -153,6 +153,30 @@ export const AuthProvider = ({ children }) => {
         }
         
         throw new Error(userMessage);
+      }
+      
+      // If signup successful and display name provided, update the user profile
+      if (data.user && displayName && displayName.trim()) {
+        try {
+          // Update the user profile with display name
+          const { error: profileError } = await supabase
+            .from('user_profiles')
+            .update({ 
+              display_name: displayName.trim(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', data.user.id);
+          
+          if (profileError) {
+            console.error('Error updating display name:', profileError);
+            // Don't throw error here - signup was successful, display name update is secondary
+          } else {
+            console.log('Display name updated successfully:', displayName.trim());
+          }
+        } catch (profileError) {
+          console.error('Error updating user profile with display name:', profileError);
+          // Don't throw error here - signup was successful
+        }
       }
       
       return { user: data.user, error: null };

@@ -22,10 +22,10 @@ const LandingPage = () => {
         // Sign in
         await login(email, password);
       } else {
-        // Sign up - store customer name in localStorage for profile display
-        await signUp(email, password);
+        // Sign up - pass customer name as display name to be stored in database
+        await signUp(email, password, customerName);
         
-        // Store customer name and email locally (not in database)
+        // Store customer name and email locally for immediate use
         if (customerName.trim()) {
           localStorage.setItem('customer_name', customerName.trim());
         }

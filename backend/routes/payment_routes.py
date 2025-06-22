@@ -411,6 +411,33 @@ async def stripe_webhook(request: Request):
         logger.error(f"💥 Webhook processing error: {str(e)}")
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 
+@router.post("/webhook-test")
+async def webhook_test(request: Request):
+    """Test endpoint to log all webhook data for debugging"""
+    try:
+        # Get raw body
+        body = await request.body()
+        headers = dict(request.headers)
+        
+        # Log everything for debugging
+        logger.info("🔍 WEBHOOK TEST - Raw body length: %d", len(body))
+        logger.info("🔍 WEBHOOK TEST - Headers: %s", headers)
+        
+        if body:
+            try:
+                # Try to parse as JSON
+                import json
+                data = json.loads(body)
+                logger.info("🔍 WEBHOOK TEST - Parsed JSON: %s", json.dumps(data, indent=2))
+            except:
+                logger.info("🔍 WEBHOOK TEST - Raw body (not JSON): %s", body.decode('utf-8', errors='ignore'))
+        
+        return {"status": "received", "body_length": len(body)}
+        
+    except Exception as e:
+        logger.error("❌ Webhook test error: %s", str(e))
+        return {"error": str(e)}, 500
+
 @router.post("/sync-subscription")
 async def sync_subscription_manually(
     request: SyncSubscriptionRequest,
