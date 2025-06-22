@@ -27,7 +27,18 @@ export default function ChatSidebar({ isOpen, onClose, isMobile }) {
   };
 
   const formatDate = (dateString) => {
+    // Validate input - handle null, undefined, or empty strings
+    if (!dateString) {
+      return 'Unknown';
+    }
+    
     const date = new Date(dateString);
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      return 'Unknown';
+    }
+    
     const now = new Date();
     const diffTime = Math.abs(now - date);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
