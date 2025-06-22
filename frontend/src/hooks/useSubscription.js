@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getSubscriptionStatus } from '@/services/paymentService';
-import { useAuth } from '@/contexts/AuthContext';
+import { getSubscriptionStatus } from '../services/paymentService';
+import { useAuth } from '../contexts/AuthContext';
 
 export function useSubscription() {
   const { user } = useAuth();

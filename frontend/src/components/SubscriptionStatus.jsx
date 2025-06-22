@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { createPortalSession } from '@/services/paymentService';
-import { useSubscription } from '@/hooks/useSubscription';
+import React, { useState } from 'react';
+import { createPortalSession } from '../services/paymentService';
+import { useSubscription } from '../hooks/useSubscription';
 
 export default function SubscriptionStatus() {
   const { subscription, hasActiveSubscription, isTrialing, isPastDue, loading } = useSubscription();

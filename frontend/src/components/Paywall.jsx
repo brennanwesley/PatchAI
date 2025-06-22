@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { createCheckoutSession } from '@/services/paymentService';
-import stripePromise from '@/lib/stripe';
+import React, { useState } from 'react';
+import { createCheckoutSession } from '../services/paymentService';
+import stripePromise from '../lib/stripe';
 
 export default function Paywall({ onClose }) {
   const [loading, setLoading] = useState(false);
