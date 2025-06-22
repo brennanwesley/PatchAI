@@ -1,0 +1,280 @@
+"""
+Stripe Webhook Handlers
+Handles real-time subscription events from Stripe to keep database in sync
+"""
+
+import logging
+import stripe
+from fastapi import HTTPException, Request
+from supabase import create_client, Client
+import os
+from dotenv import load_dotenv
+from datetime import datetime
+from .stripe_config import STRIPE_WEBHOOK_SECRET
+
+# Load environment variables
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if not supabase_url or not supabase_service_role_key:
+    raise ValueError("Supabase configuration missing for webhook handlers")
+
+supabase: Client = create_client(supabase_url, supabase_service_role_key)
+
+class StripeWebhookHandler:
+    """Handles Stripe webhook events for subscription management"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+    
+    async def verify_webhook_signature(self, payload: bytes, signature: str) -> dict:
+        """
+        Verify Stripe webhook signature and parse event
+        
+        Args:
+            payload: Raw webhook payload
+            signature: Stripe signature header
+            
+        Returns:
+            dict: Parsed Stripe event
+            
+        Raises:
+            HTTPException: If signature verification fails
+        """
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, signature, STRIPE_WEBHOOK_SECRET
+            )
+            self.logger.info(f"Webhook verified: {event['type']} - {event['id']}")
+            return event
+        except ValueError as e:
+            self.logger.error(f"Invalid payload: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid payload")
+        except stripe.error.SignatureVerificationError as e:
+            self.logger.error(f"Invalid signature: {str(e)}")
+            raise HTTPException(status_code=400, detail="Invalid signature")
+    
+    async def handle_customer_subscription_created(self, subscription: dict):
+        """Handle new subscription creation"""
+        try:
+            customer_id = subscription['customer']
+            subscription_id = subscription['id']
+            status = subscription['status']
+            
+            # Get customer to find user_id
+            customer = stripe.Customer.retrieve(customer_id)
+            user_id = customer.metadata.get('user_id')
+            
+            if not user_id:
+                self.logger.error(f"No user_id found in customer metadata for {customer_id}")
+                return
+            
+            # Get plan info from subscription items
+            if subscription['items']['data']:
+                price_id = subscription['items']['data'][0]['price']['id']
+                
+                # Find matching plan in our database
+                plan_response = supabase.table("subscription_plans").select("*").eq(
+                    "stripe_price_id", price_id
+                ).single().execute()
+                
+                if not plan_response.data:
+                    self.logger.error(f"No plan found for price_id: {price_id}")
+                    return
+                
+                plan = plan_response.data
+                
+                # Create subscription record
+                subscription_data = {
+                    "user_id": user_id,
+                    "plan_id": plan['plan_id'],
+                    "stripe_subscription_id": subscription_id,
+                    "status": status,
+                    "current_period_start": datetime.fromtimestamp(subscription['current_period_start']).isoformat(),
+                    "current_period_end": datetime.fromtimestamp(subscription['current_period_end']).isoformat(),
+                    "trial_start": datetime.fromtimestamp(subscription['trial_start']).isoformat() if subscription.get('trial_start') else None,
+                    "trial_end": datetime.fromtimestamp(subscription['trial_end']).isoformat() if subscription.get('trial_end') else None,
+                    "created_at": datetime.fromtimestamp(subscription['created']).isoformat()
+                }
+                
+                supabase.table("user_subscriptions").insert(subscription_data).execute()
+                
+                # Update user_profiles with subscription info
+                supabase.table("user_profiles").update({
+                    "subscription_status": status,
+                    "plan_tier": plan['plan_id'],
+                    "stripe_customer_id": customer_id
+                }).eq("id", user_id).execute()
+                
+                self.logger.info(f"Created subscription for user {user_id}: {plan['plan_id']} plan")
+                
+        except Exception as e:
+            self.logger.error(f"Error handling subscription creation: {str(e)}")
+    
+    async def handle_customer_subscription_updated(self, subscription: dict):
+        """Handle subscription updates (status changes, plan changes, etc.)"""
+        try:
+            subscription_id = subscription['id']
+            status = subscription['status']
+            
+            # Update subscription record
+            update_data = {
+                "status": status,
+                "current_period_start": datetime.fromtimestamp(subscription['current_period_start']).isoformat(),
+                "current_period_end": datetime.fromtimestamp(subscription['current_period_end']).isoformat(),
+                "trial_start": datetime.fromtimestamp(subscription['trial_start']).isoformat() if subscription.get('trial_start') else None,
+                "trial_end": datetime.fromtimestamp(subscription['trial_end']).isoformat() if subscription.get('trial_end') else None,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            
+            # Check if plan changed
+            if subscription['items']['data']:
+                price_id = subscription['items']['data'][0]['price']['id']
+                
+                plan_response = supabase.table("subscription_plans").select("plan_id").eq(
+                    "stripe_price_id", price_id
+                ).single().execute()
+                
+                if plan_response.data:
+                    update_data["plan_id"] = plan_response.data['plan_id']
+            
+            supabase.table("user_subscriptions").update(update_data).eq(
+                "stripe_subscription_id", subscription_id
+            ).execute()
+            
+            self.logger.info(f"Updated subscription {subscription_id}: status={status}")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling subscription update: {str(e)}")
+    
+    async def handle_customer_subscription_deleted(self, subscription: dict):
+        """Handle subscription cancellation/deletion"""
+        try:
+            subscription_id = subscription['id']
+            
+            # Update subscription status to canceled
+            supabase.table("user_subscriptions").update({
+                "status": "canceled",
+                "canceled_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("stripe_subscription_id", subscription_id).execute()
+            
+            self.logger.info(f"Canceled subscription {subscription_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling subscription deletion: {str(e)}")
+    
+    async def handle_invoice_payment_succeeded(self, invoice: dict):
+        """Handle successful payment"""
+        try:
+            subscription_id = invoice.get('subscription')
+            payment_intent_id = invoice.get('payment_intent')
+            amount = invoice.get('amount_paid', 0)
+            
+            if subscription_id:
+                # Get subscription to find user
+                subscription_response = supabase.table("user_subscriptions").select(
+                    "user_id, id"
+                ).eq("stripe_subscription_id", subscription_id).single().execute()
+                
+                if subscription_response.data:
+                    user_id = subscription_response.data['user_id']
+                    subscription_db_id = subscription_response.data['id']
+                    
+                    # Record payment transaction
+                    transaction_data = {
+                        "user_id": user_id,
+                        "subscription_id": subscription_db_id,
+                        "stripe_payment_intent_id": payment_intent_id,
+                        "stripe_invoice_id": invoice['id'],
+                        "amount": amount,
+                        "currency": invoice.get('currency', 'usd'),
+                        "status": "succeeded",
+                        "payment_method": "card",  # Default, could be enhanced
+                        "created_at": datetime.fromtimestamp(invoice['created']).isoformat()
+                    }
+                    
+                    supabase.table("payment_transactions").insert(transaction_data).execute()
+                    
+                    # Update user's last payment date
+                    supabase.table("user_profiles").update({
+                        "last_payment_at": datetime.utcnow().isoformat()
+                    }).eq("id", user_id).execute()
+                    
+                    self.logger.info(f"Recorded successful payment for user {user_id}: ${amount/100}")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling payment success: {str(e)}")
+    
+    async def handle_invoice_payment_failed(self, invoice: dict):
+        """Handle failed payment"""
+        try:
+            subscription_id = invoice.get('subscription')
+            payment_intent_id = invoice.get('payment_intent')
+            amount = invoice.get('amount_due', 0)
+            
+            if subscription_id:
+                # Get subscription to find user
+                subscription_response = supabase.table("user_subscriptions").select(
+                    "user_id, id"
+                ).eq("stripe_subscription_id", subscription_id).single().execute()
+                
+                if subscription_response.data:
+                    user_id = subscription_response.data['user_id']
+                    subscription_db_id = subscription_response.data['id']
+                    
+                    # Record failed payment transaction
+                    transaction_data = {
+                        "user_id": user_id,
+                        "subscription_id": subscription_db_id,
+                        "stripe_payment_intent_id": payment_intent_id,
+                        "stripe_invoice_id": invoice['id'],
+                        "amount": amount,
+                        "currency": invoice.get('currency', 'usd'),
+                        "status": "failed",
+                        "failure_reason": "payment_failed",
+                        "created_at": datetime.fromtimestamp(invoice['created']).isoformat()
+                    }
+                    
+                    supabase.table("payment_transactions").insert(transaction_data).execute()
+                    
+                    self.logger.warning(f"Recorded failed payment for user {user_id}: ${amount/100}")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling payment failure: {str(e)}")
+    
+    async def process_webhook_event(self, event: dict):
+        """
+        Process webhook event based on type
+        
+        Args:
+            event: Verified Stripe webhook event
+        """
+        event_type = event['type']
+        data = event['data']['object']
+        
+        try:
+            if event_type == 'customer.subscription.created':
+                await self.handle_customer_subscription_created(data)
+            elif event_type == 'customer.subscription.updated':
+                await self.handle_customer_subscription_updated(data)
+            elif event_type == 'customer.subscription.deleted':
+                await self.handle_customer_subscription_deleted(data)
+            elif event_type == 'invoice.payment_succeeded':
+                await self.handle_invoice_payment_succeeded(data)
+            elif event_type == 'invoice.payment_failed':
+                await self.handle_invoice_payment_failed(data)
+            else:
+                self.logger.info(f"Unhandled webhook event type: {event_type}")
+                
+        except Exception as e:
+            self.logger.error(f"Error processing webhook event {event_type}: {str(e)}")
+            raise
+
+# Global instance
+webhook_handler = StripeWebhookHandler()

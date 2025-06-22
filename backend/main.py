@@ -19,10 +19,13 @@ from core.logging import StructuredLogger
 from core.rate_limiter import RateLimiter
 from core.auth import verify_jwt_token
 from core.monitoring import get_health_status
+from core.subscription_middleware import enforce_subscription
+from core.stripe_config import validate_stripe_config, get_stripe_config
 from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
 from services.openai_service import initialize_openai_client, get_system_prompt
 from services.supabase_service import initialize_supabase_client
 from services.chat_service import ChatService
+from routes.payment_routes import router as payment_router
 
 # Initialize structured logging
 structured_logger = StructuredLogger()
@@ -53,6 +56,14 @@ openai_client = initialize_openai_client()
 supabase_client = initialize_supabase_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
+
+# Validate Stripe configuration
+try:
+    validate_stripe_config()
+    stripe_config = get_stripe_config()
+    logger.info(f"Stripe configured: API key={stripe_config['api_key_configured']}, Webhook={stripe_config['webhook_secret_configured']}")
+except Exception as e:
+    logger.warning(f"Stripe configuration warning: {str(e)}")
 
 logger.info("PatchAI Backend initialized with enterprise architecture and chat service")
 
@@ -167,6 +178,9 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         # Check rate limits
         await check_rate_limits(req, user_id)
         
+        # Enforce subscription access (PAYWALL)
+        subscription_info = await enforce_subscription(req, user_id)
+        
         # Validate input
         if not request.messages:
             raise HTTPException(status_code=400, detail="Messages array cannot be empty")
@@ -235,6 +249,9 @@ async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
+        # Enforce subscription access (PAYWALL)
+        await enforce_subscription(req, user_id)
+        
         if not chat_service:
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
             raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
@@ -257,6 +274,9 @@ async def get_chat_session(chat_id: str, req: Request, user_id: str = Depends(ve
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
+        # Enforce subscription access (PAYWALL)
+        await enforce_subscription(req, user_id)
+        
         if not chat_service:
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
             raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
@@ -288,6 +308,9 @@ async def save_chat_session(request: SaveChatRequest, req: Request, user_id: str
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
+        # Enforce subscription access (PAYWALL)
+        await enforce_subscription(req, user_id)
+        
         if not chat_service:
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
             raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
@@ -323,6 +346,9 @@ async def delete_chat_session(chat_id: str, req: Request, user_id: str = Depends
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
+        # Enforce subscription access (PAYWALL)
+        await enforce_subscription(req, user_id)
+        
         if not chat_service:
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
             raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
@@ -357,7 +383,23 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint with comprehensive system status"""
-    return get_health_status(openai_client, supabase_client, rate_limiter, structured_logger)
+    health_status = get_health_status(openai_client, supabase_client, rate_limiter, structured_logger)
+    
+    # Add Stripe configuration status
+    try:
+        stripe_config = get_stripe_config()
+        health_status["stripe"] = {
+            "configured": stripe_config['api_key_configured'] and stripe_config['webhook_secret_configured'],
+            "api_key_configured": stripe_config['api_key_configured'],
+            "webhook_secret_configured": stripe_config['webhook_secret_configured']
+        }
+    except Exception as e:
+        health_status["stripe"] = {
+            "configured": False,
+            "error": str(e)
+        }
+    
+    return health_status
 
 
 @app.get("/rate-limit-status")
@@ -425,6 +467,8 @@ async def delete_user_history(user_id: str, req: Request):
         structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to delete user history: {str(e)}")
 
+
+app.include_router(payment_router)
 
 if __name__ == "__main__":
     import uvicorn

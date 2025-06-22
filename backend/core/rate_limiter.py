@@ -6,8 +6,24 @@ import time
 import logging
 from collections import defaultdict, deque
 from typing import Dict, Tuple
+from supabase import create_client, Client
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Initialize Supabase client for subscription lookups
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if supabase_url and supabase_service_role_key:
+    supabase: Client = create_client(supabase_url, supabase_service_role_key)
+else:
+    supabase = None
+    logger.warning("Supabase not configured - rate limiter will use fallback limits")
 
 
 class RateLimiter:
@@ -18,8 +34,8 @@ class RateLimiter:
         self.user_requests: Dict[str, deque] = defaultdict(deque)
         self.ip_requests: Dict[str, deque] = defaultdict(deque)
         
-        # Subscription tier limits (messages per day)
-        self.TIER_LIMITS = {
+        # Fallback tier limits (messages per day) - used when database is unavailable
+        self.FALLBACK_TIER_LIMITS = {
             'free': 10,
             'standard': 1000,
             'premium': 5000,
@@ -29,7 +45,7 @@ class RateLimiter:
         # IP-based limits (per hour to prevent abuse)
         self.IP_LIMIT_PER_HOUR = 100
         
-        logger.info("Rate limiter initialized with subscription-tier awareness")
+        logger.info("Rate limiter initialized with database-driven subscription limits")
     
     def _cleanup_old_requests(self, request_queue: deque, time_window: int):
         """Remove requests older than time_window seconds"""
@@ -37,13 +53,63 @@ class RateLimiter:
         while request_queue and current_time - request_queue[0] > time_window:
             request_queue.popleft()
     
-    def _get_user_tier(self, user_id: str) -> str:
-        """Get user's subscription tier - placeholder for future subscription system"""
-        # TODO: Replace with actual subscription tier lookup from database
+    def _get_user_tier_and_limit(self, user_id: str) -> Tuple[str, int]:
+        """
+        Get user's subscription tier and message limit from database
         
-        # For now, return 'standard' for all users (1000 messages per day)
-        # This gives all users the standard plan by default
-        return 'standard'
+        Returns:
+            Tuple[str, int]: (tier_name, daily_message_limit)
+        """
+        try:
+            if not supabase:
+                # Fallback to default limits if Supabase not configured
+                return 'standard', self.FALLBACK_TIER_LIMITS['standard']
+            
+            # Get user's active subscription info
+            response = supabase.rpc(
+                "get_user_active_subscription",
+                {"user_uuid": user_id}
+            ).execute()
+            
+            if response.data and len(response.data) > 0:
+                subscription = response.data[0]
+                plan_tier = subscription.get('plan_id', 'standard')
+                message_limit = subscription.get('message_limit', 1000)
+                
+                logger.debug(f"User {user_id} has {plan_tier} plan with {message_limit} messages/day")
+                return plan_tier, message_limit
+            else:
+                # No active subscription found - check user_profiles for plan_tier
+                user_response = supabase.table("user_profiles").select(
+                    "plan_tier, subscription_status"
+                ).eq("id", user_id).single().execute()
+                
+                if user_response.data:
+                    plan_tier = user_response.data.get('plan_tier', 'standard')
+                    subscription_status = user_response.data.get('subscription_status', 'inactive')
+                    
+                    # If user has no active subscription, use fallback limits
+                    if subscription_status not in ['active', 'trialing']:
+                        logger.info(f"User {user_id} has no active subscription, using fallback limits")
+                        return 'standard', self.FALLBACK_TIER_LIMITS['standard']
+                    
+                    # Get message limit from subscription_plans table
+                    plan_response = supabase.table("subscription_plans").select(
+                        "message_limit"
+                    ).eq("plan_id", plan_tier).single().execute()
+                    
+                    if plan_response.data:
+                        message_limit = plan_response.data.get('message_limit', 1000)
+                        return plan_tier, message_limit
+                
+                # Fallback to standard plan
+                logger.warning(f"Could not determine subscription for user {user_id}, using standard fallback")
+                return 'standard', self.FALLBACK_TIER_LIMITS['standard']
+                
+        except Exception as e:
+            logger.error(f"Error getting subscription info for user {user_id}: {str(e)}")
+            # Fallback to standard plan on error
+            return 'standard', self.FALLBACK_TIER_LIMITS['standard']
     
     def check_user_limit(self, user_id: str) -> Tuple[bool, int, int]:
         """Check if user has exceeded their daily message limit"""
@@ -53,8 +119,7 @@ class RateLimiter:
         self._cleanup_old_requests(self.user_requests[user_id], 86400)
         
         # Get user's subscription tier and limit
-        tier = self._get_user_tier(user_id)
-        daily_limit = self.TIER_LIMITS.get(tier, self.TIER_LIMITS['default'])
+        tier, daily_limit = self._get_user_tier_and_limit(user_id)
         
         # Count current requests
         current_count = len(self.user_requests[user_id])
@@ -95,8 +160,7 @@ class RateLimiter:
         self._cleanup_old_requests(self.user_requests[user_id], 86400)
         
         # Get user's subscription tier and limit
-        tier = self._get_user_tier(user_id)
-        daily_limit = self.TIER_LIMITS.get(tier, self.TIER_LIMITS['default'])
+        tier, daily_limit = self._get_user_tier_and_limit(user_id)
         
         # Count current requests
         current_count = len(self.user_requests[user_id])
