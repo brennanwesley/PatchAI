@@ -87,8 +87,11 @@ function App() {
       console.log('📋 Loading messages for chat:', activeChatId);
       loadMessages(activeChatId);
     } else {
-      console.log('🔄 No active chat, clearing messages');
-      setMessages([]);
+      // Only clear messages if we're not in the middle of creating a chat
+      if (!isCreatingNewChat) {
+        console.log('🔄 No active chat, clearing messages');
+        setMessages([]);
+      }
     }
   }, [activeChatId, isCreatingNewChat]);
 
@@ -112,22 +115,35 @@ function App() {
   const loadMessages = async (chatId) => {
     try {
       console.log('📋 Loading messages for chat:', chatId);
+      
+      // During chat creation, don't interfere with the process
+      if (isCreatingNewChat) {
+        console.log('🚫 Skipping message load - chat creation in progress');
+        return;
+      }
+      
       const chat = chats.find(c => c.id === chatId);
       if (chat && chat.messages) {
         setMessages(Array.isArray(chat.messages) ? chat.messages : []);
-        console.log('✅ Messages loaded:', chat.messages.length);
+        console.log('✅ Messages loaded from local chat:', chat.messages.length);
       } else {
-        // Fallback: load from database
+        // Fallback: load from database only if not creating a new chat
+        console.log('📋 Chat not found locally, loading from database...');
         const chatData = await ChatService.getChatSession(chatId);
         if (chatData && chatData.messages) {
           setMessages(Array.isArray(chatData.messages) ? chatData.messages : []);
+          console.log('✅ Messages loaded from database:', chatData.messages.length);
         } else {
+          console.log('📋 No messages found for chat:', chatId);
           setMessages([]);
         }
       }
     } catch (error) {
       console.error('❌ Failed to load messages:', error);
-      setMessages([]);
+      // Don't clear messages on error during chat creation
+      if (!isCreatingNewChat) {
+        setMessages([]);
+      }
     }
   };
 
@@ -179,10 +195,12 @@ function App() {
         const newChat = await ChatService.createChatSession(chatTitle, userMessage);
         
         chatId = newChat.id;
+        setChats(prev => [newChat, ...(Array.isArray(prev) ? prev : [])]);
         setActiveChatId(chatId);
         
-        // Add to chats list
-        setChats(prev => [newChat, ...(Array.isArray(prev) ? prev : [])]);
+        // Immediately set messages to show user message
+        setMessages(currentMessages);
+        console.log('✅ Messages set for new chat:', currentMessages.length);
         
         // Update URL
         navigate(`/chat/${chatId}`, { replace: true });
@@ -193,8 +211,6 @@ function App() {
         await ChatService.addMessageToSession(chatId, userMessage.role, userMessage.content);
         console.log('✅ User message saved to existing chat');
       }
-
-      setIsCreatingNewChat(false);
 
       // STEP 4: Get AI response
       console.log('🤖 Getting AI response...');
@@ -232,6 +248,8 @@ function App() {
           : chat
       ));
       console.log('✅ Chat updated in sidebar');
+
+      setIsCreatingNewChat(false);
 
     } catch (error) {
       console.error('❌ Send message failed:', error);
