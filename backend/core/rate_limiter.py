@@ -23,7 +23,7 @@ class RateLimiter:
             'free': 10,
             'standard': 1000,
             'premium': 5000,
-            'default': 10  # Default to free tier
+            'default': 1000  # Default to standard tier (1000 messages/day)
         }
         
         # IP-based limits (per hour to prevent abuse)
@@ -41,12 +41,9 @@ class RateLimiter:
         """Get user's subscription tier - placeholder for future subscription system"""
         # TODO: Replace with actual subscription tier lookup from database
         
-        # Upgrade specific user to standard tier
-        if user_id == "tharaldson.brennan@gmail.com":
-            return 'standard'
-        
-        # For now, return 'free' for all other users
-        return 'free'
+        # For now, return 'standard' for all users (1000 messages per day)
+        # This gives all users the standard plan by default
+        return 'standard'
     
     def check_user_limit(self, user_id: str) -> Tuple[bool, int, int]:
         """Check if user has exceeded their daily message limit"""
