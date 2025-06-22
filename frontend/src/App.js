@@ -70,27 +70,35 @@ function App() {
         return;
       }
       
-      const chat = chats.find(c => c.id === chatId);
-      if (chat && chat.messages) {
-        setMessages(Array.isArray(chat.messages) ? chat.messages : []);
-        console.log('✅ Messages loaded from local chat:', chat.messages.length);
-      } else {
-        // Fallback: load from database only if not creating a new chat
-        console.log('📋 Chat not found locally, loading from database...');
-        const chatData = await ChatService.getChatSession(chatId);
-        if (chatData && chatData.messages) {
-          setMessages(Array.isArray(chatData.messages) ? chatData.messages : []);
-          console.log('✅ Messages loaded from database:', chatData.messages.length);
+      // Use functional state update to access current chats without dependency
+      setChats(currentChats => {
+        const chat = currentChats.find(c => c.id === chatId);
+        if (chat && chat.messages) {
+          setMessages(Array.isArray(chat.messages) ? chat.messages : []);
+          console.log('✅ Messages loaded from local chat:', chat.messages.length);
         } else {
-          console.log('📋 No messages found for chat:', chatId);
-          setMessages([]);
+          // Fallback: load from database only if not creating a new chat
+          console.log('📋 Chat not found locally, loading from database...');
+          ChatService.getChatSession(chatId).then(chatData => {
+            if (chatData && chatData.messages) {
+              setMessages(Array.isArray(chatData.messages) ? chatData.messages : []);
+              console.log('✅ Messages loaded from database:', chatData.messages.length);
+            } else {
+              console.log('📋 No messages found for chat:', chatId);
+              setMessages([]);
+            }
+          }).catch(error => {
+            console.error('❌ Failed to load messages from database:', error);
+            setMessages([]);
+          });
         }
-      }
+        return currentChats; // Return unchanged chats
+      });
     } catch (error) {
       console.error('❌ Failed to load messages:', error);
       setMessages([]);
     }
-  }, [chats, isCreatingNewChat]);
+  }, [isCreatingNewChat]);
 
   // Handle window resize
   useEffect(() => {
