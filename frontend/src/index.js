@@ -7,6 +7,8 @@ import App from './App';
 import LandingPage from './components/LandingPage';
 import reportWebVitals from './reportWebVitals';
 
+// Fresh deployment after database cleanup - 2025-06-22
+
 // Auth wrapper component to protect routes
 const PrivateRoute = ({ children }) => {
   const { user } = useAuth();
