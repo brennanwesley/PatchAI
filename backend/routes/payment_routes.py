@@ -508,3 +508,141 @@ async def sync_subscription_manually(
     except Exception as e:
         logger.error(f"💥 Manual sync error: {str(e)}")
         raise HTTPException(status_code=500, detail="Manual sync failed")
+
+@router.post("/sync-all-subscriptions")
+async def sync_all_subscriptions(current_user: dict = Depends(verify_jwt_token)):
+    """
+    Manually sync all Stripe subscriptions for users with missing database records
+    """
+    try:
+        logger.info("🔄 MANUAL SYNC: Starting sync of all subscriptions")
+        
+        # Get all user profiles with Stripe customer IDs
+        profiles_response = supabase.table("user_profiles").select("id, email, stripe_customer_id, subscription_status").execute()
+        
+        synced_count = 0
+        error_count = 0
+        
+        for profile in profiles_response.data:
+            try:
+                user_id = profile['id']
+                email = profile['email']
+                customer_id = profile.get('stripe_customer_id')
+                current_status = profile.get('subscription_status', 'inactive')
+                
+                if not customer_id:
+                    logger.info(f"⏭️  SYNC: Skipping {email} - no Stripe customer ID")
+                    continue
+                
+                logger.info(f"🔍 SYNC: Checking {email} (current status: {current_status})")
+                
+                # Get active subscriptions from Stripe
+                subscriptions = stripe.Subscription.list(
+                    customer=customer_id,
+                    status='active',
+                    limit=10
+                )
+                
+                if not subscriptions.data:
+                    logger.info(f"⏭️  SYNC: No active subscriptions for {email}")
+                    continue
+                
+                # Process each active subscription
+                for subscription in subscriptions.data:
+                    # Check if subscription already exists in database
+                    existing_sub = supabase.table("user_subscriptions").select("id").eq("stripe_subscription_id", subscription.id).execute()
+                    
+                    if existing_sub.data:
+                        logger.info(f"✅ SYNC: Subscription {subscription.id} already exists for {email}")
+                        continue
+                    
+                    # Process the subscription using webhook handler
+                    logger.info(f"🔄 SYNC: Processing subscription {subscription.id} for {email}")
+                    await webhook_handler.handle_customer_subscription_created(subscription)
+                    synced_count += 1
+                    logger.info(f"✅ SYNC: Successfully synced {email}")
+                    
+            except Exception as e:
+                error_count += 1
+                logger.error(f"❌ SYNC: Error processing {profile.get('email', 'unknown')}: {str(e)}")
+                continue
+        
+        logger.info(f"🎉 MANUAL SYNC: Completed - {synced_count} synced, {error_count} errors")
+        
+        return {
+            "status": "success",
+            "synced_count": synced_count,
+            "error_count": error_count,
+            "message": f"Synced {synced_count} subscriptions with {error_count} errors"
+        }
+        
+    except Exception as e:
+        logger.error(f"💥 MANUAL SYNC: Failed: {str(e)}")
+        import traceback
+        logger.error(f"💥 MANUAL SYNC: Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+@router.post("/sync-user-subscription")
+async def sync_user_subscription(
+    request: dict,
+    current_user: dict = Depends(verify_jwt_token)
+):
+    """
+    Manually sync a specific user's subscription by email
+    """
+    try:
+        email = request.get('email')
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+        
+        logger.info(f"🔄 USER SYNC: Starting sync for {email}")
+        
+        # Get user profile
+        profile_response = supabase.table("user_profiles").select("*").eq("email", email).execute()
+        if not profile_response.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        profile = profile_response.data[0]
+        customer_id = profile.get('stripe_customer_id')
+        
+        if not customer_id:
+            raise HTTPException(status_code=400, detail="User has no Stripe customer ID")
+        
+        # Get active subscriptions from Stripe
+        subscriptions = stripe.Subscription.list(
+            customer=customer_id,
+            status='active',
+            limit=10
+        )
+        
+        if not subscriptions.data:
+            return {
+                "status": "no_subscriptions",
+                "message": f"No active subscriptions found for {email}"
+            }
+        
+        synced_count = 0
+        for subscription in subscriptions.data:
+            # Check if subscription already exists
+            existing_sub = supabase.table("user_subscriptions").select("id").eq("stripe_subscription_id", subscription.id).execute()
+            
+            if existing_sub.data:
+                logger.info(f"✅ USER SYNC: Subscription {subscription.id} already exists")
+                continue
+            
+            # Process the subscription
+            await webhook_handler.handle_customer_subscription_created(subscription)
+            synced_count += 1
+            logger.info(f"✅ USER SYNC: Synced subscription {subscription.id}")
+        
+        return {
+            "status": "success",
+            "synced_count": synced_count,
+            "message": f"Synced {synced_count} subscriptions for {email}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 USER SYNC: Failed for {email}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
