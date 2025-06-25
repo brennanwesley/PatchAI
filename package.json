@@ -1,6 +1,6 @@
 {
   "name": "patchai-testing",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Testing suite for PatchAI frontend and backend",
   "scripts": {
     "test-frontend": "node frontend_test.js",
@@ -14,5 +14,5 @@
   "devDependencies": {},
   "keywords": ["testing", "patchai", "frontend", "backend"],
   "author": "PatchAI Team",
-  "license": "MIT"
+  "license": "PROPRIETARY"
 }

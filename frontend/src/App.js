@@ -1,3 +1,12 @@
+/*
+ * PatchAI Frontend v2.0.0 - Enterprise SaaS Platform
+ * Copyright (c) 2025 brennanwesley. All Rights Reserved.
+ * 
+ * PROPRIETARY AND CONFIDENTIAL
+ * This software is proprietary to brennanwesley. Unauthorized copying, distribution,
+ * modification, or commercial use is strictly prohibited.
+ */
+
 import React from 'react';
 import { ChatProvider, useChatStore } from './hooks/useChatStore';
 import { useMobileLayout } from './hooks/useMobileLayout';

@@ -186,7 +186,12 @@ For assistance, please open an issue in the GitHub repository or contact the dev
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**All Rights Reserved**
+
+Copyright (c) 2025 brennanwesley. All rights reserved.
+
+This software is proprietary and confidential. As of version 2.0.0, PatchAI is no longer open source. 
+Unauthorized copying, distribution, modification, or commercial use is strictly prohibited.
 
 ## 🙏 Acknowledgments
 

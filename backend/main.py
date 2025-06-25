@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
-PatchAI Backend - Refactored Enterprise Architecture
+PatchAI Backend v2.0.0 - Enterprise SaaS Platform
+Copyright (c) 2025 brennanwesley. All Rights Reserved.
+
+PROPRIETARY AND CONFIDENTIAL
+This software is proprietary to brennanwesley. Unauthorized copying, distribution,
+modification, or commercial use is strictly prohibited.
+
 Modular FastAPI application with proper separation of concerns
-Last updated: 2025-06-21 - REFACTORED FOR ENTERPRISE SCALABILITY
+Last updated: 2025-06-24 - PROPRIETARY VERSION 2.0.0
 """
 
 import os
