@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { FiLogOut } from 'react-icons/fi';
+import { FiLogOut, FiUser } from 'react-icons/fi';
 import PropTypes from 'prop-types';
+import Profile from './Profile';
 
 const MAX_TITLE_LENGTH = 30;
 const MAX_MESSAGE_PREVIEW = 40;
@@ -15,12 +16,13 @@ const Sidebar = ({
   onSelectChat = () => {},
   onNewChat = () => {},
   onDeleteChat = () => {},
-  onLogOut = () => {}, // Add onLogOut prop
+  onLogOut = () => {}, 
   isCollapsed = false,
   onToggleCollapse = () => {}
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredChatId, setHoveredChatId] = useState(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Format chat title with ellipsis if too long
   const formatTitle = (title) => {
@@ -231,6 +233,14 @@ const Sidebar = ({
             <FiLogOut className="w-4 h-4 mr-3" />
             <span>Log Out</span>
           </button>
+          {/* Profile Button */}
+          <button
+            onClick={() => setIsProfileOpen(true)}
+            className="w-full flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            <FiUser className="w-4 h-4 mr-3" />
+            <span>Profile</span>
+          </button>
         </div>
         
         {/* Mobile User Info - Stays at bottom */}
@@ -261,6 +271,14 @@ const Sidebar = ({
                 <FiLogOut className="w-4 h-4 mr-3" />
                 <span>Log Out</span>
               </button>
+              {/* Mobile Profile Button */}
+              <button
+                onClick={() => setIsProfileOpen(true)}
+                className="w-full flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                <FiUser className="w-4 h-4 mr-3" />
+                <span>Profile</span>
+              </button>
             </div>
           ) : (
             <div className="flex justify-center">
@@ -270,6 +288,14 @@ const Sidebar = ({
             </div>
           )}
         </div>
+        
+        {/* Profile Modal */}
+        {isProfileOpen && (
+          <Profile
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+          />
+        )}
       </div>
     </div>
   );
@@ -292,7 +318,7 @@ Sidebar.propTypes = {
   onSelectChat: PropTypes.func,
   onNewChat: PropTypes.func,
   onDeleteChat: PropTypes.func,
-  onLogOut: PropTypes.func, // Add onLogOut prop type
+  onLogOut: PropTypes.func, 
   isCollapsed: PropTypes.bool,
   onToggleCollapse: PropTypes.func
 };

@@ -4,11 +4,48 @@ import { useAuth } from '../contexts/AuthContext';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [referralValidation, setReferralValidation] = useState({ valid: null, message: '' });
   
   const { signIn, signUp } = useAuth();
+
+  // Validate referral code as user types
+  const validateReferralCode = async (code) => {
+    if (!code || code.length !== 6) {
+      setReferralValidation({ valid: null, message: '' });
+      return;
+    }
+
+    try {
+      const API_URL = process.env.REACT_APP_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://patchai-backend.onrender.com';
+      const response = await fetch(`${API_URL}/referrals/validate-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ referral_code: code.toUpperCase() }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setReferralValidation({
+          valid: data.valid,
+          message: data.valid 
+            ? `Valid referral code from ${data.referring_user_email}` 
+            : 'Referral code not found'
+        });
+      } else {
+        setReferralValidation({ valid: false, message: 'Invalid referral code format' });
+      }
+    } catch (error) {
+      console.error('Error validating referral code:', error);
+      setReferralValidation({ valid: false, message: 'Unable to validate referral code' });
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,7 +54,7 @@ export default function Login() {
 
     try {
       if (isSignUp) {
-        await signUp(email, password);
+        await signUp(email, password, referralCode.toUpperCase() || null);
       } else {
         await signIn(email, password);
       }
@@ -86,6 +123,32 @@ export default function Login() {
                 placeholder="Enter your password"
               />
             </div>
+            
+            {isSignUp && (
+              <div>
+                <label htmlFor="referralCode" className="block text-sm font-medium text-gray-700">
+                  Referral Code (optional)
+                </label>
+                <input
+                  id="referralCode"
+                  name="referralCode"
+                  type="text"
+                  maxLength={6}
+                  value={referralCode}
+                  onChange={(e) => {
+                    setReferralCode(e.target.value);
+                    validateReferralCode(e.target.value);
+                  }}
+                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="Enter your referral code"
+                />
+                {referralValidation.valid !== null && (
+                  <div className={`text-sm ${referralValidation.valid ? 'text-green-600' : 'text-red-600'}`}>
+                    {referralValidation.message}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div>

@@ -131,8 +131,44 @@ export const AuthProvider = ({ children }) => {
   };
   
   // Sign up function with better error messages
-  const signUp = async (email, password, displayName = null) => {
+  const signUp = async (email, password, referralCode = null, displayName = null) => {
     try {
+      // If referral code is provided, use our backend referral signup endpoint
+      if (referralCode) {
+        const API_URL = process.env.REACT_APP_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://patchai-backend.onrender.com';
+        const response = await fetch(`${API_URL}/referrals/signup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password,
+            referral_code: referralCode
+          }),
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.detail || 'Signup with referral code failed');
+        }
+
+        // The backend handles the Supabase signup, so we need to sign in the user
+        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          throw new Error('Account created but sign-in failed. Please try logging in.');
+        }
+
+        setUser(authData.user);
+        return { user: authData.user, error: null };
+      }
+
+      // Standard signup without referral code
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -179,6 +215,7 @@ export const AuthProvider = ({ children }) => {
         }
       }
       
+      setUser(data.user);
       return { user: data.user, error: null };
     } catch (error) {
       console.error('Error signing up:', error);
