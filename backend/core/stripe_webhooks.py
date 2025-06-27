@@ -244,15 +244,85 @@ class StripeWebhookHandler:
                     
                     transaction_result = supabase.table("payment_transactions").insert(transaction_data).execute()
                     
-                    # Update user's last payment date
-                    supabase.table("user_profiles").update({
-                        "last_payment_at": datetime.utcnow().isoformat()
-                    }).eq("id", user_id).execute()
+                    # CRITICAL FIX: Get subscription details from Stripe to update status
+                    try:
+                        stripe_subscription = stripe.Subscription.retrieve(subscription_id)
+                        subscription_status = stripe_subscription.status
+                        
+                        # Get plan information from subscription
+                        plan_tier = "standard"  # Default
+                        if stripe_subscription.items and stripe_subscription.items.data:
+                            price_id = stripe_subscription.items.data[0].price.id
+                            plan_response = supabase.table("subscription_plans").select(
+                                "plan_id"
+                            ).eq("stripe_price_id", price_id).single().execute()
+                            
+                            if plan_response.data:
+                                plan_tier = plan_response.data['plan_id']
+                        
+                        # Update user profile with subscription status AND plan tier
+                        profile_update = {
+                            "last_payment_at": datetime.utcnow().isoformat(),
+                            "subscription_status": subscription_status,
+                            "plan_tier": plan_tier,
+                            "updated_at": datetime.utcnow().isoformat()
+                        }
+                        
+                        supabase.table("user_profiles").update(profile_update).eq("id", user_id).execute()
+                        
+                        self.logger.info(f" ✅ CRITICAL FIX: Updated subscription status for user {user_id}: {subscription_status} ({plan_tier})")
+                        
+                    except Exception as status_error:
+                        self.logger.error(f" ❌ Failed to update subscription status: {str(status_error)}")
+                        # Fallback: just update payment date
+                        supabase.table("user_profiles").update({
+                            "last_payment_at": datetime.utcnow().isoformat()
+                        }).eq("id", user_id).execute()
                     
                     self.logger.info(f" Recorded successful payment for user {user_id}: ${amount/100}")
                     
                     # Process referral rewards if user was referred
                     await self._process_referral_rewards(user_id, amount, transaction_result.data[0]['id'] if transaction_result.data else None)
+                else:
+                    # FALLBACK: No subscription record found, but payment succeeded
+                    # This handles cases where customer.subscription.created webhook failed
+                    self.logger.warning(f" No subscription record found for Stripe subscription {subscription_id}")
+                    
+                    try:
+                        # Get subscription details directly from Stripe
+                        stripe_subscription = stripe.Subscription.retrieve(subscription_id)
+                        customer_id = stripe_subscription.customer
+                        
+                        # Find user by Stripe customer ID
+                        user_response = supabase.table("user_profiles").select(
+                            "id, email"
+                        ).eq("stripe_customer_id", customer_id).single().execute()
+                        
+                        if user_response.data:
+                            user_id = user_response.data['id']
+                            user_email = user_response.data['email']
+                            
+                            self.logger.info(f" ⚠️ FALLBACK: Processing payment for user {user_email} without subscription record")
+                            
+                            # Create the missing subscription record
+                            await self.handle_customer_subscription_created(stripe_subscription)
+                            
+                            # Update user profile with active status
+                            profile_update = {
+                                "last_payment_at": datetime.utcnow().isoformat(),
+                                "subscription_status": stripe_subscription.status,
+                                "plan_tier": "standard",  # Default
+                                "updated_at": datetime.utcnow().isoformat()
+                            }
+                            
+                            supabase.table("user_profiles").update(profile_update).eq("id", user_id).execute()
+                            
+                            self.logger.info(f" ✅ FALLBACK SUCCESS: Fixed subscription for {user_email}")
+                        else:
+                            self.logger.error(f" ❌ FALLBACK FAILED: No user found for customer {customer_id}")
+                            
+                    except Exception as fallback_error:
+                        self.logger.error(f" ❌ FALLBACK ERROR: {str(fallback_error)}")
             
         except Exception as e:
             self.logger.error(f" Error handling payment success: {str(e)}")
