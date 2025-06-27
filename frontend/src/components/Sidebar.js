@@ -9,6 +9,19 @@ const MAX_TITLE_LENGTH = 30;
 const MAX_MESSAGE_PREVIEW = 40;
 
 /**
+ * Get initials from a name string
+ */
+const getInitials = (name) => {
+  if (!name) return 'U';
+  return name
+    .split(' ')
+    .map(word => word.charAt(0))
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
+};
+
+/**
  * Sidebar component for displaying chat history and navigation
  */
 const Sidebar = ({
@@ -24,6 +37,21 @@ const Sidebar = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredChatId, setHoveredChatId] = useState(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  // Debug function to handle profile modal opening
+  const handleProfileOpen = () => {
+    console.log('🔍 Profile modal button clicked');
+    console.log('🔍 Current isProfileOpen state:', isProfileOpen);
+    setIsProfileOpen(true);
+    console.log('🔍 Profile modal state set to true');
+  };
+
+  // Debug function to handle profile modal closing
+  const handleProfileClose = () => {
+    console.log('🔍 Profile modal close requested');
+    setIsProfileOpen(false);
+    console.log('🔍 Profile modal state set to false');
+  };
 
   // Format chat title with ellipsis if too long
   const formatTitle = (title) => {
@@ -41,14 +69,6 @@ const Sidebar = ({
       : text;
   };
   
-  // Get user initials from name
-  const getInitials = (name) => {
-    if (!name) return 'U';
-    const words = name.trim().split(/\s+/);
-    if (words.length === 1) return words[0].charAt(0).toUpperCase();
-    return `${words[0].charAt(0)}${words[words.length - 1].charAt(0)}`.toUpperCase();
-  };
-
   // Format chat timestamps and prepare chat data
   const formattedChats = useMemo(() => {
     return chatHistory.map(chat => ({
@@ -212,7 +232,7 @@ const Sidebar = ({
         <div className="hidden md:block p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mt-auto">
           {/* Clickable User Info Section */}
           <button
-            onClick={() => setIsProfileOpen(true)}
+            onClick={handleProfileOpen}
             className="w-full flex items-center mb-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             <div className="flex-shrink-0">
@@ -238,14 +258,6 @@ const Sidebar = ({
             <FiLogOut className="w-4 h-4 mr-3" />
             <span>Log Out</span>
           </button>
-          {/* Profile Button */}
-          <button
-            onClick={() => setIsProfileOpen(true)}
-            className="w-full flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            <FiUser className="w-4 h-4 mr-3" />
-            <span>Profile</span>
-          </button>
         </div>
         
         {/* Mobile User Info - Stays at bottom */}
@@ -254,7 +266,7 @@ const Sidebar = ({
             <div>
               {/* Clickable User Info Section */}
               <button
-                onClick={() => setIsProfileOpen(true)}
+                onClick={handleProfileOpen}
                 className="w-full flex items-center mb-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 <div className="flex-shrink-0">
@@ -280,18 +292,10 @@ const Sidebar = ({
                 <FiLogOut className="w-4 h-4 mr-3" />
                 <span>Log Out</span>
               </button>
-              {/* Mobile Profile Button */}
-              <button
-                onClick={() => setIsProfileOpen(true)}
-                className="w-full flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                <FiUser className="w-4 h-4 mr-3" />
-                <span>Profile</span>
-              </button>
             </div>
           ) : (
             <button
-              onClick={() => setIsProfileOpen(true)}
+              onClick={handleProfileOpen}
               className="flex justify-center p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
@@ -305,7 +309,7 @@ const Sidebar = ({
         {isProfileOpen && ReactDOM.createPortal(
           <Profile
             isOpen={isProfileOpen}
-            onClose={() => setIsProfileOpen(false)}
+            onClose={handleProfileClose}
           />,
           document.body
         )}

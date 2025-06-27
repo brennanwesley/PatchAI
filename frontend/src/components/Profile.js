@@ -16,6 +16,10 @@ export default function Profile({ isOpen, onClose }) {
   const [displayName, setDisplayName] = useState('');
   const [company, setCompany] = useState('');
 
+  // Debug logging
+  console.log('🔍 Profile component rendered with props:', { isOpen, onClose: !!onClose });
+  console.log('🔍 Profile component user:', user);
+
   // Get API URL from environment
   const API_URL = process.env.REACT_APP_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://patchai-backend.onrender.com';
 
@@ -176,6 +180,8 @@ export default function Profile({ isOpen, onClose }) {
   };
 
   if (!isOpen) return null;
+
+  console.log('🔍 Profile component rendering modal (isOpen=true)');
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
