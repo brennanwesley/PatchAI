@@ -11,6 +11,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 from .stripe_config import STRIPE_WEBHOOK_SECRET
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -241,7 +242,7 @@ class StripeWebhookHandler:
                         "created_at": datetime.fromtimestamp(invoice['created']).isoformat()
                     }
                     
-                    supabase.table("payment_transactions").insert(transaction_data).execute()
+                    transaction_result = supabase.table("payment_transactions").insert(transaction_data).execute()
                     
                     # Update user's last payment date
                     supabase.table("user_profiles").update({
@@ -249,6 +250,9 @@ class StripeWebhookHandler:
                     }).eq("id", user_id).execute()
                     
                     self.logger.info(f" Recorded successful payment for user {user_id}: ${amount/100}")
+                    
+                    # Process referral rewards if user was referred
+                    await self._process_referral_rewards(user_id, amount, transaction_result.data[0]['id'] if transaction_result.data else None)
             
         except Exception as e:
             self.logger.error(f" Error handling payment success: {str(e)}")
@@ -256,6 +260,76 @@ class StripeWebhookHandler:
             import traceback
             self.logger.error(f" Traceback: {traceback.format_exc()}")
             raise
+    
+    async def _process_referral_rewards(self, referred_user_id: str, payment_amount: int, transaction_id: str = None):
+        """
+        Process referral rewards for successful payments
+        """
+        try:
+            self.logger.info(f" Processing referral rewards for user {referred_user_id}, amount: ${payment_amount/100}")
+            
+            # Check if this user was referred by someone
+            user_profile = supabase.table("user_profiles").select(
+                "referred_by"
+            ).eq("id", referred_user_id).single().execute()
+            
+            if not user_profile.data or not user_profile.data.get('referred_by'):
+                self.logger.debug(f" User {referred_user_id} was not referred by anyone, skipping rewards")
+                return
+            
+            referring_user_id = user_profile.data['referred_by']
+            self.logger.info(f" User {referred_user_id} was referred by {referring_user_id}")
+            
+            # Get referral relationship to check status and calculate subscription month
+            referral_relationship = supabase.table("referral_relationships").select(
+                "id, created_at, status"
+            ).eq("referring_user_id", referring_user_id).eq("referred_user_id", referred_user_id).single().execute()
+            
+            if not referral_relationship.data or referral_relationship.data.get('status') != 'active':
+                self.logger.warning(f" Referral relationship not active for users {referring_user_id} -> {referred_user_id}")
+                return
+            
+            # Calculate which subscription month this is (for reward percentage calculation)
+            referral_start_date = datetime.fromisoformat(referral_relationship.data['created_at'].replace('Z', '+00:00'))
+            current_date = datetime.utcnow()
+            months_since_referral = ((current_date.year - referral_start_date.year) * 12 + 
+                                   current_date.month - referral_start_date.month)
+            
+            # Calculate reward amount based on subscription month
+            if months_since_referral < 12:
+                reward_percentage = 0.10  # 10% for first 12 months
+            else:
+                reward_percentage = 0.05  # 5% after 12 months
+            
+            # Convert amount from cents to dollars for calculation
+            base_payment_amount = payment_amount / 100
+            reward_amount = base_payment_amount * reward_percentage
+            
+            # Create referral reward record
+            reward_data = {
+                "id": str(uuid.uuid4()),
+                "referring_user_id": referring_user_id,
+                "referred_user_id": referred_user_id,
+                "payment_transaction_id": transaction_id,
+                "reward_amount": reward_amount,
+                "reward_percentage": reward_percentage,
+                "base_payment_amount": base_payment_amount,
+                "subscription_month": months_since_referral + 1,
+                "status": "calculated",
+                "created_at": datetime.utcnow().isoformat(),
+                "payment_date": datetime.utcnow().isoformat()
+            }
+            
+            reward_result = supabase.table("referral_rewards").insert(reward_data).execute()
+            
+            if reward_result.data:
+                self.logger.info(f" Created referral reward: ${reward_amount:.2f} ({reward_percentage*100}%) for user {referring_user_id}")
+            else:
+                self.logger.error(f" Failed to create referral reward record: {reward_data}")
+                
+        except Exception as e:
+            self.logger.error(f" Error processing referral rewards: {e}")
+            # Don't raise exception - referral reward failure shouldn't break payment processing
     
     async def handle_invoice_payment_failed(self, invoice: dict):
         """Handle failed payment"""

@@ -30,9 +30,10 @@ from core.subscription_middleware import enforce_subscription
 from core.stripe_config import validate_stripe_config, get_stripe_config_status, initialize_stripe
 from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
 from services.openai_service import initialize_openai_client, get_system_prompt
-from services.supabase_service import initialize_supabase_client
+from services.supabase_service import supabase
 from services.chat_service import ChatService
 from routes.payment_routes import router as payment_router
+from routes.referral_routes import router as referral_router
 
 # Initialize structured logging
 structured_logger = StructuredLogger()
@@ -46,8 +47,7 @@ if not initialize_openai_client():
     logger.error("❌ Failed to initialize OpenAI client")
     
 # Initialize Supabase
-if not initialize_supabase_client():
-    logger.error("❌ Failed to initialize Supabase client")
+supabase_client = supabase
 
 # Initialize Stripe
 logger.info("💳 Initializing Stripe...")
@@ -82,7 +82,6 @@ app.add_middleware(
 
 # Initialize clients
 openai_client = initialize_openai_client()
-supabase_client = initialize_supabase_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
 
@@ -504,6 +503,7 @@ async def delete_user_history(user_id: str, req: Request):
 
 
 app.include_router(payment_router)
+app.include_router(referral_router)
 
 if __name__ == "__main__":
     import uvicorn
