@@ -6,11 +6,48 @@ const LandingPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [referralValidation, setReferralValidation] = useState({ valid: null, message: '' });
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { login, signUp } = useAuth();
+
+  // Validate referral code as user types
+  const validateReferralCode = async (code) => {
+    if (!code || code.length !== 6) {
+      setReferralValidation({ valid: null, message: '' });
+      return;
+    }
+
+    try {
+      const API_URL = process.env.REACT_APP_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://patchai-backend.onrender.com';
+      const response = await fetch(`${API_URL}/referrals/validate-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ referral_code: code.toUpperCase() }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setReferralValidation({
+          valid: data.valid,
+          message: data.valid 
+            ? `Valid referral code from ${data.referring_user_email}` 
+            : 'Referral code not found'
+        });
+      } else {
+        setReferralValidation({ valid: false, message: 'Invalid referral code format' });
+      }
+    } catch (error) {
+      console.error('Error validating referral code:', error);
+      setReferralValidation({ valid: false, message: 'Unable to validate referral code' });
+    }
+  };
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -22,8 +59,9 @@ const LandingPage = () => {
         // Sign in
         await login(email, password);
       } else {
-        // Sign up - pass customer name as display name to be stored in database
-        await signUp(email, password, customerName);
+        // Sign up - pass referral code if provided
+        const finalReferralCode = referralCode.trim().toUpperCase() || null;
+        await signUp(email, password, finalReferralCode, customerName);
         
         // Store customer name and email locally for immediate use
         if (customerName.trim()) {
@@ -39,6 +77,8 @@ const LandingPage = () => {
         setIsLogin(true);
         setPassword('');
         setCustomerName('');
+        setReferralCode('');
+        setReferralValidation({ valid: null, message: '' });
       }
     } catch (error) {
       console.error('Authentication error:', error);
@@ -233,6 +273,30 @@ const LandingPage = () => {
                         placeholder="you@example.com"
                         disabled={isLoading}
                       />
+                    </div>
+                    <div>
+                      <label htmlFor="referralCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Referral Code (optional)
+                      </label>
+                      <input
+                        id="referralCode"
+                        name="referralCode"
+                        type="text"
+                        maxLength={6}
+                        value={referralCode}
+                        onChange={(e) => {
+                          setReferralCode(e.target.value);
+                          validateReferralCode(e.target.value);
+                        }}
+                        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${referralValidation.valid === false ? 'border-red-500' : ''}`}
+                        placeholder="XXXXXX"
+                        disabled={isLoading}
+                      />
+                      {referralValidation.valid !== null && (
+                        <p className={`mt-1 text-xs ${referralValidation.valid ? 'text-green-600' : 'text-red-600'}`}>
+                          {referralValidation.message}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}

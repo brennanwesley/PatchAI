@@ -95,7 +95,7 @@ const Sidebar = ({
                 aria-label="Collapse sidebar"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M5 5l7 7-7 7" />
                 </svg>
               </button>
             </div>
@@ -207,15 +207,19 @@ const Sidebar = ({
           )}
         </div>
       
-        {/* User Info - Positioned 25% from bottom on desktop */}
-        <div className="hidden md:block absolute bottom-1/4 w-full p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-          <div className="flex items-center mb-3">
+        {/* Desktop User Info - Stays at bottom */}
+        <div className="hidden md:block p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mt-auto">
+          {/* Clickable User Info Section */}
+          <button
+            onClick={() => setIsProfileOpen(true)}
+            className="w-full flex items-center mb-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
             <div className="flex-shrink-0">
               <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
                 {getInitials(localStorage.getItem('customer_name') || 'User')}
               </div>
             </div>
-            <div className="ml-3 overflow-hidden">
+            <div className="ml-3 overflow-hidden text-left">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
                 {localStorage.getItem('customer_name') || 'User'}
               </p>
@@ -223,7 +227,7 @@ const Sidebar = ({
                 {localStorage.getItem('userEmail') || 'user@example.com'}
               </p>
             </div>
-          </div>
+          </button>
           
           {/* Log Out Button */}
           <button
@@ -247,13 +251,17 @@ const Sidebar = ({
         <div className="md:hidden p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mt-auto">
           {!isCollapsed ? (
             <div>
-              <div className="flex items-center mb-3">
+              {/* Clickable User Info Section */}
+              <button
+                onClick={() => setIsProfileOpen(true)}
+                className="w-full flex items-center mb-3 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
                 <div className="flex-shrink-0">
                   <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
                     {getInitials(localStorage.getItem('customer_name') || 'User')}
                   </div>
                 </div>
-                <div className="ml-3 overflow-hidden">
+                <div className="ml-3 overflow-hidden text-left">
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
                     {localStorage.getItem('customer_name') || 'User'}
                   </p>
@@ -261,7 +269,7 @@ const Sidebar = ({
                     {localStorage.getItem('userEmail') || 'user@example.com'}
                   </p>
                 </div>
-              </div>
+              </button>
               
               {/* Mobile Log Out Button */}
               <button
@@ -281,11 +289,14 @@ const Sidebar = ({
               </button>
             </div>
           ) : (
-            <div className="flex justify-center">
+            <button
+              onClick={() => setIsProfileOpen(true)}
+              className="flex justify-center p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
               <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-medium">
                 {getInitials(localStorage.getItem('customer_name') || 'U')}
               </div>
-            </div>
+            </button>
           )}
         </div>
         
