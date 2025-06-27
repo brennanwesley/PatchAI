@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { FiLogOut, FiUser } from 'react-icons/fi';
 import PropTypes from 'prop-types';
@@ -301,11 +302,12 @@ const Sidebar = ({
         </div>
         
         {/* Profile Modal */}
-        {isProfileOpen && (
+        {isProfileOpen && ReactDOM.createPortal(
           <Profile
             isOpen={isProfileOpen}
             onClose={() => setIsProfileOpen(false)}
-          />
+          />,
+          document.body
         )}
       </div>
     </div>
