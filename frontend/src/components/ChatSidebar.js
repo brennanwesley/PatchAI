@@ -1,7 +1,9 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 import { useChatStore } from '../hooks/useChatStore';
 import { useAuth } from '../contexts/AuthContext';
 import ChatItem from './ChatItem';
+import Profile from './Profile';
 
 export default function ChatSidebar({ isOpen, onClose, isMobile }) {
   const { chats, activeChat, createNewChat, selectChat, updateChatTitle, deleteChat, isLoading } = useChatStore();
@@ -47,6 +49,31 @@ export default function ChatSidebar({ isOpen, onClose, isMobile }) {
     if (diffDays === 2) return 'Yesterday';
     if (diffDays <= 7) return `${diffDays} days ago`;
     return date.toLocaleDateString();
+  };
+
+  // Profile modal state
+  const [isProfileOpen, setIsProfileOpen] = React.useState(false);
+
+  // Helper function to get user initials
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
+  // Profile modal handlers
+  const handleProfileOpen = () => {
+    console.log('🔍 Profile modal opened from ChatSidebar');
+    setIsProfileOpen(true);
+  };
+
+  const handleProfileClose = () => {
+    console.log('🔍 Profile modal closed from ChatSidebar');
+    setIsProfileOpen(false);
   };
 
   // Mobile overlay backdrop
@@ -130,33 +157,48 @@ export default function ChatSidebar({ isOpen, onClose, isMobile }) {
           )}
         </div>
 
-        {/* User Profile */}
-        <div className="p-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
-                  {user?.email?.charAt(0).toUpperCase() || 'U'}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {user?.email || 'User'}
-                </p>
-              </div>
+        {/* User Info Section */}
+        <div className="p-4 border-t border-gray-200">
+          {/* Clickable User Info */}
+          <button
+            onClick={handleProfileOpen}
+            className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-gray-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-medium">
+                {getInitials(user?.email) || 'U'}
+              </span>
             </div>
-            <button
-              onClick={signOut}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-md transition-colors duration-200"
-              title="Sign out"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          </div>
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {user?.email || 'User'}
+              </p>
+              <p className="text-xs text-gray-500">
+                Click to view profile
+              </p>
+            </div>
+          </button>
+          
+          {/* Sign Out Button */}
+          <button
+            onClick={signOut}
+            className="w-full mt-2 flex items-center gap-3 p-2 text-gray-500 hover:text-red-600 hover:bg-gray-50 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            title="Sign out"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span className="text-sm">Sign Out</span>
+          </button>
         </div>
       </div>
+      {isProfileOpen && ReactDOM.createPortal(
+        <Profile
+          isOpen={isProfileOpen}
+          onClose={handleProfileClose}
+        />,
+        document.body
+      )}
     </>
   );
 }
