@@ -29,28 +29,43 @@ export class ChatService {
   // SINGLE CHAT: Send message and get AI response
   static async sendMessage(content, conversationHistory = []) {
     try {
-      console.log('🔄 ChatService: Sending message to single chat with context');
+      console.log('🔄 ChatService: Starting message send with context preservation');
       
-      // Build full conversation context for AI
-      const messages = [
-        ...conversationHistory.map(msg => ({
+      // Validate and clean conversation history
+      const historicalMessages = conversationHistory
+        .filter(msg => msg && msg.content && msg.role && msg.content.trim().length > 0)
+        .map(msg => ({
           role: msg.role,
-          content: msg.content
-        })),
+          content: msg.content.trim()
+        }));
+      
+      // Add the new user message at the end
+      const messages = [
+        ...historicalMessages,
         {
           role: 'user',
-          content: content
+          content: content.trim()
         }
       ];
       
-      console.log(`📝 ChatService: Sending ${messages.length} messages for context`);
+      // Enterprise-grade logging for debugging
+      console.log(`📝 ChatService: Prepared ${messages.length} total messages`);
+      console.log(`   • Historical messages: ${historicalMessages.length}`);
+      console.log(`   • New user message: 1`);
+      console.log(`   • Message flow: ${messages.map(m => m.role).join(' → ')}`);
+      
+      if (messages.length > 1) {
+        console.log('✅ ChatService: Context preservation ACTIVE - AI will remember conversation');
+      } else {
+        console.log('⚠️ ChatService: No historical context - this appears to be first message');
+      }
       
       // Backend expects messages array with full conversation history
       const response = await ApiService.post('/prompt', {
         messages: messages
       });
       
-      console.log('✅ ChatService: Received AI response with context');
+      console.log('✅ ChatService: AI response received with full conversational context');
       
       return {
         message: response.response || response.message || 'No response received'

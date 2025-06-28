@@ -130,8 +130,14 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
       dispatch({ type: 'SET_TYPING', payload: true });
       
-      // Send to backend with full conversation history for context
-      const response = await ChatService.sendMessage(content, state.messages);
+      // Build conversation history WITHOUT the new user message
+      // (ChatService will add the new user message itself)
+      const conversationHistory = [...state.messages];
+      
+      console.log(`🔍 SEND_MESSAGE: Sending ${conversationHistory.length} historical messages + 1 new message`);
+      
+      // Send to backend with conversation history (service will add new user message)
+      const response = await ChatService.sendMessage(content, conversationHistory);
       
       // Add AI response
       const aiMessage = {
