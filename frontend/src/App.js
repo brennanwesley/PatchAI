@@ -68,7 +68,7 @@ const isTestMode = () => {
   return urlParams.get('test') === 'backend';
 };
 
-// Main Chat Layout Component
+// Main Chat Layout Component (INSIDE ChatProvider)
 function ChatLayout() {
   const { chats, isLoading, error } = useChatStore();
   const { isMobile, sidebarOpen, toggleSidebar, closeSidebar } = useMobileLayout();
@@ -275,6 +275,15 @@ function ChatLayout() {
   );
 }
 
+// Chat App Wrapper (CONTAINS ChatProvider)
+function ChatApp() {
+  return (
+    <ChatProvider>
+      <ChatLayout />
+    </ChatProvider>
+  );
+}
+
 // Main App Component
 function App() {
   // CRITICAL FIX: Move test mode check OUTSIDE ChatProvider to prevent unmounting
@@ -302,9 +311,7 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <ChatProvider>
-          <ChatLayout />
-        </ChatProvider>
+        <ChatApp />
       </AuthProvider>
     </ErrorBoundary>
   );
