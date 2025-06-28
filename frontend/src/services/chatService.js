@@ -90,16 +90,18 @@ export class ChatService {
     }
   }
 
-  // SINGLE CHAT: Clear all messages from single chat session
+  // SINGLE CHAT: Clear all messages from single chat session (soft delete)
   static async clearMessages() {
     try {
-      console.log('🔄 ChatService: Clearing single chat session');
-      // This might need to be implemented on backend
-      // For now, just log the action
-      console.log('✅ ChatService: Single chat session cleared');
+      console.log('🔄 ChatService: Soft deleting messages from single chat session');
+      
+      // Call backend to soft delete all messages
+      await ApiService.delete('/history/clear');
+      
+      console.log('✅ ChatService: Messages soft deleted successfully');
       return true;
     } catch (error) {
-      console.error('❌ ChatService: Failed to clear messages:', error);
+      console.error('❌ ChatService: Failed to soft delete messages:', error);
       throw error;
     }
   }
