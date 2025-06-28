@@ -42,28 +42,38 @@ function chatReducer(state, action) {
       return { ...state, messages: action.payload };
     
     case 'ADD_MESSAGE':
-      // FIXED: Add message to both global state AND active chat's messages
+      // ARCHITECTURAL FIX: Only store messages in per-chat arrays, derive global messages from activeChat
       const updatedMessage = action.payload;
       console.log('📝 ADD_MESSAGE: Adding message to chat:', state.activeChat?.id);
       
+      if (!state.activeChat) {
+        console.warn('⚠️ ADD_MESSAGE: No active chat, cannot add message');
+        return state;
+      }
+      
+      // Update the active chat with the new message
+      const updatedActiveChat = {
+        ...state.activeChat,
+        messages: [...(state.activeChat.messages || []), updatedMessage]
+      };
+      
+      // Update the chat in the chats array
+      const newChatsArray = state.chats.map(chat => 
+        chat.id === state.activeChat.id 
+          ? updatedActiveChat
+          : chat
+      );
+      
       return { 
-        ...state, 
-        messages: [...state.messages, updatedMessage],
-        // Update the active chat's messages array
-        activeChat: state.activeChat ? {
-          ...state.activeChat,
-          messages: [...(state.activeChat.messages || []), updatedMessage]
-        } : state.activeChat,
-        // Update the chat in the chats array
-        chats: state.chats.map(chat => 
-          chat.id === state.activeChat?.id 
-            ? { ...chat, messages: [...(chat.messages || []), updatedMessage] }
-            : chat
-        )
+        ...state,
+        activeChat: updatedActiveChat,
+        chats: newChatsArray,
+        // CRITICAL: Global messages derived from active chat (single source of truth)
+        messages: updatedActiveChat.messages
       };
     
     case 'CREATE_CHAT':
-      // FIXED: Don't clear global messages, initialize new chat with empty messages
+      // ARCHITECTURAL FIX: Create new chat without overwriting global messages
       console.log('🆕 CREATE_CHAT: Creating new chat with ID:', action.payload.id);
       const newChat = {
         ...action.payload,
@@ -74,26 +84,33 @@ function chatReducer(state, action) {
         ...state,
         chats: [newChat, ...(Array.isArray(state.chats) ? state.chats : [])],
         activeChat: newChat,
-        messages: newChat.messages // Load the new chat's messages (empty for new chats)
+        // CRITICAL: Global messages derived from new active chat (preserves per-chat isolation)
+        messages: newChat.messages // Empty for new chats, but doesn't affect other chats
       };
     
     case 'SWITCH_CHAT':
-      // PHASE 2: Improved chat switching with proper per-chat message isolation
+      // ARCHITECTURAL FIX: Switch chat with proper per-chat message isolation
       console.log('🔄 SWITCH_CHAT: Switching to chat:', action.payload?.id);
       const targetChat = action.payload;
       
+      if (!targetChat) {
+        console.warn('⚠️ SWITCH_CHAT: No target chat provided');
+        return state;
+      }
+      
       // Update the target chat in the chats array if it has loaded messages
       const switchedChats = state.chats.map(chat => 
-        chat.id === targetChat?.id ? targetChat : chat
+        chat.id === targetChat.id ? targetChat : chat
       );
       
-      console.log('📝 SWITCH_CHAT: Loading', targetChat?.messages?.length || 0, 'messages for chat:', targetChat?.id);
+      console.log('📝 SWITCH_CHAT: Loading', targetChat.messages?.length || 0, 'messages for chat:', targetChat.id);
       
       return {
         ...state,
         chats: switchedChats,
         activeChat: targetChat,
-        messages: targetChat?.messages || [] // Load the specific chat's messages
+        // CRITICAL: Global messages derived from target chat (single source of truth)
+        messages: targetChat.messages || []
       };
     
     case 'UPDATE_CHAT_TITLE':
@@ -342,12 +359,17 @@ export function ChatProvider({ children }) {
     try {
       console.log('🤖 AI_FLOW: Starting AI response request...');
       
-      // Get current messages for AI context
-      const allMessages = [...state.messages, userMessage];
+      // CRITICAL ARCHITECTURAL FIX: Get messages from active chat, not global state
+      const activeMessages = state.activeChat?.messages || [];
+      const allMessages = [...activeMessages, userMessage];
       const apiMessages = allMessages.map(msg => ({
         role: msg.role,
         content: msg.content
       }));
+      
+      console.log('🔍 AI_FLOW: Using messages from active chat:', state.activeChat?.id);
+      console.log('🔍 AI_FLOW: Active chat has', activeMessages.length, 'messages');
+      console.log('🔍 AI_FLOW: Total context messages (including new):', allMessages.length);
 
       console.log('📤 AI_FLOW: Prepared API messages:', apiMessages);
       console.log('📤 AI_FLOW: Calling ChatService.sendPrompt with chatId:', chatId);
