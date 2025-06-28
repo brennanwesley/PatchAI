@@ -31,8 +31,14 @@ export class ChatService {
     try {
       console.log('🔄 ChatService: Sending message to single chat');
       
+      // Backend expects messages array with Message objects
       const response = await ApiService.post('/prompt', {
-        message: content
+        messages: [
+          {
+            role: 'user',
+            content: content
+          }
+        ]
       });
       
       console.log('✅ ChatService: Received AI response');
