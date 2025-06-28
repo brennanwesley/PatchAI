@@ -136,31 +136,38 @@ export function ChatProvider({ children }) {
     try {
       console.log('📤 SEND_MESSAGE: Sending message to single chat session');
       
-      // CRITICAL FIX: Capture conversation history BEFORE dispatching ADD_MESSAGE
-      // This ensures we read the current state before React updates it
-      const conversationHistory = [...state.messages];
+      // CRITICAL FIX: Use functional state update to get the most current state
+      // This ensures we capture the actual current state, not a stale closure
+      let currentConversationHistory = [];
+      
+      // Get current state using functional update pattern
+      dispatch((currentState) => {
+        currentConversationHistory = [...currentState.messages];
+        console.log(`🔍 FUNCTIONAL_STATE_DEBUG: Captured ${currentConversationHistory.length} messages from current state`);
+        return currentState; // No state change, just capturing
+      });
       
       // COMPREHENSIVE STATE DEBUGGING
-      console.log(`🔍 STATE_DEBUG: Current state.messages length: ${state.messages.length}`);
-      console.log(`🔍 STATE_DEBUG: Conversation history length: ${conversationHistory.length}`);
-      console.log(`🔍 STATE_DEBUG: State vs History match: ${state.messages.length === conversationHistory.length}`);
+      console.log(`🔍 STATE_DEBUG: Captured conversation history length: ${currentConversationHistory.length}`);
+      console.log(`🔍 STATE_DEBUG: Original state.messages length: ${state.messages.length}`);
       
       // Detailed message analysis
-      const userMsgs = conversationHistory.filter(m => m.role === 'user');
-      const assistantMsgs = conversationHistory.filter(m => m.role === 'assistant');
+      const userMsgs = currentConversationHistory.filter(m => m.role === 'user');
+      const assistantMsgs = currentConversationHistory.filter(m => m.role === 'assistant');
       console.log(`📊 STATE_DEBUG: Message breakdown - User: ${userMsgs.length}, Assistant: ${assistantMsgs.length}`);
       
       // Log each message for debugging
-      conversationHistory.forEach((msg, i) => {
+      currentConversationHistory.forEach((msg, i) => {
         const preview = msg.content?.substring(0, 50) + '...' || 'No content';
         console.log(`📄 STATE_DEBUG: Message ${i+1} (${msg.role}): ${preview}`);
       });
       
       // Critical validation
-      if (conversationHistory.length === 0) {
+      if (currentConversationHistory.length === 0) {
         console.error(`❌ STATE_DEBUG: CRITICAL - No conversation history found! This will cause context loss.`);
+        console.error(`❌ STATE_DEBUG: This indicates a state management issue that needs immediate attention.`);
       } else {
-        console.log(`✅ STATE_DEBUG: Context preservation active - sending ${conversationHistory.length} historical + 1 new = ${conversationHistory.length + 1} total messages`);
+        console.log(`✅ STATE_DEBUG: Context preservation ACTIVE - sending ${currentConversationHistory.length} historical + 1 new = ${currentConversationHistory.length + 1} total messages`);
       }
       
       // Add user message immediately (optimistic UI)
@@ -175,7 +182,7 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'SET_TYPING', payload: true });
       
       // Send to backend with conversation history (service will add new user message)
-      const response = await ChatService.sendMessage(content, conversationHistory);
+      const response = await ChatService.sendMessage(content, currentConversationHistory);
       
       // Add AI response
       const aiMessage = {
@@ -195,7 +202,7 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'SET_ERROR', payload: error.message });
       dispatch({ type: 'SET_TYPING', payload: false });
     }
-  }, [user]);
+  }, [user, state.messages]);
 
   // SINGLE CHAT: Clear all messages from single chat session
   const clearMessages = useCallback(async () => {
