@@ -8,11 +8,28 @@ export class ChatService {
     try {
       console.log('🔄 ChatService: Fetching user chat sessions');
       const response = await ApiService.get('/history');
-      console.log('✅ ChatService: Retrieved chat sessions:', response?.length || 0);
-      return response || [];
+      
+      // CRITICAL: Debug the exact response from backend
+      console.log('🔍 ChatService: Raw backend response:', {
+        type: typeof response,
+        value: response,
+        isArray: Array.isArray(response),
+        length: response?.length
+      });
+      
+      // CRITICAL: Ensure we always return an array
+      if (!Array.isArray(response)) {
+        console.warn('⚠️ ChatService: Backend returned non-array, converting to empty array:', response);
+        return [];
+      }
+      
+      console.log('✅ ChatService: Retrieved', response.length, 'chat sessions');
+      return response;
     } catch (error) {
       console.error('❌ ChatService: Failed to get user chat sessions:', error);
-      throw error;
+      // Return empty array instead of throwing to prevent app crash
+      console.warn('⚠️ ChatService: Returning empty array due to error');
+      return [];
     }
   }
 

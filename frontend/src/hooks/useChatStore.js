@@ -227,6 +227,15 @@ export function ChatProvider({ children }) {
       
       // Fetch chat history from backend
       const chatHistory = await ChatService.getUserChatSessions();
+      console.log('🔍 LOAD_CHATS: Backend response type:', typeof chatHistory, 'value:', chatHistory);
+      
+      // CRITICAL: Ensure backend response is an array
+      if (!Array.isArray(chatHistory)) {
+        console.warn('⚠️ LOAD_CHATS: Backend returned non-array:', chatHistory, 'defaulting to empty array');
+        dispatch({ type: 'LOAD_CHATS', payload: [] });
+        return;
+      }
+      
       console.log('✅ LOAD_CHATS: Retrieved', chatHistory.length, 'chats from backend');
       
       // Transform backend data to frontend format
