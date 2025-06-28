@@ -142,7 +142,7 @@ export function ChatProvider({ children }) {
     
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const chats = await ChatService.getChatHistory();
+      const chats = await ChatService.getUserChatSessions();
       
       // Ensure each chat has a messages array (even if empty)
       const chatsWithMessages = chats.map(chat => ({
