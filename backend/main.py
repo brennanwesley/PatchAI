@@ -330,9 +330,45 @@ async def get_chat_session(chat_id: str, req: Request, user_id: str = Depends(ve
         raise HTTPException(status_code=500, detail="Failed to retrieve chat session")
 
 
+@app.post("/history/{chat_id}/messages")
+async def append_message_to_chat(chat_id: str, request: dict, req: Request, user_id: str = Depends(verify_jwt_token)):
+    """Append a single message to an existing chat session (EFFICIENT)"""
+    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
+    
+    try:
+        # Enforce subscription access (PAYWALL)
+        await enforce_subscription(req, user_id)
+        
+        if not chat_service:
+            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        
+        # Validate input
+        if not request.get('role') or not request.get('content'):
+            raise HTTPException(status_code=400, detail="Message must have role and content")
+        
+        # Create message object
+        message = Message(role=request['role'], content=request['content'])
+        
+        # Append single message (EFFICIENT - no destructive updates)
+        success = await chat_service.append_message(chat_id, user_id, message)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        
+        logger.info(f"Message appended to chat {chat_id} for user {user_id}")
+        return {"status": "appended", "chat_id": chat_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Failed to append message")
+
+
 @app.post("/history")
 async def save_chat_session(request: SaveChatRequest, req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Save or update chat session"""
+    """Save or update chat session (LEGACY - use append endpoint for efficiency)"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
@@ -351,7 +387,7 @@ async def save_chat_session(request: SaveChatRequest, req: Request, user_id: str
         existing_chat = await chat_service.get_chat_session(request.chat_id, user_id)
         
         if existing_chat:
-            # Session exists, update it
+            # Session exists, update it (FIXED: now uses append-only logic)
             success = await chat_service.update_chat_session(request.chat_id, user_id, request.messages)
             chat_id = request.chat_id
         else:

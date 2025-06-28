@@ -97,40 +97,24 @@ export class ChatService {
     }
   }
 
-  // Add a message to an existing chat session
+  // Add a message to an existing chat session (EFFICIENT APPEND-ONLY)
   static async addMessageToSession(chatId, role, content) {
     try {
-      console.log('🔄 CHATSERVICE: Adding message to session:', chatId);
+      console.log('🔄 CHATSERVICE: Adding message to session (APPEND-ONLY):', chatId);
       
-      // Get current chat and update with new message
-      const chat = await this.getChatSession(chatId);
-      const messages = chat.messages || [];
-      
-      // FIXED: Use UUID for message IDs to prevent collisions
-      const messageId = uuidv4();
-      const newMessage = {
-        id: `${role}-${messageId}`,
-        role,
-        content,
-        timestamp: new Date().toISOString()
-      };
-      
-      const updatedMessages = [...messages, newMessage];
-      
-      // FIXED: Send only the fields that backend expects (SaveChatRequest schema)
-      const updateData = {
-        chat_id: chatId,
-        messages: updatedMessages,
-        title: chat.title || 'Chat Session'
+      // CRITICAL FIX: Use efficient append-only endpoint instead of full update
+      const messageData = {
+        role: role,
+        content: content
       };
 
-      console.log('📤 CHATSERVICE: Sending update payload to /history:', updateData);
+      console.log('📤 CHATSERVICE: Sending append payload to /history/{chatId}/messages:', messageData);
 
-      const response = await ApiService.post('/history', updateData);
-      console.log('✅ CHATSERVICE: Message added to session successfully');
+      const response = await ApiService.post(`/history/${chatId}/messages`, messageData);
+      console.log('✅ CHATSERVICE: Message appended to session successfully');
       return response;
     } catch (error) {
-      console.error('❌ CHATSERVICE: Failed to add message to session:', error);
+      console.error('❌ CHATSERVICE: Failed to append message to session:', error);
       console.error('❌ CHATSERVICE: Error details:', {
         message: error.message,
         status: error.status,
