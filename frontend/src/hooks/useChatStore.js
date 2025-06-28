@@ -99,6 +99,7 @@ export function ChatProvider({ children }) {
       const title = chatSession?.title || 'Chat Session';
       
       console.log('✅ LOAD_MESSAGES: Retrieved', messages.length, 'messages from backend');
+      console.log('📝 LOAD_MESSAGES: Message details:', messages.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })));
       
       dispatch({ type: 'LOAD_MESSAGES', payload: messages });
       dispatch({ type: 'SET_CHAT_TITLE', payload: title });
@@ -134,6 +135,8 @@ export function ChatProvider({ children }) {
       // (ChatService will add the new user message itself)
       const conversationHistory = [...state.messages];
       
+      console.log(`🔍 SEND_MESSAGE: Current state.messages length: ${state.messages.length}`);
+      console.log(`🔍 SEND_MESSAGE: Conversation history:`, conversationHistory.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })));
       console.log(`🔍 SEND_MESSAGE: Sending ${conversationHistory.length} historical messages + 1 new message`);
       
       // Send to backend with conversation history (service will add new user message)
