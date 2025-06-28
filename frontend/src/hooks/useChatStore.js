@@ -78,13 +78,22 @@ function chatReducer(state, action) {
       };
     
     case 'SWITCH_CHAT':
-      // NEW: Dedicated chat switching logic
+      // PHASE 2: Improved chat switching with proper per-chat message isolation
       console.log('🔄 SWITCH_CHAT: Switching to chat:', action.payload?.id);
       const targetChat = action.payload;
+      
+      // Update the target chat in the chats array if it has loaded messages
+      const switchedChats = state.chats.map(chat => 
+        chat.id === targetChat?.id ? targetChat : chat
+      );
+      
+      console.log('📝 SWITCH_CHAT: Loading', targetChat?.messages?.length || 0, 'messages for chat:', targetChat?.id);
+      
       return {
         ...state,
+        chats: switchedChats,
         activeChat: targetChat,
-        messages: targetChat?.messages || []
+        messages: targetChat?.messages || [] // Load the specific chat's messages
       };
     
     case 'UPDATE_CHAT_TITLE':
@@ -137,6 +146,40 @@ function chatReducer(state, action) {
         messages: state.activeChat?.id === updatedChat.id ? state.messages : state.messages
       };
     
+    case 'LOAD_CHATS':
+      // PHASE 1: Load existing chats from backend on app initialization
+      console.log('📥 LOAD_CHATS: Loading', action.payload?.length || 0, 'chats into state');
+      return {
+        ...state,
+        chats: Array.isArray(action.payload) ? action.payload : [],
+        isLoading: false,
+        error: null
+      };
+    
+    case 'CLEAR_CHATS':
+      // PHASE 1: Clear all chats when user logs out
+      console.log('🧹 CLEAR_CHATS: Clearing all chat data');
+      return {
+        ...state,
+        chats: [],
+        activeChat: null,
+        messages: [],
+        error: null
+      };
+    
+    case 'SET_LOADING':
+      return {
+        ...state,
+        isLoading: action.payload
+      };
+    
+    case 'SET_ERROR':
+      return {
+        ...state,
+        error: action.payload,
+        isLoading: false
+      };
+    
     default:
       return state;
   }
@@ -146,43 +189,7 @@ export function ChatProvider({ children }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { user } = useAuth();
 
-  // FIXED: Load chats from backend with proper message initialization
-  const loadChats = useCallback(async () => {
-    if (!user) return;
-    
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await ChatService.getUserChatSessions();
-      
-      // CRITICAL FIX: Ensure response is always an array
-      const chats = Array.isArray(response) ? response : [];
-      console.log('🔍 LOAD_CHATS: API response type:', typeof response, 'value:', response);
-      console.log('🔍 LOAD_CHATS: Processed chats array:', chats);
-      
-      // Ensure each chat has a messages array (even if empty)
-      const chatsWithMessages = chats.map(chat => ({
-        ...chat,
-        messages: chat.messages || [] // Initialize empty messages array if not present
-      }));
-      
-      console.log('📥 LOAD_CHATS: Loaded', chatsWithMessages.length, 'chats');
-      dispatch({ type: 'LOAD_CHATS', payload: chatsWithMessages });
-    } catch (error) {
-      console.error('Failed to load chats:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
-      // Fallback to empty array on error
-      dispatch({ type: 'LOAD_CHATS', payload: [] });
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  }, [user]); // Empty dependency array - function doesn't depend on state
-
-  // FIXED: Proper dependency array with memoized function
-  useEffect(() => {
-    if (user) {
-      loadChats();
-    }
-  }, [user, loadChats]);
+  // OLD loadChats function removed - using new comprehensive version below
 
   const createNewChat = useCallback(async () => {
     try {
@@ -206,6 +213,53 @@ export function ChatProvider({ children }) {
   }, []); // No dependencies needed
 
   // OLD selectChat function removed - using new per-chat message storage version below
+
+  // PHASE 1: Add loadChats function to fetch user's existing chats
+  const loadChats = useCallback(async () => {
+    if (!user) {
+      console.log('🔍 LOAD_CHATS: No user authenticated, skipping chat loading');
+      return;
+    }
+
+    try {
+      console.log('🔄 LOAD_CHATS: Loading existing chats for user:', user.id);
+      dispatch({ type: 'SET_LOADING', payload: true });
+      
+      // Fetch chat history from backend
+      const chatHistory = await ChatService.getChatHistory();
+      console.log('✅ LOAD_CHATS: Retrieved', chatHistory.length, 'chats from backend');
+      
+      // Transform backend data to frontend format
+      const chats = chatHistory.map(chat => ({
+        id: chat.id,
+        title: chat.title,
+        created_at: chat.created_at,
+        updated_at: chat.updated_at,
+        messages: [], // Messages loaded on-demand when chat is selected
+        isNew: false
+      }));
+      
+      dispatch({ type: 'LOAD_CHATS', payload: chats });
+      console.log('✅ LOAD_CHATS: Successfully loaded', chats.length, 'chats into state');
+      
+    } catch (error) {
+      console.error('❌ LOAD_CHATS: Failed to load chats:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to load chat history' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, [user]);
+
+  // PHASE 1: Load chats when user logs in or component mounts
+  useEffect(() => {
+    if (user) {
+      console.log('🚀 CHAT_INIT: User authenticated, loading existing chats');
+      loadChats();
+    } else {
+      console.log('🔍 CHAT_INIT: No user, clearing chat state');
+      dispatch({ type: 'CLEAR_CHATS' });
+    }
+  }, [user, loadChats]);
 
   // FIXED: Removed chats dependency to prevent circular dependency
   const sendMessage = useCallback(async (content, files = []) => {
@@ -362,31 +416,44 @@ export function ChatProvider({ children }) {
     }
   }, [state.activeChat]); // Only depend on activeChat
 
-  // FIXED: Add selectChat function for proper chat switching
+  // PHASE 2: Improved selectChat function with proper per-chat message isolation
   const selectChat = useCallback(async (chat) => {
     try {
       console.log('🔄 SELECT_CHAT: Switching to chat:', chat.id);
       
-      // If chat doesn't have messages loaded, fetch them from backend
+      // CRITICAL: Check if chat has messages loaded or needs to fetch from backend
       if (!chat.messages || chat.messages.length === 0) {
         console.log('📥 SELECT_CHAT: Loading messages for chat:', chat.id);
-        const chatWithMessages = await ChatService.getChatSession(chat.id);
-        const updatedChat = {
-          ...chat,
-          messages: chatWithMessages.messages || []
-        };
         
-        // Update the chat in state with loaded messages
-        dispatch({ type: 'UPDATE_CHAT', payload: updatedChat });
-        dispatch({ type: 'SWITCH_CHAT', payload: updatedChat });
+        try {
+          const chatWithMessages = await ChatService.getChatSession(chat.id);
+          console.log('✅ SELECT_CHAT: Retrieved', chatWithMessages.messages?.length || 0, 'messages');
+          
+          const updatedChat = {
+            ...chat,
+            messages: chatWithMessages.messages || [],
+            title: chatWithMessages.title || chat.title // Update title if available
+          };
+          
+          // CRITICAL: Only switch to chat, don't trigger UPDATE_CHAT to avoid message loss
+          dispatch({ type: 'SWITCH_CHAT', payload: updatedChat });
+          
+        } catch (messageError) {
+          console.error('❌ SELECT_CHAT: Failed to load messages:', messageError);
+          // Switch to chat with empty messages if loading fails
+          const chatWithEmptyMessages = { ...chat, messages: [] };
+          dispatch({ type: 'SWITCH_CHAT', payload: chatWithEmptyMessages });
+        }
       } else {
-        // Chat already has messages, just switch
+        // Chat already has messages loaded, just switch
+        console.log('📝 SELECT_CHAT: Chat has', chat.messages.length, 'messages loaded, switching directly');
         dispatch({ type: 'SWITCH_CHAT', payload: chat });
       }
     } catch (error) {
-      console.error('❌ SELECT_CHAT: Failed to switch chat:', error);
-      // Still switch to the chat even if message loading fails
-      dispatch({ type: 'SWITCH_CHAT', payload: chat });
+      console.error('❌ SELECT_CHAT: Critical error during chat switch:', error);
+      // Fallback: switch to chat with empty messages
+      const fallbackChat = { ...chat, messages: [] };
+      dispatch({ type: 'SWITCH_CHAT', payload: fallbackChat });
     }
   }, []);
 
