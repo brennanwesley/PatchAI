@@ -48,16 +48,30 @@ export class ChatService {
         }
       ];
       
-      // Enterprise-grade logging for debugging
-      console.log(`📝 ChatService: Prepared ${messages.length} total messages`);
+      // COMPREHENSIVE PAYLOAD DEBUGGING
+      console.log(`🔍 PAYLOAD_DEBUG: Prepared ${messages.length} total messages for backend`);
       console.log(`   • Historical messages: ${historicalMessages.length}`);
       console.log(`   • New user message: 1`);
       console.log(`   • Message flow: ${messages.map(m => m.role).join(' → ')}`);
       
-      if (messages.length > 1) {
-        console.log('✅ ChatService: Context preservation ACTIVE - AI will remember conversation');
+      // Detailed payload analysis
+      messages.forEach((msg, i) => {
+        const preview = msg.content.substring(0, 50) + (msg.content.length > 50 ? '...' : '');
+        console.log(`📄 PAYLOAD_DEBUG: Message ${i+1} (${msg.role}): ${preview}`);
+      });
+      
+      // Critical validation checks
+      if (messages.length === 1) {
+        console.error('❌ PAYLOAD_DEBUG: CRITICAL - Only 1 message in payload! Context loss detected.');
+        console.error('❌ PAYLOAD_DEBUG: This means conversationHistory was empty when it should contain previous messages.');
       } else {
-        console.log('⚠️ ChatService: No historical context - this appears to be first message');
+        console.log(`✅ PAYLOAD_DEBUG: Context preservation ACTIVE - sending ${messages.length} messages to backend`);
+      }
+      
+      // Validate message structure before sending
+      const invalidMessages = messages.filter(msg => !msg.role || !msg.content || msg.content.trim().length === 0);
+      if (invalidMessages.length > 0) {
+        console.error('❌ PAYLOAD_DEBUG: Invalid messages detected:', invalidMessages);
       }
       
       // Backend expects messages array with full conversation history

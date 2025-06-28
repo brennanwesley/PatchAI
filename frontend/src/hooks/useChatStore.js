@@ -124,9 +124,28 @@ export function ChatProvider({ children }) {
       // This ensures we read the current state before React updates it
       const conversationHistory = [...state.messages];
       
-      console.log(`🔍 SEND_MESSAGE: Current state.messages length: ${state.messages.length}`);
-      console.log(`🔍 SEND_MESSAGE: Conversation history:`, conversationHistory.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })));
-      console.log(`🔍 SEND_MESSAGE: Sending ${conversationHistory.length} historical messages + 1 new message`);
+      // COMPREHENSIVE STATE DEBUGGING
+      console.log(`🔍 STATE_DEBUG: Current state.messages length: ${state.messages.length}`);
+      console.log(`🔍 STATE_DEBUG: Conversation history length: ${conversationHistory.length}`);
+      console.log(`🔍 STATE_DEBUG: State vs History match: ${state.messages.length === conversationHistory.length}`);
+      
+      // Detailed message analysis
+      const userMsgs = conversationHistory.filter(m => m.role === 'user');
+      const assistantMsgs = conversationHistory.filter(m => m.role === 'assistant');
+      console.log(`📊 STATE_DEBUG: Message breakdown - User: ${userMsgs.length}, Assistant: ${assistantMsgs.length}`);
+      
+      // Log each message for debugging
+      conversationHistory.forEach((msg, i) => {
+        const preview = msg.content?.substring(0, 50) + '...' || 'No content';
+        console.log(`📄 STATE_DEBUG: Message ${i+1} (${msg.role}): ${preview}`);
+      });
+      
+      // Critical validation
+      if (conversationHistory.length === 0) {
+        console.error(`❌ STATE_DEBUG: CRITICAL - No conversation history found! This will cause context loss.`);
+      } else {
+        console.log(`✅ STATE_DEBUG: Context preservation active - sending ${conversationHistory.length} historical + 1 new = ${conversationHistory.length + 1} total messages`);
+      }
       
       // Add user message immediately (optimistic UI)
       const userMessage = {

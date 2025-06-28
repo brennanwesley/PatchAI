@@ -224,18 +224,46 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
             raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
         
+        # COMPREHENSIVE DEBUGGING: Analyze incoming message payload
+        logger.info(f"🔍 CONTEXT_DEBUG: Received {len(request.messages)} total messages from frontend")
+        
+        # Analyze message composition
+        user_messages = [msg for msg in request.messages if msg.role == 'user']
+        assistant_messages = [msg for msg in request.messages if msg.role == 'assistant']
+        
+        logger.info(f"📊 CONTEXT_DEBUG: Message breakdown - User: {len(user_messages)}, Assistant: {len(assistant_messages)}")
+        logger.info(f"📝 CONTEXT_DEBUG: Message roles: {[msg.role for msg in request.messages]}")
+        
+        # Log first few characters of each message for debugging
+        for i, msg in enumerate(request.messages):
+            preview = msg.content[:50] + "..." if len(msg.content) > 50 else msg.content
+            logger.info(f"📄 CONTEXT_DEBUG: Message {i+1} ({msg.role}): {preview}")
+        
+        # Validate message structure
+        if len(request.messages) == 1:
+            logger.warning(f"⚠️ CONTEXT_DEBUG: Only 1 message received - this indicates context loss!")
+        else:
+            logger.info(f"✅ CONTEXT_DEBUG: Multiple messages received - context preservation appears active")
+        
         # Log OpenAI request
         structured_logger.log_openai_request(correlation_id, "gpt-4", len(request.messages))
         
         # Prepare messages for OpenAI (include system prompt)
         openai_messages = [{"role": "system", "content": get_system_prompt()}]
         
-        # Add conversation history
-        for message in request.messages:
+        # Add conversation history with detailed logging
+        logger.info(f"🤖 OPENAI_DEBUG: Preparing {len(request.messages)} messages for OpenAI (plus system prompt)")
+        
+        for i, message in enumerate(request.messages):
             openai_messages.append({
                 "role": message.role,
                 "content": message.content
             })
+            logger.info(f"🔄 OPENAI_DEBUG: Added message {i+1} to OpenAI payload ({message.role})")
+        
+        # Final OpenAI payload validation
+        total_openai_messages = len(openai_messages)
+        logger.info(f"🎯 OPENAI_DEBUG: Final payload contains {total_openai_messages} messages (1 system + {total_openai_messages-1} conversation)")
         
         # Send to OpenAI
         response = openai_client.chat.completions.create(
