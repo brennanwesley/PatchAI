@@ -261,12 +261,42 @@ export function ChatProvider({ children }) {
         title: chat.title,
         created_at: chat.created_at,
         updated_at: chat.updated_at,
-        messages: [], // Messages loaded on-demand when chat is selected
+        messages: [], // Messages will be loaded for active chat below
         isNew: false
       }));
       
       dispatch({ type: 'LOAD_CHATS', payload: chats });
       console.log('✅ LOAD_CHATS: Successfully loaded', chats.length, 'chats into state');
+      
+      // CRITICAL FIX: Auto-select and load messages for the most recent chat
+      if (chats.length > 0) {
+        console.log('🎯 LOAD_CHATS: Auto-selecting most recent chat for immediate message loading');
+        const mostRecentChat = chats[0]; // Chats are ordered by updated_at desc
+        console.log('📥 LOAD_CHATS: Loading messages for most recent chat:', mostRecentChat.id);
+        
+        try {
+          // Load complete message history for the most recent chat
+          const chatWithMessages = await ChatService.getChatSession(mostRecentChat.id);
+          console.log('✅ LOAD_CHATS: Retrieved', chatWithMessages.messages?.length || 0, 'messages for active chat');
+          
+          const activeChat = {
+            ...mostRecentChat,
+            messages: chatWithMessages.messages || [],
+            title: chatWithMessages.title || mostRecentChat.title
+          };
+          
+          // Set as active chat with complete message history
+          dispatch({ type: 'SET_ACTIVE_CHAT', payload: activeChat });
+          console.log('✅ LOAD_CHATS: Set active chat with', activeChat.messages.length, 'messages loaded');
+          
+        } catch (messageError) {
+          console.error('❌ LOAD_CHATS: Failed to load messages for most recent chat:', messageError);
+          // Fallback: set active chat without messages
+          dispatch({ type: 'SET_ACTIVE_CHAT', payload: { ...mostRecentChat, messages: [] } });
+        }
+      } else {
+        console.log('📝 LOAD_CHATS: No existing chats found, user will start with new chat');
+      }
       
     } catch (error) {
       console.error('❌ LOAD_CHATS: Failed to load chats:', error);
@@ -451,33 +481,28 @@ export function ChatProvider({ children }) {
     try {
       console.log('🔄 SELECT_CHAT: Switching to chat:', chat.id);
       
-      // CRITICAL: Check if chat has messages loaded or needs to fetch from backend
-      if (!chat.messages || chat.messages.length === 0) {
-        console.log('📥 SELECT_CHAT: Loading messages for chat:', chat.id);
+      // CRITICAL FIX: ALWAYS load messages from database to ensure complete message history
+      console.log('📥 SELECT_CHAT: Loading complete message history for chat:', chat.id);
+      
+      try {
+        const chatWithMessages = await ChatService.getChatSession(chat.id);
+        console.log('✅ SELECT_CHAT: Retrieved', chatWithMessages.messages?.length || 0, 'messages from database');
         
-        try {
-          const chatWithMessages = await ChatService.getChatSession(chat.id);
-          console.log('✅ SELECT_CHAT: Retrieved', chatWithMessages.messages?.length || 0, 'messages');
-          
-          const updatedChat = {
-            ...chat,
-            messages: chatWithMessages.messages || [],
-            title: chatWithMessages.title || chat.title // Update title if available
-          };
-          
-          // CRITICAL: Only switch to chat, don't trigger UPDATE_CHAT to avoid message loss
-          dispatch({ type: 'SWITCH_CHAT', payload: updatedChat });
-          
-        } catch (messageError) {
-          console.error('❌ SELECT_CHAT: Failed to load messages:', messageError);
-          // Switch to chat with empty messages if loading fails
-          const chatWithEmptyMessages = { ...chat, messages: [] };
-          dispatch({ type: 'SWITCH_CHAT', payload: chatWithEmptyMessages });
-        }
-      } else {
-        // Chat already has messages loaded, just switch
-        console.log('📝 SELECT_CHAT: Chat has', chat.messages.length, 'messages loaded, switching directly');
-        dispatch({ type: 'SWITCH_CHAT', payload: chat });
+        const updatedChat = {
+          ...chat,
+          messages: chatWithMessages.messages || [],
+          title: chatWithMessages.title || chat.title // Update title if available
+        };
+        
+        // Switch to chat with complete message history loaded from database
+        dispatch({ type: 'SWITCH_CHAT', payload: updatedChat });
+        console.log('✅ SELECT_CHAT: Successfully switched to chat with', updatedChat.messages.length, 'messages');
+        
+      } catch (messageError) {
+        console.error('❌ SELECT_CHAT: Failed to load messages from database:', messageError);
+        // Fallback: switch to chat with empty messages if database loading fails
+        const chatWithEmptyMessages = { ...chat, messages: [] };
+        dispatch({ type: 'SWITCH_CHAT', payload: chatWithEmptyMessages });
       }
     } catch (error) {
       console.error('❌ SELECT_CHAT: Critical error during chat switch:', error);
