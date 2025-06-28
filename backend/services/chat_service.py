@@ -157,3 +157,28 @@ class ChatService:
         except Exception as e:
             logger.error(f"Failed to hard delete messages for user {user_id}: {e}")
             return False
+    
+    async def global_hard_delete_all_messages(self) -> bool:
+        """GLOBAL HARD DELETE: Remove ALL chat messages for ALL users (complete reset)"""
+        try:
+            logger.warning("🚨 GLOBAL HARD DELETE: Starting complete removal of all chat messages for all users")
+            
+            # Get count of messages before deletion for logging
+            count_result = self.supabase.table("messages").select("id", count="exact").execute()
+            total_messages = count_result.count if count_result.count else 0
+            
+            # HARD DELETE ALL messages from ALL chat sessions
+            delete_result = self.supabase.table("messages").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+            
+            # Update all chat sessions timestamps
+            self.supabase.table("chat_sessions").update({
+                "updated_at": datetime.utcnow().isoformat()
+            }).neq("id", "00000000-0000-0000-0000-000000000000").execute()
+            
+            logger.warning(f"🚨 GLOBAL HARD DELETE COMPLETE: Removed {total_messages} messages from all users")
+            logger.warning("🚨 ALL USERS NOW START WITH FRESH CHAT SESSIONS")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ GLOBAL HARD DELETE FAILED: {e}")
+            return False

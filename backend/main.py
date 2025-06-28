@@ -370,6 +370,35 @@ async def clear_chat_messages(req: Request, user_id: str = Depends(verify_jwt_to
         raise HTTPException(status_code=500, detail="Failed to clear chat messages")
 
 
+@app.post("/admin/global-hard-delete")
+async def global_hard_delete_all_messages(req: Request, user_id: str = Depends(verify_jwt_token)):
+    """ADMIN ONLY: Global hard delete of ALL chat messages for ALL users (complete reset)"""
+    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
+    
+    try:
+        # CRITICAL: This is a destructive operation - log extensively
+        logger.warning(f"🚨 ADMIN GLOBAL HARD DELETE requested by user {user_id}")
+        
+        if not chat_service:
+            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
+            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        
+        # Execute global hard delete
+        success = await chat_service.global_hard_delete_all_messages()
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to execute global hard delete")
+        
+        logger.warning(f"🚨 GLOBAL HARD DELETE COMPLETED by user {user_id} - ALL chat history removed")
+        return {"status": "global_hard_delete_complete", "message": "All chat history for all users has been permanently deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Failed to execute global hard delete")
+
+
 @app.get("/metrics")
 async def get_metrics():
     """Get current performance metrics"""
