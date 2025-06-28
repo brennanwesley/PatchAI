@@ -63,19 +63,25 @@ class ChatService:
             raise
     
     async def update_chat_session(self, chat_id: str, user_id: str, messages: List[Message]) -> bool:
-        """Update an existing chat session with new messages"""
+        """Update an existing chat session with new messages (APPEND-ONLY)"""
         try:
-            # Delete existing messages
-            self.supabase.table("messages").delete().eq("chat_session_id", chat_id).execute()
+            # CRITICAL FIX: Get existing messages to avoid duplicates
+            existing_result = self.supabase.table("messages").select("content, role").eq("chat_session_id", chat_id).execute()
+            existing_messages = [(msg["role"], msg["content"]) for msg in existing_result.data]
             
-            # Insert new messages into separate messages table
+            # APPEND-ONLY: Only insert messages that don't already exist
             for message in messages:
-                self.supabase.table("messages").insert({
-                    "chat_session_id": chat_id,
-                    "role": message.role,
-                    "content": message.content,
-                    "created_at": datetime.utcnow().isoformat()
-                }).execute()
+                message_tuple = (message.role, message.content)
+                if message_tuple not in existing_messages:
+                    self.supabase.table("messages").insert({
+                        "chat_session_id": chat_id,
+                        "role": message.role,
+                        "content": message.content,
+                        "created_at": datetime.utcnow().isoformat()
+                    }).execute()
+                    logger.info(f"Added new {message.role} message to chat {chat_id}")
+                else:
+                    logger.debug(f"Skipping duplicate {message.role} message in chat {chat_id}")
             
             # Update chat session metadata
             session_result = self.supabase.table("chat_sessions").update({
@@ -91,6 +97,29 @@ class ChatService:
             
         except Exception as e:
             logger.error(f"Failed to update chat session {chat_id}: {e}")
+            raise
+    
+    async def append_message(self, chat_id: str, user_id: str, message: Message) -> bool:
+        """Append a single message to an existing chat session (EFFICIENT)"""
+        try:
+            # Insert single message
+            self.supabase.table("messages").insert({
+                "chat_session_id": chat_id,
+                "role": message.role,
+                "content": message.content,
+                "created_at": datetime.utcnow().isoformat()
+            }).execute()
+            
+            # Update chat session timestamp
+            self.supabase.table("chat_sessions").update({
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", chat_id).eq("user_id", user_id).execute()
+            
+            logger.info(f"Appended {message.role} message to chat {chat_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to append message to chat {chat_id}: {e}")
             raise
     
     async def get_chat_session(self, chat_id: str, user_id: str) -> Optional[ChatSession]:
