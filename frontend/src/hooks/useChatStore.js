@@ -130,8 +130,8 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
       dispatch({ type: 'SET_TYPING', payload: true });
       
-      // Send to backend and get AI response
-      const response = await ChatService.sendMessage(content);
+      // Send to backend with full conversation history for context
+      const response = await ChatService.sendMessage(content, state.messages);
       
       // Add AI response
       const aiMessage = {

@@ -27,21 +27,30 @@ export class ChatService {
   }
 
   // SINGLE CHAT: Send message and get AI response
-  static async sendMessage(content) {
+  static async sendMessage(content, conversationHistory = []) {
     try {
-      console.log('🔄 ChatService: Sending message to single chat');
+      console.log('🔄 ChatService: Sending message to single chat with context');
       
-      // Backend expects messages array with Message objects
+      // Build full conversation context for AI
+      const messages = [
+        ...conversationHistory.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })),
+        {
+          role: 'user',
+          content: content
+        }
+      ];
+      
+      console.log(`📝 ChatService: Sending ${messages.length} messages for context`);
+      
+      // Backend expects messages array with full conversation history
       const response = await ApiService.post('/prompt', {
-        messages: [
-          {
-            role: 'user',
-            content: content
-          }
-        ]
+        messages: messages
       });
       
-      console.log('✅ ChatService: Received AI response');
+      console.log('✅ ChatService: Received AI response with context');
       
       return {
         message: response.response || response.message || 'No response received'
