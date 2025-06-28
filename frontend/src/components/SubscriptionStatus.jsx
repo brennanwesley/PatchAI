@@ -30,21 +30,55 @@ export default function SubscriptionStatus() {
   const handleSyncSubscription = async () => {
     try {
       setIsSyncing(true);
-      console.log('🔄 Manually syncing subscription from Stripe...');
+      console.log('🔄 Starting subscription sync from UI...');
+      
       const result = await syncSubscriptionManually();
-      console.log('✅ Sync result:', result);
+      console.log('✅ Sync completed:', result);
       
-      // Refresh subscription data after sync
+      // Always refresh subscription data after sync attempt
+      console.log('🔄 Refreshing subscription data...');
       await refetch();
+      console.log('✅ Subscription data refreshed');
       
-      if (result.success) {
-        alert('Subscription synced successfully!');
+      // Provide detailed feedback based on result
+      if (result && result.success) {
+        const message = result.message || 'Subscription synced successfully!';
+        alert(`✅ Success: ${message}`);
+      } else if (result && result.success === false) {
+        const message = result.message || 'Sync completed, but no changes were needed.';
+        alert(`ℹ️ Info: ${message}`);
       } else {
-        alert('Sync completed, but no changes detected.');
+        // Fallback for unexpected response format
+        alert('✅ Sync completed. Please check your subscription status.');
       }
+      
     } catch (error) {
-      console.error('❌ Error syncing subscription:', error);
-      alert('Failed to sync subscription. Please try again or contact support.');
+      console.error('❌ Sync failed:', error);
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to sync subscription.';
+      
+      if (error.message.includes('Authentication failed')) {
+        errorMessage = 'Authentication expired. Please log out and log back in, then try again.';
+      } else if (error.message.includes('Network error')) {
+        errorMessage = 'Network connection issue. Please check your internet and try again.';
+      } else if (error.message.includes('Server error')) {
+        errorMessage = 'Server is temporarily unavailable. Please try again in a few minutes.';
+      } else if (error.message.includes('Not authenticated')) {
+        errorMessage = 'Please log out and log back in, then try syncing again.';
+      } else if (error.message) {
+        errorMessage = `Sync failed: ${error.message}`;
+      }
+      
+      alert(`❌ ${errorMessage}`);
+      
+      // Still try to refresh data in case there were partial updates
+      try {
+        await refetch();
+      } catch (refreshError) {
+        console.error('Failed to refresh subscription data:', refreshError);
+      }
+      
     } finally {
       setIsSyncing(false);
     }

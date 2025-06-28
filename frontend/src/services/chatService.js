@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import { ApiService } from '../config/api';
 import { paywallEvents, PAYWALL_EVENTS } from '../utils/paywallEvents';
 
@@ -53,8 +54,8 @@ export class ChatService {
     try {
       console.log('🔄 ChatService: Creating new chat session:', title);
       
-      // Generate a temporary chat ID for new sessions
-      const tempChatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // FIXED: Generate a unique chat ID using UUID to prevent collisions
+      const tempChatId = `chat_${uuidv4()}`;
       
       const chatData = {
         chat_id: tempChatId,
@@ -88,8 +89,10 @@ export class ChatService {
       const chat = await this.getChatSession(chatId);
       const messages = chat.messages || [];
       
+      // FIXED: Use UUID for message IDs to prevent collisions
+      const messageId = uuidv4();
       const newMessage = {
-        id: `${role}-${Date.now()}`,
+        id: `${role}-${messageId}`,
         role,
         content,
         timestamp: new Date().toISOString()

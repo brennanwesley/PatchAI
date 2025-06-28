@@ -95,8 +95,26 @@ export async function createPortalSession(returnUrl) {
  */
 export async function syncSubscriptionManually(email = null) {
   try {
+    console.log('🔄 Starting subscription sync...');
+    console.log('📍 API Base URL:', API_BASE_URL);
+    
+    // Check authentication
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('Not authenticated');
+    if (!session) {
+      console.error('❌ No active session found');
+      throw new Error('Not authenticated - please log in again');
+    }
+    
+    console.log('✅ Session found, user:', session.user?.email);
+    
+    const requestBody = {
+      email: email, // Optional: sync specific user (admin feature)
+    };
+    
+    console.log('📤 Request details:');
+    console.log('  URL:', `${API_BASE_URL}/payments/sync-subscription`);
+    console.log('  Body:', requestBody);
+    console.log('  Auth token length:', session.access_token?.length || 0);
 
     const response = await fetch(`${API_BASE_URL}/payments/sync-subscription`, {
       method: 'POST',
@@ -104,18 +122,44 @@ export async function syncSubscriptionManually(email = null) {
         'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        email: email, // Optional: sync specific user (admin feature)
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log('📥 Response status:', response.status);
+    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('❌ Response error:', errorText);
+      
+      // Provide specific error messages based on status code
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('Authentication failed - please log out and log back in');
+      } else if (response.status === 404) {
+        throw new Error('Sync endpoint not found - please contact support');
+      } else if (response.status >= 500) {
+        throw new Error('Server error - please try again later');
+      } else {
+        throw new Error(`Sync failed (${response.status}): ${errorText}`);
+      }
     }
 
-    return await response.json();
+    const result = await response.json();
+    console.log('✅ Sync response:', result);
+    return result;
+    
   } catch (error) {
-    console.error('Error syncing subscription:', error);
+    console.error('💥 Sync error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // Re-throw with more user-friendly message if needed
+    if (error.message.includes('fetch')) {
+      throw new Error('Network error - please check your connection and try again');
+    }
+    
     throw error;
   }
 }

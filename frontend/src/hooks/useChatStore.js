@@ -1,4 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { ChatService } from '../services/chatService';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -111,14 +112,17 @@ export function ChatProvider({ children }) {
 
   const createNewChat = useCallback(async () => {
     try {
+      // FIXED: Use UUID instead of Date.now() to prevent ID collisions
+      const chatId = uuidv4();
       const newChat = {
-        id: `temp-${Date.now()}`,
+        id: `temp-${chatId}`,
         title: 'New Chat',
         messages: [],
         createdAt: new Date().toISOString(),
         isNew: true
       };
       
+      console.log('🆕 CREATE_NEW_CHAT: Generated unique chat ID:', newChat.id);
       dispatch({ type: 'CREATE_CHAT', payload: newChat });
       return newChat;
     } catch (error) {
@@ -166,8 +170,10 @@ export function ChatProvider({ children }) {
       }
     }
 
+    // FIXED: Use UUID for message IDs to prevent collisions
+    const messageId = uuidv4();
     const userMessage = {
-      id: `user-${Date.now()}`,
+      id: `user-${messageId}`,
       role: 'user',
       content,
       files,
@@ -232,8 +238,10 @@ export function ChatProvider({ children }) {
       console.log('✅ AI_FLOW: AI response received:', aiResponse);
 
       // STEP 3: Proper state management - Create assistant message
+      // FIXED: Use UUID for assistant message IDs
+      const assistantMessageId = uuidv4();
       const assistantMessage = {
-        id: `assistant-${Date.now()}`,
+        id: `assistant-${assistantMessageId}`,
         role: 'assistant',
         content: aiResponse,
         timestamp: new Date().toISOString()
@@ -283,8 +291,10 @@ export function ChatProvider({ children }) {
         errorContent = '💳 Subscription required to continue chatting. Please upgrade to the Standard Plan to keep using PatchAI.';
       }
       
+      // FIXED: Use UUID for error message IDs
+      const errorMessageId = uuidv4();
       const errorMessage = {
-        id: `error-${Date.now()}`,
+        id: `error-${errorMessageId}`,
         role: 'assistant',
         content: errorContent,
         timestamp: new Date().toISOString(),
