@@ -339,9 +339,9 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'SET_ACTIVE_CHAT', payload: currentChat });
       console.log('✅ SENDMESSAGE: New chat created with ID:', chatId);
     } else {
-      // Save to existing chat
-      console.log('💾 SENDMESSAGE: Adding message to existing chat:', chatId);
-      await ChatService.addMessageToSession(chatId, userMessage.role, userMessage.content);
+      // CRITICAL FIX: Backend /prompt endpoint will save all messages including user message
+      // Removing redundant frontend call to prevent double insertion
+      console.log('✅ SENDMESSAGE: Using existing chat (backend will save all messages):', chatId);
     }
 
     // Ensure we have a valid chatId before proceeding
@@ -395,10 +395,9 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'SET_TYPING', payload: false });
       console.log('✅ AI_FLOW: Assistant message added to state, typing indicator cleared');
 
-      // Save AI message to database
-      console.log('💾 AI_FLOW: Saving AI response to database...');
-      await ChatService.addMessageToSession(chatId, 'assistant', aiResponse);
-      console.log('✅ AI_FLOW: AI response saved to database');
+      // CRITICAL FIX: Backend already saved the AI message via /prompt endpoint
+      // Removing redundant frontend call to prevent double insertion
+      console.log('✅ AI_FLOW: AI response already saved by backend (no duplicate call needed)');
 
       // Update chat with last message
       const updatedChat = {
