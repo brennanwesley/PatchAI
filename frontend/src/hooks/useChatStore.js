@@ -226,7 +226,7 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'SET_LOADING', payload: true });
       
       // Fetch chat history from backend
-      const chatHistory = await ChatService.getChatHistory();
+      const chatHistory = await ChatService.getUserChatSessions();
       console.log('✅ LOAD_CHATS: Retrieved', chatHistory.length, 'chats from backend');
       
       // Transform backend data to frontend format
