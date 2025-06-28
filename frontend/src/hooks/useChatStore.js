@@ -194,15 +194,17 @@ export function ChatProvider({ children }) {
     }
   }, []);
 
-  // Load messages when user changes
+  // Load messages ONLY on initial user authentication (not on every state change)
   useEffect(() => {
     if (user) {
+      console.log('🔄 INITIAL_LOAD: Loading messages for newly authenticated user');
       loadMessages();
     } else {
       // Clear messages when user logs out
+      console.log('🔒 USER_LOGOUT: Clearing messages due to logout');
       dispatch({ type: 'CLEAR_MESSAGES' });
     }
-  }, [user, loadMessages]);
+  }, [user]); // ❌ REMOVED loadMessages dependency to prevent state overwrites
 
   // SINGLE CHAT: Update chat title
   const updateChatTitle = useCallback(async (chatId, newTitle) => {
