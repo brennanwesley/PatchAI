@@ -111,12 +111,21 @@ function chatReducer(state, action) {
       };
     
     case 'UPDATE_CHAT':
-      // FIXED: Preserve messages when updating chat and sync with active chat
+      // CRITICAL FIX: Preserve existing messages when updating chat metadata
       console.log('🔄 UPDATE_CHAT: Updating chat:', action.payload.id);
+      
+      // Find the existing chat to preserve its messages
+      const existingChat = state.chats.find(chat => chat.id === action.payload.id);
+      const existingMessages = existingChat?.messages || [];
+      
+      // CRITICAL: Only update metadata, preserve existing messages
       const updatedChat = {
-        ...action.payload,
-        messages: action.payload.messages || [] // Ensure messages array exists
+        ...existingChat, // Start with existing chat data
+        ...action.payload, // Apply updates
+        messages: action.payload.messages || existingMessages // Preserve messages if not explicitly provided
       };
+      
+      console.log('🔍 UPDATE_CHAT: Preserving', existingMessages.length, 'existing messages');
       
       return {
         ...state,
@@ -124,7 +133,8 @@ function chatReducer(state, action) {
           ? state.chats.map(chat => chat.id === updatedChat.id ? updatedChat : chat)
           : [updatedChat],
         activeChat: state.activeChat?.id === updatedChat.id ? updatedChat : state.activeChat,
-        messages: state.activeChat?.id === updatedChat.id ? updatedChat.messages : state.messages
+        // CRITICAL: Preserve current messages in global state
+        messages: state.activeChat?.id === updatedChat.id ? state.messages : state.messages
       };
     
     default:
