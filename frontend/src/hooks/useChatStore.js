@@ -15,17 +15,27 @@ const initialState = {
   chatTitle: 'Chat Session'
 };
 
+// DEBUG: Track state resets
+let stateResetCount = 0;
+console.log('🏗️ CHAT_STORE_DEBUG: useChatStore.js loaded, initialState created');
+
 // Reducer for single chat architecture
 function chatReducer(state, action) {
+  console.log(`🔄 REDUCER_DEBUG: Action '${action.type}' called with current state.messages.length: ${state.messages.length}`);
+  
   switch (action.type) {
     case 'LOAD_MESSAGES':
       console.log('📥 LOAD_MESSAGES: Loading', action.payload?.length || 0, 'messages');
-      return {
+      console.log('📥 LOAD_MESSAGES_DEBUG: Previous state.messages.length:', state.messages.length);
+      console.log('📥 LOAD_MESSAGES_DEBUG: New payload length:', action.payload?.length || 0);
+      const newState = {
         ...state,
         messages: Array.isArray(action.payload) ? action.payload : [],
         isLoading: false,
         error: null
       };
+      console.log('📥 LOAD_MESSAGES_DEBUG: Returning state with messages.length:', newState.messages.length);
+      return newState;
     
     case 'ADD_MESSAGE':
       console.log('➕ ADD_MESSAGE: Adding message:', action.payload.role);
@@ -76,8 +86,14 @@ function chatReducer(state, action) {
 }
 
 export function ChatProvider({ children }) {
+  console.log('🏗️ PROVIDER_DEBUG: ChatProvider component mounting/re-mounting');
+  stateResetCount++;
+  console.log(`🏗️ PROVIDER_DEBUG: This is mount #${stateResetCount}`);
+  
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { user } = useAuth();
+  
+  console.log('🏗️ PROVIDER_DEBUG: useReducer initialized with state.messages.length:', state.messages.length);
 
   // SINGLE CHAT: Load messages for user's single chat session
   const loadMessages = useCallback(async () => {
@@ -196,6 +212,10 @@ export function ChatProvider({ children }) {
 
   // Load messages ONLY on initial user authentication (not on every state change)
   useEffect(() => {
+    console.log('🔄 USEEFFECT_DEBUG: useEffect triggered');
+    console.log('🔄 USEEFFECT_DEBUG: user exists:', !!user);
+    console.log('🔄 USEEFFECT_DEBUG: current state.messages.length:', state.messages.length);
+    
     if (user) {
       console.log('🔄 INITIAL_LOAD: Loading messages for newly authenticated user');
       loadMessages();
