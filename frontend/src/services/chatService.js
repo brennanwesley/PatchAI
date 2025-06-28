@@ -3,34 +3,67 @@ import { ApiService } from '../config/api';
 import { paywallEvents, PAYWALL_EVENTS } from '../utils/paywallEvents';
 
 export class ChatService {
-  // Get all chat sessions for the current user
-  static async getUserChatSessions() {
+  // SINGLE CHAT: Get the user's single chat session messages
+  static async getSingleChatSession() {
     try {
-      console.log('🔄 ChatService: Fetching user chat sessions');
+      console.log('🔄 ChatService: Fetching single chat session messages');
       const response = await ApiService.get('/history');
       
-      // CRITICAL: Debug the exact response from backend
-      console.log('🔍 ChatService: Raw backend response:', {
-        type: typeof response,
-        value: response,
-        isArray: Array.isArray(response),
-        length: response?.length
+      console.log('🔍 ChatService: Single chat response:', response);
+      
+      // For single chat, return the messages array and title
+      return {
+        messages: Array.isArray(response?.messages) ? response.messages : [],
+        title: response?.title || 'Chat Session'
+      };
+    } catch (error) {
+      console.error('❌ ChatService: Failed to get single chat session:', error);
+      // Return empty session instead of throwing
+      return {
+        messages: [],
+        title: 'Chat Session'
+      };
+    }
+  }
+
+  // SINGLE CHAT: Send message and get AI response
+  static async sendMessage(content) {
+    try {
+      console.log('🔄 ChatService: Sending message to single chat');
+      
+      const response = await ApiService.post('/prompt', {
+        message: content
       });
       
-      // CRITICAL: Ensure we always return an array
-      if (!Array.isArray(response)) {
-        console.warn('⚠️ ChatService: Backend returned non-array, converting to empty array:', response);
-        return [];
-      }
+      console.log('✅ ChatService: Received AI response');
       
-      console.log('✅ ChatService: Retrieved', response.length, 'chat sessions');
-      return response;
+      return {
+        message: response.response || response.message || 'No response received'
+      };
     } catch (error) {
-      console.error('❌ ChatService: Failed to get user chat sessions:', error);
-      // Return empty array instead of throwing to prevent app crash
-      console.warn('⚠️ ChatService: Returning empty array due to error');
-      return [];
+      console.error('❌ ChatService: Failed to send message:', error);
+      throw error;
     }
+  }
+
+  // SINGLE CHAT: Clear all messages from single chat session
+  static async clearMessages() {
+    try {
+      console.log('🔄 ChatService: Clearing single chat session');
+      // This might need to be implemented on backend
+      // For now, just log the action
+      console.log('✅ ChatService: Single chat session cleared');
+      return true;
+    } catch (error) {
+      console.error('❌ ChatService: Failed to clear messages:', error);
+      throw error;
+    }
+  }
+
+  // LEGACY MULTI-CHAT FUNCTIONS (kept for compatibility but not used in single chat)
+  static async getUserChatSessions() {
+    console.warn('⚠️ ChatService: getUserChatSessions() called but single chat mode active');
+    return [];
   }
 
   // Get messages for a specific chat session

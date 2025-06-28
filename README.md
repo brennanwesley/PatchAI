@@ -19,3 +19,6 @@ For licensing inquiries, contact: brennanwesley
 ---
 
 *This is a commercial SaaS product. Unauthorized use is prohibited.*
+
+# CodeRabbit Pull Request Reviews
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/brennanwesley/PatchAI?utm_source=oss&utm_medium=github&utm_campaign=brennanwesley%2FPatchAI&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
