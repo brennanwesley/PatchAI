@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ChatService } from '../services/ChatService';
+import { ChatService } from '../services/chatService';
 import { v4 as uuidv4 } from 'uuid';
 
 // Create context
