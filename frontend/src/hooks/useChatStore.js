@@ -120,6 +120,14 @@ export function ChatProvider({ children }) {
     try {
       console.log('📤 SEND_MESSAGE: Sending message to single chat session');
       
+      // CRITICAL FIX: Capture conversation history BEFORE dispatching ADD_MESSAGE
+      // This ensures we read the current state before React updates it
+      const conversationHistory = [...state.messages];
+      
+      console.log(`🔍 SEND_MESSAGE: Current state.messages length: ${state.messages.length}`);
+      console.log(`🔍 SEND_MESSAGE: Conversation history:`, conversationHistory.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })));
+      console.log(`🔍 SEND_MESSAGE: Sending ${conversationHistory.length} historical messages + 1 new message`);
+      
       // Add user message immediately (optimistic UI)
       const userMessage = {
         id: uuidv4(),
@@ -130,14 +138,6 @@ export function ChatProvider({ children }) {
       
       dispatch({ type: 'ADD_MESSAGE', payload: userMessage });
       dispatch({ type: 'SET_TYPING', payload: true });
-      
-      // Build conversation history WITHOUT the new user message
-      // (ChatService will add the new user message itself)
-      const conversationHistory = [...state.messages];
-      
-      console.log(`🔍 SEND_MESSAGE: Current state.messages length: ${state.messages.length}`);
-      console.log(`🔍 SEND_MESSAGE: Conversation history:`, conversationHistory.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })));
-      console.log(`🔍 SEND_MESSAGE: Sending ${conversationHistory.length} historical messages + 1 new message`);
       
       // Send to backend with conversation history (service will add new user message)
       const response = await ChatService.sendMessage(content, conversationHistory);
