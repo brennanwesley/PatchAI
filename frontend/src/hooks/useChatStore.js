@@ -206,3 +206,49 @@ export function useChat() {
   }
   return context;
 }
+
+// BACKWARD COMPATIBILITY: Export useChatStore for existing components
+export function useChatStore() {
+  const context = useContext(ChatContext);
+  if (!context) {
+    throw new Error('useChatStore must be used within a ChatProvider');
+  }
+  
+  // Map single chat API to multi-chat API for backward compatibility
+  return {
+    // Single chat state mapped to multi-chat expectations
+    chats: context.messages.length > 0 ? [{ id: 'single-chat', title: context.chatTitle, messages: context.messages }] : [],
+    activeChat: context.messages.length > 0 ? { id: 'single-chat', title: context.chatTitle, messages: context.messages } : null,
+    messages: context.messages,
+    isLoading: context.isLoading,
+    isTyping: context.isTyping,
+    error: context.error,
+    
+    // Single chat actions mapped to multi-chat API
+    sendMessage: context.sendMessage,
+    loadMessages: context.loadMessages,
+    clearMessages: context.clearMessages,
+    
+    // Deprecated multi-chat functions (no-ops for single chat)
+    createNewChat: () => {
+      console.warn('⚠️ createNewChat() called but single chat mode active');
+      return Promise.resolve();
+    },
+    selectChat: () => {
+      console.warn('⚠️ selectChat() called but single chat mode active');
+      return Promise.resolve();
+    },
+    updateChatTitle: () => {
+      console.warn('⚠️ updateChatTitle() called but single chat mode active');
+      return Promise.resolve();
+    },
+    deleteChat: () => {
+      console.warn('⚠️ deleteChat() called but single chat mode active');
+      return Promise.resolve();
+    },
+    loadChats: () => {
+      console.warn('⚠️ loadChats() called but single chat mode active');
+      return Promise.resolve();
+    }
+  };
+}
