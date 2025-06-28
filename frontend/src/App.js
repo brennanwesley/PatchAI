@@ -75,6 +75,8 @@ function ChatLayout() {
   const { needsPayment, hasActiveSubscription, loading: subscriptionLoading, refetch: refetchSubscription } = useSubscription();
   const { user } = useAuth();
   const [showPaywall, setShowPaywall] = React.useState(false);
+  
+  console.log('🏗️ LAYOUT_DEBUG: ChatLayout rendering with isLoading:', isLoading, 'error:', !!error, 'chats.length:', chats.length);
 
   // Check for payment success in URL and refresh subscription
   React.useEffect(() => {
@@ -147,7 +149,7 @@ function ChatLayout() {
     return unsubscribe;
   }, []);
 
-  // Show backend test if test mode is enabled
+  // Show backend test if test mode is enabled (OUTSIDE ChatProvider to avoid unmounting)
   if (isTestMode()) {
     return (
       <div className="min-h-screen bg-gray-100 py-8">
@@ -165,43 +167,45 @@ function ChatLayout() {
     );
   }
 
-  // Show loading state while initializing
-  if (isLoading && chats.length === 0) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading chat interface...</p>
-        </div>
+  // CRITICAL FIX: Show loading/error states as OVERLAYS instead of conditional returns
+  // This prevents ChatProvider from being unmounted during chat operations
+  
+  // Loading overlay (shown over chat interface)
+  const LoadingOverlay = () => (
+    <div className="absolute inset-0 bg-gray-100 bg-opacity-90 flex items-center justify-center z-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading chat interface...</p>
       </div>
-    );
-  }
-
-  // Show error state if there's a critical error
-  if (error && chats.length === 0) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-md">
-          <h2 className="text-xl font-bold text-red-600 mb-4">Connection Error</h2>
-          <p className="text-gray-600 mb-4">
-            Unable to connect to the chat service. Please check your internet connection and try again.
-          </p>
-          <p className="text-sm text-gray-500 mb-4">Error: {error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Retry
-          </button>
-        </div>
+    </div>
+  );
+  
+  // Error overlay (shown over chat interface)
+  const ErrorOverlay = () => (
+    <div className="absolute inset-0 bg-gray-100 bg-opacity-90 flex items-center justify-center z-50">
+      <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-md">
+        <h2 className="text-xl font-bold text-red-600 mb-4">Connection Error</h2>
+        <p className="text-gray-600 mb-4">
+          Unable to connect to the chat service. Please check your internet connection and try again.
+        </p>
+        <p className="text-sm text-gray-500 mb-4">Error: {error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
 
+  // CRITICAL FIX: Always render the chat interface, show loading/error as overlays
+  // This ensures ChatProvider is NEVER unmounted during chat operations
+  
   if (isMobile) {
     // Mobile Layout
     return (
-      <div className="h-screen flex flex-col bg-gray-100">
+      <div className="h-screen flex flex-col bg-gray-100 relative">
         {/* Mobile Header with Hamburger */}
         <MobileHeader onToggleSidebar={toggleSidebar} />
         
@@ -218,6 +222,10 @@ function ChatLayout() {
           <InputBar />
         </div>
 
+        {/* Loading/Error Overlays */}
+        {isLoading && chats.length === 0 && <LoadingOverlay />}
+        {error && chats.length === 0 && <ErrorOverlay />}
+
         {/* Paywall Modal */}
         {showPaywall && (
           <Paywall onClose={() => setShowPaywall(false)} />
@@ -228,7 +236,7 @@ function ChatLayout() {
 
   // Desktop Layout
   return (
-    <div className="h-screen flex bg-gray-100 overflow-hidden">
+    <div className="h-screen flex bg-gray-100 overflow-hidden relative">
       {/* Left Sidebar - Chat List */}
       <ChatSidebar 
         isOpen={true} 
@@ -255,6 +263,10 @@ function ChatLayout() {
         </div>
       </div>
 
+      {/* Loading/Error Overlays */}
+      {isLoading && chats.length === 0 && <LoadingOverlay />}
+      {error && chats.length === 0 && <ErrorOverlay />}
+
       {/* Paywall Modal */}
       {showPaywall && (
         <Paywall onClose={() => setShowPaywall(false)} />
@@ -265,6 +277,28 @@ function ChatLayout() {
 
 // Main App Component
 function App() {
+  // CRITICAL FIX: Move test mode check OUTSIDE ChatProvider to prevent unmounting
+  if (isTestMode()) {
+    return (
+      <ErrorBoundary>
+        <AuthProvider>
+          <div className="min-h-screen bg-gray-100 py-8">
+            <div className="max-w-6xl mx-auto">
+              <div className="mb-6 text-center">
+                <h1 className="text-3xl font-bold text-gray-800 mb-2">PatchAI Backend Integration Test</h1>
+                <p className="text-gray-600">
+                  Testing all API endpoints and authentication. 
+                  <a href="/" className="text-blue-500 hover:underline ml-2">← Back to Chat</a>
+                </p>
+              </div>
+              <BackendTest />
+            </div>
+          </div>
+        </AuthProvider>
+      </ErrorBoundary>
+    );
+  }
+  
   return (
     <ErrorBoundary>
       <AuthProvider>
