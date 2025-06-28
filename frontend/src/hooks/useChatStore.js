@@ -136,13 +136,18 @@ export function ChatProvider({ children }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { user } = useAuth();
 
-  // FIXED: Memoized loadChats to prevent infinite loops
+  // FIXED: Load chats from backend with proper message initialization
   const loadChats = useCallback(async () => {
     if (!user) return;
     
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const chats = await ChatService.getUserChatSessions();
+      const response = await ChatService.getUserChatSessions();
+      
+      // CRITICAL FIX: Ensure response is always an array
+      const chats = Array.isArray(response) ? response : [];
+      console.log('🔍 LOAD_CHATS: API response type:', typeof response, 'value:', response);
+      console.log('🔍 LOAD_CHATS: Processed chats array:', chats);
       
       // Ensure each chat has a messages array (even if empty)
       const chatsWithMessages = chats.map(chat => ({
@@ -155,6 +160,8 @@ export function ChatProvider({ children }) {
     } catch (error) {
       console.error('Failed to load chats:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message });
+      // Fallback to empty array on error
+      dispatch({ type: 'LOAD_CHATS', payload: [] });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
