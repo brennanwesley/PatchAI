@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    """Service for managing chat sessions and conversation context"""
+    """Service for managing SINGLE chat session per user - simplified architecture"""
     
     def __init__(self, supabase_client):
         self.supabase = supabase_client
@@ -29,80 +29,42 @@ class ChatService:
                 return title
         return "New Chat"
     
-    async def create_chat_session(self, user_id: str, messages: List[Message], title: Optional[str] = None) -> str:
-        """Create a new chat session and return the chat_id"""
+    async def get_or_create_single_chat(self, user_id: str) -> str:
+        """Get user's single chat session or create it if it doesn't exist"""
         try:
+            # Check if user already has a chat session
+            existing_result = self.supabase.table("chat_sessions").select("id").eq("user_id", user_id).execute()
+            
+            if existing_result.data:
+                chat_id = existing_result.data[0]["id"]
+                logger.info(f"Found existing chat session {chat_id} for user {user_id}")
+                return chat_id
+            
+            # Create new single chat session
             chat_id = str(uuid.uuid4())
             
-            if not title:
-                title = self.generate_chat_title(messages)
-            
-            # Insert chat session metadata
             session_result = self.supabase.table("chat_sessions").insert({
                 "id": chat_id,
                 "user_id": user_id,
-                "title": title,
+                "title": "Chat with Patch",
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()
             }).execute()
             
-            # Insert messages into separate messages table
-            for message in messages:
-                self.supabase.table("messages").insert({
-                    "chat_session_id": chat_id,
-                    "role": message.role,
-                    "content": message.content,
-                    "created_at": datetime.utcnow().isoformat()
-                }).execute()
-            
-            logger.info(f"Created new chat session {chat_id} for user {user_id} with {len(messages)} messages")
+            logger.info(f"Created new single chat session {chat_id} for user {user_id}")
             return chat_id
             
         except Exception as e:
-            logger.error(f"Failed to create chat session: {e}")
+            logger.error(f"Failed to get or create single chat for user {user_id}: {e}")
             raise
     
-    async def update_chat_session(self, chat_id: str, user_id: str, messages: List[Message]) -> bool:
-        """Update an existing chat session with new messages (APPEND-ONLY)"""
+    async def add_message_to_single_chat(self, user_id: str, message: Message) -> str:
+        """Add a single message to user's single chat session"""
         try:
-            # CRITICAL FIX: Get existing messages to avoid duplicates
-            existing_result = self.supabase.table("messages").select("content, role").eq("chat_session_id", chat_id).execute()
-            existing_messages = [(msg["role"], msg["content"]) for msg in existing_result.data]
+            # Get or create user's single chat session
+            chat_id = await self.get_or_create_single_chat(user_id)
             
-            # APPEND-ONLY: Only insert messages that don't already exist
-            for message in messages:
-                message_tuple = (message.role, message.content)
-                if message_tuple not in existing_messages:
-                    self.supabase.table("messages").insert({
-                        "chat_session_id": chat_id,
-                        "role": message.role,
-                        "content": message.content,
-                        "created_at": datetime.utcnow().isoformat()
-                    }).execute()
-                    logger.info(f"Added new {message.role} message to chat {chat_id}")
-                else:
-                    logger.debug(f"Skipping duplicate {message.role} message in chat {chat_id}")
-            
-            # Update chat session metadata
-            session_result = self.supabase.table("chat_sessions").update({
-                "updated_at": datetime.utcnow().isoformat()
-            }).eq("id", chat_id).eq("user_id", user_id).execute()
-            
-            if not session_result.data:
-                logger.warning(f"No chat session found with id {chat_id} for user {user_id}")
-                return False
-            
-            logger.info(f"Updated chat session {chat_id} for user {user_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to update chat session {chat_id}: {e}")
-            raise
-    
-    async def append_message(self, chat_id: str, user_id: str, message: Message) -> bool:
-        """Append a single message to an existing chat session (EFFICIENT)"""
-        try:
-            # Insert single message
+            # Insert the message
             self.supabase.table("messages").insert({
                 "chat_session_id": chat_id,
                 "role": message.role,
@@ -115,26 +77,35 @@ class ChatService:
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("id", chat_id).eq("user_id", user_id).execute()
             
-            logger.info(f"Appended {message.role} message to chat {chat_id}")
-            return True
+            logger.info(f"Added {message.role} message to single chat {chat_id} for user {user_id}")
+            return chat_id
             
         except Exception as e:
-            logger.error(f"Failed to append message to chat {chat_id}: {e}")
+            logger.error(f"Failed to add message to single chat for user {user_id}: {e}")
             raise
     
-    async def get_chat_session(self, chat_id: str, user_id: str) -> Optional[ChatSession]:
-        """Get a specific chat session"""
+
+    
+    async def get_single_chat_session(self, user_id: str) -> Optional[ChatSession]:
+        """Get user's single chat session with all messages"""
         try:
+            # Get or create user's single chat session
+            chat_id = await self.get_or_create_single_chat(user_id)
+            
+            # Get session metadata
             session_result = self.supabase.table("chat_sessions").select("*").eq("id", chat_id).eq("user_id", user_id).execute()
             
             if not session_result.data:
+                logger.error(f"Single chat session {chat_id} not found for user {user_id}")
                 return None
             
             session_data = session_result.data[0]
             
-            # Get messages from separate messages table
+            # Get all messages from separate messages table
             messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).order("created_at").execute()
             messages = [Message(role=msg["role"], content=msg["content"]) for msg in messages_result.data]
+            
+            logger.info(f"Retrieved single chat session {chat_id} with {len(messages)} messages for user {user_id}")
             
             return ChatSession(
                 id=session_data["id"],
@@ -146,38 +117,43 @@ class ChatService:
             )
             
         except Exception as e:
-            logger.error(f"Failed to get chat session {chat_id}: {e}")
+            logger.error(f"Failed to get single chat session for user {user_id}: {e}")
             return None
     
-    async def get_user_chat_sessions(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get all chat sessions for a user (without full message content for performance)"""
+    async def get_single_chat_messages(self, user_id: str) -> List[Message]:
+        """Get all messages from user's single chat session"""
         try:
-            result = self.supabase.table("chat_sessions").select(
-                "id, title, created_at, updated_at"
-            ).eq("user_id", user_id).order("updated_at", desc=True).limit(limit).execute()
+            # Get or create user's single chat session
+            chat_id = await self.get_or_create_single_chat(user_id)
             
-            return result.data or []
+            # Get all messages
+            messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).order("created_at").execute()
+            messages = [Message(role=msg["role"], content=msg["content"]) for msg in messages_result.data]
+            
+            logger.info(f"Retrieved {len(messages)} messages from single chat for user {user_id}")
+            return messages
             
         except Exception as e:
-            logger.error(f"Failed to get chat sessions for user {user_id}: {e}")
+            logger.error(f"Failed to get messages for user {user_id}: {e}")
             return []
     
-    async def delete_chat_session(self, chat_id: str, user_id: str) -> bool:
-        """Delete a chat session"""
+    async def clear_single_chat_messages(self, user_id: str) -> bool:
+        """Clear all messages from user's single chat session (keep session)"""
         try:
-            # Delete messages from separate messages table
+            # Get user's single chat session
+            chat_id = await self.get_or_create_single_chat(user_id)
+            
+            # Delete all messages from the chat
             self.supabase.table("messages").delete().eq("chat_session_id", chat_id).execute()
             
-            # Delete chat session metadata
-            session_result = self.supabase.table("chat_sessions").delete().eq("id", chat_id).eq("user_id", user_id).execute()
+            # Update chat session timestamp
+            self.supabase.table("chat_sessions").update({
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", chat_id).eq("user_id", user_id).execute()
             
-            if not session_result.data:
-                logger.warning(f"No chat session found with id {chat_id} for user {user_id}")
-                return False
-            
-            logger.info(f"Deleted chat session {chat_id} for user {user_id}")
+            logger.info(f"Cleared all messages from single chat {chat_id} for user {user_id}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to delete chat session {chat_id}: {e}")
+            logger.error(f"Failed to clear messages for user {user_id}: {e}")
             return False

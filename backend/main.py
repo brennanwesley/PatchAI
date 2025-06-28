@@ -247,22 +247,15 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         
         ai_response = response.choices[0].message.content
         
-        # Add AI response to conversation
-        updated_messages = request.messages + [Message(role="assistant", content=ai_response)]
+        # Add user message to single chat session
+        user_message = request.messages[-1]  # Get the latest user message
+        chat_id = await chat_service.add_message_to_single_chat(user_id, user_message)
         
-        # Handle chat session
-        chat_id = request.chat_id
-        if chat_id:
-            # Update existing chat session
-            success = await chat_service.update_chat_session(chat_id, user_id, updated_messages)
-            if not success:
-                # Chat not found, create new one
-                chat_id = await chat_service.create_chat_session(user_id, updated_messages)
-        else:
-            # Create new chat session
-            chat_id = await chat_service.create_chat_session(user_id, updated_messages)
+        # Add AI response to single chat session
+        ai_message = Message(role="assistant", content=ai_response)
+        await chat_service.add_message_to_single_chat(user_id, ai_message)
         
-        logger.info(f"OpenAI response generated for user {user_id}, chat {chat_id}")
+        logger.info(f"OpenAI response generated and saved to single chat {chat_id} for user {user_id}")
         
         return PromptResponse(response=ai_response, chat_id=chat_id)
         
@@ -276,7 +269,7 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
 
 @app.get("/history")
 async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Get chat sessions for authenticated user"""
+    """Get user's single chat session with all messages"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
@@ -287,10 +280,23 @@ async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
             raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
         
-        sessions = await chat_service.get_user_chat_sessions(user_id)
+        # Get user's single chat session
+        chat_session = await chat_service.get_single_chat_session(user_id)
         
-        logger.info(f"Chat sessions retrieved for user {user_id}: {len(sessions)} sessions")
-        return {"sessions": sessions}
+        if chat_session:
+            # Return single chat session in expected format
+            session_data = {
+                "id": chat_session.id,
+                "title": chat_session.title,
+                "created_at": chat_session.created_at.isoformat(),
+                "updated_at": chat_session.updated_at.isoformat()
+            }
+            logger.info(f"Single chat session retrieved for user {user_id} with {len(chat_session.messages)} messages")
+            return {"sessions": [session_data], "messages": [msg.__dict__ for msg in chat_session.messages]}
+        else:
+            # No chat session exists yet
+            logger.info(f"No chat session found for user {user_id} - will be created on first message")
+            return {"sessions": [], "messages": []}
         
     except HTTPException:
         raise
@@ -299,43 +305,18 @@ async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
         raise HTTPException(status_code=500, detail="Failed to retrieve chat history")
 
 
-@app.get("/history/{chat_id}")
-async def get_chat_session(chat_id: str, req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Get specific chat session with full message history"""
-    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
-    
-    try:
-        # NOTE: Removed enforce_subscription() to allow new users to view chat history
-        # Paywall enforcement happens at /prompt endpoint when user tries to chat
-        
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
-        
-        session = await chat_service.get_chat_session(chat_id, user_id)
-        
-        if not session:
-            raise HTTPException(status_code=404, detail="Chat session not found")
-        
-        logger.info(f"Chat session {chat_id} retrieved for user {user_id}")
-        return {
-            "id": session.id,
-            "title": session.title,
-            "messages": [{"role": msg.role, "content": msg.content} for msg in session.messages],
-            "created_at": session.created_at.isoformat(),
-            "updated_at": session.updated_at.isoformat()
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Failed to retrieve chat session")
+# REMOVED: Individual chat session endpoint - single chat architecture only uses /history
 
 
-@app.post("/history/{chat_id}/messages")
-async def append_message_to_chat(chat_id: str, request: dict, req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Append a single message to an existing chat session (EFFICIENT)"""
+# REMOVED: Multi-chat message append endpoint - single chat architecture handles messages automatically
+
+
+
+
+
+@app.delete("/history/clear")
+async def clear_chat_messages(req: Request, user_id: str = Depends(verify_jwt_token)):
+    """Clear all messages from user's single chat session"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
@@ -346,93 +327,19 @@ async def append_message_to_chat(chat_id: str, request: dict, req: Request, user
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
             raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
         
-        # Validate input
-        if not request.get('role') or not request.get('content'):
-            raise HTTPException(status_code=400, detail="Message must have role and content")
-        
-        # Create message object
-        message = Message(role=request['role'], content=request['content'])
-        
-        # Append single message (EFFICIENT - no destructive updates)
-        success = await chat_service.append_message(chat_id, user_id, message)
+        success = await chat_service.clear_single_chat_messages(user_id)
         
         if not success:
-            raise HTTPException(status_code=404, detail="Chat session not found")
+            raise HTTPException(status_code=500, detail="Failed to clear chat messages")
         
-        logger.info(f"Message appended to chat {chat_id} for user {user_id}")
-        return {"status": "appended", "chat_id": chat_id}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Failed to append message")
-
-
-@app.post("/history")
-async def save_chat_session(request: SaveChatRequest, req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Save or update chat session (LEGACY - use append endpoint for efficiency)"""
-    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
-    
-    try:
-        # Enforce subscription access (PAYWALL)
-        await enforce_subscription(req, user_id)
-        
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
-        
-        # Validate input
-        if not request.messages:
-            raise HTTPException(status_code=400, detail="Messages array cannot be empty")
-        
-        # Check if chat session exists first
-        existing_chat = await chat_service.get_chat_session(request.chat_id, user_id)
-        
-        if existing_chat:
-            # Session exists, update it (FIXED: now uses append-only logic)
-            success = await chat_service.update_chat_session(request.chat_id, user_id, request.messages)
-            chat_id = request.chat_id
-        else:
-            # Session doesn't exist, create new one
-            chat_id = await chat_service.create_chat_session(user_id, request.messages, request.title)
-        
-        logger.info(f"Chat session saved for user {user_id}, chat {chat_id}")
-        return {"status": "saved", "chat_id": chat_id}
+        logger.info(f"Chat messages cleared for user {user_id}")
+        return {"status": "cleared"}
         
     except HTTPException:
         raise
     except Exception as e:
         structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Failed to save chat session")
-
-
-@app.delete("/history/{chat_id}")
-async def delete_chat_session(chat_id: str, req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Delete a chat session"""
-    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
-    
-    try:
-        # Enforce subscription access (PAYWALL)
-        await enforce_subscription(req, user_id)
-        
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
-        
-        success = await chat_service.delete_chat_session(chat_id, user_id)
-        
-        if not success:
-            raise HTTPException(status_code=404, detail="Chat session not found")
-        
-        logger.info(f"Chat session {chat_id} deleted for user {user_id}")
-        return {"status": "deleted", "chat_id": chat_id}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Failed to delete chat session")
+        raise HTTPException(status_code=500, detail="Failed to clear chat messages")
 
 
 @app.get("/metrics")
