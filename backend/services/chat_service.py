@@ -138,24 +138,22 @@ class ChatService:
             return []
     
     async def clear_single_chat_messages(self, user_id: str) -> bool:
-        """Soft delete all messages from user's single chat session (keep session and preserve data)"""
+        """HARD DELETE all messages from user's single chat session (remove from database completely)"""
         try:
             # Get user's single chat session
             chat_id = await self.get_or_create_single_chat(user_id)
             
-            # Soft delete all non-deleted messages from the chat
-            self.supabase.table("messages").update({
-                "deleted_at": datetime.utcnow().isoformat()
-            }).eq("chat_session_id", chat_id).is_("deleted_at", "null").execute()
+            # HARD DELETE all messages from the chat (remove from database completely)
+            self.supabase.table("messages").delete().eq("chat_session_id", chat_id).execute()
             
             # Update chat session timestamp
             self.supabase.table("chat_sessions").update({
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("id", chat_id).eq("user_id", user_id).execute()
             
-            logger.info(f"Soft deleted all messages from single chat {chat_id} for user {user_id}")
+            logger.info(f"HARD DELETED all messages from single chat {chat_id} for user {user_id}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to soft delete messages for user {user_id}: {e}")
+            logger.error(f"Failed to hard delete messages for user {user_id}: {e}")
             return False
