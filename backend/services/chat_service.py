@@ -101,8 +101,8 @@ class ChatService:
             
             session_data = session_result.data[0]
             
-            # Get all messages from separate messages table
-            messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).order("created_at").execute()
+            # Get all non-deleted messages from separate messages table
+            messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).is_("deleted_at", "null").order("created_at").execute()
             messages = [Message(role=msg["role"], content=msg["content"]) for msg in messages_result.data]
             
             logger.info(f"Retrieved single chat session {chat_id} with {len(messages)} messages for user {user_id}")
@@ -121,16 +121,16 @@ class ChatService:
             return None
     
     async def get_single_chat_messages(self, user_id: str) -> List[Message]:
-        """Get all messages from user's single chat session"""
+        """Get all non-deleted messages from user's single chat session"""
         try:
             # Get or create user's single chat session
             chat_id = await self.get_or_create_single_chat(user_id)
             
-            # Get all messages
-            messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).order("created_at").execute()
+            # Get all non-deleted messages (exclude soft deleted)
+            messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).is_("deleted_at", "null").order("created_at").execute()
             messages = [Message(role=msg["role"], content=msg["content"]) for msg in messages_result.data]
             
-            logger.info(f"Retrieved {len(messages)} messages from single chat for user {user_id}")
+            logger.info(f"Retrieved {len(messages)} non-deleted messages from single chat for user {user_id}")
             return messages
             
         except Exception as e:
@@ -138,22 +138,24 @@ class ChatService:
             return []
     
     async def clear_single_chat_messages(self, user_id: str) -> bool:
-        """Clear all messages from user's single chat session (keep session)"""
+        """Soft delete all messages from user's single chat session (keep session and preserve data)"""
         try:
             # Get user's single chat session
             chat_id = await self.get_or_create_single_chat(user_id)
             
-            # Delete all messages from the chat
-            self.supabase.table("messages").delete().eq("chat_session_id", chat_id).execute()
+            # Soft delete all non-deleted messages from the chat
+            self.supabase.table("messages").update({
+                "deleted_at": datetime.utcnow().isoformat()
+            }).eq("chat_session_id", chat_id).is_("deleted_at", "null").execute()
             
             # Update chat session timestamp
             self.supabase.table("chat_sessions").update({
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("id", chat_id).eq("user_id", user_id).execute()
             
-            logger.info(f"Cleared all messages from single chat {chat_id} for user {user_id}")
+            logger.info(f"Soft deleted all messages from single chat {chat_id} for user {user_id}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to clear messages for user {user_id}: {e}")
+            logger.error(f"Failed to soft delete messages for user {user_id}: {e}")
             return False
