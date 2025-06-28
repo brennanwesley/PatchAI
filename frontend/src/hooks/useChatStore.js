@@ -185,6 +185,18 @@ export function ChatProvider({ children }) {
     }
   }, [user, loadMessages]);
 
+  // SINGLE CHAT: Update chat title
+  const updateChatTitle = useCallback(async (chatId, newTitle) => {
+    try {
+      console.log('📝 UPDATE_CHAT_TITLE: Updating single chat title to:', newTitle);
+      dispatch({ type: 'SET_CHAT_TITLE', payload: newTitle });
+      console.log('✅ UPDATE_CHAT_TITLE: Title updated successfully');
+    } catch (error) {
+      console.error('❌ UPDATE_CHAT_TITLE: Failed to update title:', error);
+      dispatch({ type: 'SET_ERROR', payload: error.message });
+    }
+  }, []);
+
   // Context value for single chat architecture
   const value = {
     // State
@@ -197,7 +209,8 @@ export function ChatProvider({ children }) {
     // Actions
     sendMessage,
     loadMessages,
-    clearMessages
+    clearMessages,
+    updateChatTitle
   };
 
   return (
@@ -223,11 +236,27 @@ export function useChatStore() {
     throw new Error('useChatStore must be used within a ChatProvider');
   }
   
+  // Get last message timestamp for sidebar display
+  const getLastMessageTime = () => {
+    if (context.messages.length === 0) return null;
+    const lastMessage = context.messages[context.messages.length - 1];
+    return lastMessage.timestamp || new Date().toISOString();
+  };
+
+  // Create single chat object with proper timestamp
+  const singleChatObject = {
+    id: 'single-chat',
+    title: context.chatTitle,
+    messages: context.messages,
+    createdAt: getLastMessageTime(),
+    lastMessage: context.messages.length > 0 ? context.messages[context.messages.length - 1].content?.substring(0, 50) + '...' : null
+  };
+
   // Map single chat API to multi-chat API for backward compatibility
   return {
     // Single chat state mapped to multi-chat expectations
-    chats: context.messages.length > 0 ? [{ id: 'single-chat', title: context.chatTitle, messages: context.messages }] : [],
-    activeChat: context.messages.length > 0 ? { id: 'single-chat', title: context.chatTitle, messages: context.messages } : null,
+    chats: context.messages.length > 0 || context.chatTitle !== 'Chat Session' ? [singleChatObject] : [],
+    activeChat: context.messages.length > 0 || context.chatTitle !== 'Chat Session' ? singleChatObject : null,
     messages: context.messages,
     isLoading: context.isLoading,
     isTyping: context.isTyping,
@@ -238,26 +267,26 @@ export function useChatStore() {
     loadMessages: context.loadMessages,
     clearMessages: context.clearMessages,
     
-    // Deprecated multi-chat functions (no-ops for single chat)
+    // FIXED: Properly implement sidebar functions for single chat
     createNewChat: () => {
-      console.warn('⚠️ createNewChat() called but single chat mode active');
-      return Promise.resolve();
+      console.log('🆕 CREATE_NEW_CHAT: Clearing messages to start fresh (single chat mode)');
+      return context.clearMessages();
     },
     selectChat: () => {
-      console.warn('⚠️ selectChat() called but single chat mode active');
+      console.log('🔄 SELECT_CHAT: Single chat already selected');
       return Promise.resolve();
     },
-    updateChatTitle: () => {
-      console.warn('⚠️ updateChatTitle() called but single chat mode active');
-      return Promise.resolve();
+    updateChatTitle: (chatId, newTitle) => {
+      console.log('📝 UPDATE_CHAT_TITLE: Updating single chat title via compatibility layer');
+      return context.updateChatTitle(chatId, newTitle);
     },
     deleteChat: () => {
-      console.warn('⚠️ deleteChat() called but single chat mode active');
-      return Promise.resolve();
+      console.log('🗑️ DELETE_CHAT: Clearing messages to start over (single chat mode)');
+      return context.clearMessages();
     },
     loadChats: () => {
-      console.warn('⚠️ loadChats() called but single chat mode active');
-      return Promise.resolve();
+      console.log('📂 LOAD_CHATS: Loading single chat session');
+      return context.loadMessages();
     }
   };
 }
