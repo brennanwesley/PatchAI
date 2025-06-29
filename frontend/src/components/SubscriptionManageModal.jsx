@@ -231,9 +231,6 @@ export default function SubscriptionManageModal({ isOpen, onClose, subscription 
                     Cancel your subscription and downgrade to free tier
                   </p>
                 </div>
-                <div className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                  Coming Soon
-                </div>
               </div>
             </button>
           </div>
