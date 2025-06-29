@@ -460,9 +460,19 @@ export function ChatProvider({ children }) {
       });
     }
     
+    // 🔍 DEBUG: Log all conditions for message loading
+    console.log('🔍 LOAD_DEBUG: Checking message load conditions:', {
+      hasUser: !!user,
+      messagesLength: state.messages.length,
+      isLoading: state.loading,
+      initialLoadDone: initialLoadRef.current,
+      shouldLoad: user && state.messages.length === 0 && !state.loading && !initialLoadRef.current
+    });
+    
     // Only load messages if we have a user, no messages, not loading, and haven't loaded yet
     if (user && state.messages.length === 0 && !state.loading && !initialLoadRef.current) {
       initialLoadRef.current = true;
+      console.log('✅ LOAD_DEBUG: Conditions met - calling loadMessages()');
       logger.info('Performing initial message load for authenticated user');
       loadMessages();
     } else if (!user) {
@@ -471,6 +481,12 @@ export function ChatProvider({ children }) {
       dispatch({ type: 'CLEAR_MESSAGES' });
     } else if (state.loading) {
       console.log('⏳ LOADING_GUARD: Skipping loadMessages - already loading');
+    } else if (initialLoadRef.current) {
+      console.log('🔄 LOAD_DEBUG: Skipping loadMessages - initial load already done');
+    } else if (state.messages.length > 0) {
+      console.log('📝 LOAD_DEBUG: Skipping loadMessages - messages already exist:', state.messages.length);
+    } else {
+      console.log('❓ LOAD_DEBUG: Skipping loadMessages - unknown condition');
     }
   }, [user]); // ✅ FIXED - Remove loadMessages dependency to break infinite loop
 
