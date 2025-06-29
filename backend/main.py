@@ -224,46 +224,57 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
             structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
             raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
         
-        # COMPREHENSIVE DEBUGGING: Analyze incoming message payload
-        logger.info(f"🔍 CONTEXT_DEBUG: Received {len(request.messages)} total messages from frontend")
+        # CRITICAL FIX: Retrieve full conversation history from database
+        logger.info(f"🔍 CONTEXT_DEBUG: Received {len(request.messages)} new messages from frontend")
         
-        # Analyze message composition
-        user_messages = [msg for msg in request.messages if msg.role == 'user']
-        assistant_messages = [msg for msg in request.messages if msg.role == 'assistant']
+        # Get the user's single chat session with full message history
+        try:
+            chat_session = await chat_service.get_chat_session(user_id)
+            stored_messages = chat_session.get('messages', []) if chat_session else []
+            logger.info(f"📚 CONTEXT_DEBUG: Retrieved {len(stored_messages)} stored messages from database")
+        except Exception as e:
+            logger.error(f"❌ CONTEXT_DEBUG: Failed to retrieve chat history: {e}")
+            stored_messages = []
         
-        logger.info(f"📊 CONTEXT_DEBUG: Message breakdown - User: {len(user_messages)}, Assistant: {len(assistant_messages)}")
-        logger.info(f"📝 CONTEXT_DEBUG: Message roles: {[msg.role for msg in request.messages]}")
+        # Combine stored messages with new message for complete context
+        # The new message should be the last one in request.messages
+        new_message = request.messages[-1] if request.messages else None
         
-        # Log first few characters of each message for debugging
-        for i, msg in enumerate(request.messages):
-            preview = msg.content[:50] + "..." if len(msg.content) > 50 else msg.content
-            logger.info(f"📄 CONTEXT_DEBUG: Message {i+1} ({msg.role}): {preview}")
+        if new_message:
+            logger.info(f"📝 CONTEXT_DEBUG: New message ({new_message.role}): {new_message.content[:50]}...")
         
-        # Validate message structure
-        if len(request.messages) == 1:
-            logger.warning(f"⚠️ CONTEXT_DEBUG: Only 1 message received - this indicates context loss!")
-        else:
-            logger.info(f"✅ CONTEXT_DEBUG: Multiple messages received - context preservation appears active")
-        
-        # Log OpenAI request
-        structured_logger.log_openai_request(correlation_id, "gpt-4", len(request.messages))
-        
-        # Prepare messages for OpenAI (include system prompt)
+        # Prepare complete conversation history for OpenAI
         openai_messages = [{"role": "system", "content": get_system_prompt()}]
         
-        # Add conversation history with detailed logging
-        logger.info(f"🤖 OPENAI_DEBUG: Preparing {len(request.messages)} messages for OpenAI (plus system prompt)")
-        
-        for i, message in enumerate(request.messages):
+        # Add all stored messages first
+        for i, stored_msg in enumerate(stored_messages):
             openai_messages.append({
-                "role": message.role,
-                "content": message.content
+                "role": stored_msg["role"],
+                "content": stored_msg["content"]
             })
-            logger.info(f"🔄 OPENAI_DEBUG: Added message {i+1} to OpenAI payload ({message.role})")
+            logger.info(f"🔄 CONTEXT_DEBUG: Added stored message {i+1} ({stored_msg['role']})")
         
-        # Final OpenAI payload validation
-        total_openai_messages = len(openai_messages)
-        logger.info(f"🎯 OPENAI_DEBUG: Final payload contains {total_openai_messages} messages (1 system + {total_openai_messages-1} conversation)")
+        # Add the new message
+        if new_message:
+            openai_messages.append({
+                "role": new_message.role,
+                "content": new_message.content
+            })
+            logger.info(f"🆕 CONTEXT_DEBUG: Added new message ({new_message.role})")
+        
+        # Final context validation
+        total_conversation_messages = len(openai_messages) - 1  # Exclude system prompt
+        total_stored = len(stored_messages)
+        total_new = 1 if new_message else 0
+        
+        logger.info(f"🎯 CONTEXT_DEBUG: Complete context prepared:")
+        logger.info(f"   - System prompt: 1 message")
+        logger.info(f"   - Stored history: {total_stored} messages")
+        logger.info(f"   - New message: {total_new} messages")
+        logger.info(f"   - Total to OpenAI: {len(openai_messages)} messages")
+        
+        # Log OpenAI request with correct count
+        structured_logger.log_openai_request(correlation_id, "gpt-4", total_conversation_messages)
         
         # Send to OpenAI
         response = openai_client.chat.completions.create(
