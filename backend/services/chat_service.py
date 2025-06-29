@@ -30,15 +30,30 @@ class ChatService:
         return "New Chat"
     
     async def get_or_create_single_chat(self, user_id: str) -> str:
-        """Get user's single chat session or create it if it doesn't exist"""
+        """Get user's single chat session or create it if it doesn't exist - ENFORCES SINGLE SESSION PER USER"""
         try:
-            # Check if user already has a chat session - ORDER BY created_at DESC to get most recent
-            existing_result = self.supabase.table("chat_sessions").select("id").eq("user_id", user_id).order("created_at", desc=True).execute()
+            # Get all user's chat sessions ordered by most recent first
+            sessions_result = self.supabase.table("chat_sessions").select("id, created_at").eq("user_id", user_id).order("created_at", desc=True).execute()
             
-            if existing_result.data:
-                chat_id = existing_result.data[0]["id"]
-                logger.info(f"Found existing chat session {chat_id} for user {user_id} (most recent)")
-                return chat_id
+            if sessions_result.data:
+                # SINGLE CHAT ARCHITECTURE: Use the most recent session
+                primary_session_id = sessions_result.data[0]["id"]
+                
+                # CLEANUP: If multiple sessions exist (architecture violation), clean up old ones
+                if len(sessions_result.data) > 1:
+                    logger.warning(f"🚨 ARCHITECTURE VIOLATION: User {user_id} has {len(sessions_result.data)} chat sessions, should have only 1")
+                    
+                    # Delete old sessions (keep only the most recent)
+                    old_session_ids = [session["id"] for session in sessions_result.data[1:]]
+                    for old_session_id in old_session_ids:
+                        # Hard delete messages from old session
+                        self.supabase.table("messages").delete().eq("chat_session_id", old_session_id).execute()
+                        # Hard delete old session
+                        self.supabase.table("chat_sessions").delete().eq("id", old_session_id).execute()
+                        logger.info(f"🗑️ CLEANUP: Deleted old chat session {old_session_id} for user {user_id}")
+                
+                logger.info(f"Found existing single chat session {primary_session_id} for user {user_id}")
+                return primary_session_id
             
             # Create new single chat session
             chat_id = str(uuid.uuid4())
