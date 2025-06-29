@@ -123,7 +123,7 @@ async def get_user_profile(user_id: str = Depends(verify_jwt_token)):
         
         # Get user profile from database
         profile_response = supabase.table("user_profiles").select(
-            "id, email, display_name, phone, company, referral_code, referred_by, "
+            "id, email, display_name, company, referral_code, referred_by, "
             "subscription_status, plan_tier, created_at, updated_at"
         ).eq("id", user_id).single().execute()
         
@@ -169,8 +169,6 @@ async def update_user_profile(
         
         if request.display_name is not None:
             update_data["display_name"] = request.display_name
-        if request.phone is not None:
-            update_data["phone"] = request.phone
         if request.company is not None:
             update_data["company"] = request.company
         
@@ -185,7 +183,7 @@ async def update_user_profile(
         
         # Get updated profile
         profile_response = supabase.table("user_profiles").select(
-            "id, email, display_name, phone, company, referral_code, referred_by, "
+            "id, email, display_name, company, referral_code, referred_by, "
             "subscription_status, plan_tier, created_at, updated_at"
         ).eq("id", user_id).single().execute()
         

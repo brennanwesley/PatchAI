@@ -102,19 +102,12 @@ class SignupWithReferralRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     """Request model for updating user profile"""
     display_name: Optional[str] = None
-    phone: Optional[str] = None
     company: Optional[str] = None
     
     @validator('display_name')
     def validate_display_name(cls, v):
         if v and len(v.strip()) > 100:
             raise ValueError('Display name too long (max 100 characters)')
-        return v.strip() if v else None
-    
-    @validator('phone')
-    def validate_phone(cls, v):
-        if v and len(v.strip()) > 20:
-            raise ValueError('Phone number too long (max 20 characters)')
         return v.strip() if v else None
     
     @validator('company')
@@ -148,7 +141,6 @@ class ProfileResponse(BaseModel):
     id: str
     email: str
     display_name: Optional[str] = None
-    phone: Optional[str] = None
     company: Optional[str] = None
     referral_code: Optional[str] = None
     referred_by: Optional[str] = None
