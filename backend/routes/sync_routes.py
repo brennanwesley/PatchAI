@@ -8,8 +8,8 @@ from fastapi.responses import JSONResponse
 import logging
 from datetime import datetime
 from services.subscription_sync_service import subscription_sync_service
-from core.auth import get_current_user
-from models.schemas import User
+from core.auth import verify_jwt_token
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -17,13 +17,13 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 @router.post("/subscription/{email}")
 async def sync_user_subscription(
     email: str,
-    current_user: User = Depends(get_current_user)
+    current_user_id: str = Depends(verify_jwt_token)
 ):
     """
     Enhanced subscription sync endpoint with comprehensive error handling
     """
     try:
-        logger.info(f"🔄 Manual sync requested for {email} by {current_user.email}")
+        logger.info(f"🔄 Manual sync requested for {email} by user {current_user_id}")
         
         # Perform comprehensive sync
         result = await subscription_sync_service.comprehensive_user_sync(email)
@@ -66,7 +66,7 @@ async def sync_user_subscription(
 @router.post("/proactive-check")
 async def run_proactive_sync_check(
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user)
+    current_user_id: str = Depends(verify_jwt_token)
 ):
     """
     Run proactive sync check to find and fix sync issues
@@ -125,7 +125,7 @@ async def sync_service_health():
         )
 
 @router.get("/status")
-async def sync_service_status(current_user: User = Depends(get_current_user)):
+async def sync_service_status(current_user_id: str = Depends(verify_jwt_token)):
     """
     Get detailed sync service status and statistics
     """
