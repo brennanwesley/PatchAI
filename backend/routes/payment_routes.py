@@ -497,6 +497,17 @@ async def sync_subscription_manually(
         
         logger.info(f"🔄 SYNC ENDPOINT: Manual subscription sync requested by {user_email} for: {target_email}")
         
+        # Debug webhook handler availability
+        try:
+            logger.info(f"🔍 SYNC ENDPOINT: Webhook handler available: {webhook_handler is not None}")
+            logger.info(f"🔍 SYNC ENDPOINT: Webhook handler methods: {dir(webhook_handler)}")
+            if hasattr(webhook_handler, 'sync_subscription_from_stripe'):
+                logger.info(f"✅ SYNC ENDPOINT: sync_subscription_from_stripe method exists")
+            else:
+                logger.error(f"❌ SYNC ENDPOINT: sync_subscription_from_stripe method NOT found")
+        except Exception as debug_e:
+            logger.error(f"🚨 SYNC ENDPOINT: Webhook handler debug failed: {str(debug_e)}")
+        
         # Validate Stripe configuration before attempting sync
         try:
             stripe_secret = os.getenv('STRIPE_SECRET_KEY')
@@ -518,7 +529,12 @@ async def sync_subscription_manually(
         # Attempt the sync with comprehensive error handling
         try:
             logger.info(f"🔧 SYNC ENDPOINT: Calling webhook handler sync for {target_email}")
+            logger.info(f"🔧 SYNC ENDPOINT: Webhook handler type: {type(webhook_handler)}")
+            logger.info(f"🔧 SYNC ENDPOINT: About to call sync_subscription_from_stripe method")
+            
             success = await webhook_handler.sync_subscription_from_stripe(target_email)
+            
+            logger.info(f"🔧 SYNC ENDPOINT: Sync method returned: {success} (type: {type(success)})")
             
             if success:
                 logger.info(f"✅ SYNC ENDPOINT: Sync successful for {target_email}")
