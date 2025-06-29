@@ -34,6 +34,8 @@ class StripeWebhookHandler:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        # Import here to avoid circular imports
+        self._monitor = None
     
     async def verify_webhook_signature(self, payload: bytes, signature: str) -> dict:
         """
@@ -442,10 +444,38 @@ class StripeWebhookHandler:
             self.logger.error(f" Traceback: {traceback.format_exc()}")
             raise
     
+    @property
+    def monitor(self):
+        """Lazy load monitor to avoid circular imports"""
+        if self._monitor is None:
+            try:
+                from services.subscription_monitor import subscription_monitor
+                self._monitor = subscription_monitor
+            except ImportError:
+                self.logger.warning("Subscription monitor not available")
+                self._monitor = None
+        return self._monitor
+    
     async def process_webhook_event(self, event: dict):
-        """Process webhook event based on type"""
+        """Process webhook event based on type with monitoring integration"""
         event_type = event['type']
         self.logger.info(f" Processing webhook event: {event_type}")
+        
+        # Extract user email for monitoring (if available)
+        user_email = None
+        try:
+            if event_type in ['customer.subscription.created', 'customer.subscription.updated']:
+                customer_id = event['data']['object'].get('customer')
+                if customer_id:
+                    customer = stripe.Customer.retrieve(customer_id)
+                    user_email = customer.email
+            elif event_type == 'invoice.payment_succeeded':
+                customer_id = event['data']['object'].get('customer')
+                if customer_id:
+                    customer = stripe.Customer.retrieve(customer_id)
+                    user_email = customer.email
+        except Exception as e:
+            self.logger.debug(f"Could not extract user email for monitoring: {str(e)}")
         
         try:
             if event_type == 'checkout.session.completed':
@@ -468,6 +498,11 @@ class StripeWebhookHandler:
             self.logger.error(f" Event data: {event}")
             import traceback
             self.logger.error(f" Traceback: {traceback.format_exc()}")
+            
+            # Record failure for monitoring and potential recovery
+            if self.monitor and user_email:
+                self.monitor.record_webhook_failure(event_type, user_email, str(e))
+            
             raise
     
     async def handle_checkout_session_completed(self, session: dict):

@@ -35,6 +35,8 @@ from services.supabase_service import supabase
 from services.chat_service import ChatService
 from routes.payment_routes import router as payment_router
 from routes.referral_routes import router as referral_router
+from routes.monitoring_routes import router as monitoring_router
+from services.background_monitor import background_monitor
 
 # Initialize structured logging
 structured_logger = StructuredLogger()
@@ -97,6 +99,21 @@ except Exception as e:
     logger.warning(f"Stripe configuration warning: {str(e)}")
 
 logger.info("PatchAI Backend initialized with enterprise architecture and chat service")
+
+# Application lifecycle events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background services on startup"""
+    logger.info("🚀 Starting background monitoring service...")
+    await background_monitor.start()
+    logger.info("✅ Background services initialized")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean shutdown of background services"""
+    logger.info("🛑 Shutting down background services...")
+    await background_monitor.stop()
+    logger.info("✅ Background services stopped")
 
 
 def get_client_ip(request: Request) -> str:
@@ -534,6 +551,7 @@ async def delete_user_history(user_id: str, req: Request):
 
 app.include_router(payment_router)
 app.include_router(referral_router)
+app.include_router(monitoring_router)
 
 if __name__ == "__main__":
     import uvicorn
