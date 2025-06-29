@@ -32,12 +32,12 @@ class ChatService:
     async def get_or_create_single_chat(self, user_id: str) -> str:
         """Get user's single chat session or create it if it doesn't exist"""
         try:
-            # Check if user already has a chat session
-            existing_result = self.supabase.table("chat_sessions").select("id").eq("user_id", user_id).execute()
+            # Check if user already has a chat session - ORDER BY created_at DESC to get most recent
+            existing_result = self.supabase.table("chat_sessions").select("id").eq("user_id", user_id).order("created_at", desc=True).execute()
             
             if existing_result.data:
                 chat_id = existing_result.data[0]["id"]
-                logger.info(f"Found existing chat session {chat_id} for user {user_id}")
+                logger.info(f"Found existing chat session {chat_id} for user {user_id} (most recent)")
                 return chat_id
             
             # Create new single chat session
@@ -91,6 +91,7 @@ class ChatService:
         try:
             # Get or create user's single chat session
             chat_id = await self.get_or_create_single_chat(user_id)
+            logger.info(f"🔍 CHAT_DEBUG: Using chat_id {chat_id} for user {user_id}")
             
             # Get session metadata
             session_result = self.supabase.table("chat_sessions").select("*").eq("id", chat_id).eq("user_id", user_id).execute()
@@ -100,9 +101,17 @@ class ChatService:
                 return None
             
             session_data = session_result.data[0]
+            logger.info(f"🔍 CHAT_DEBUG: Found session metadata for {chat_id}")
             
             # Get all non-deleted messages from separate messages table
             messages_result = self.supabase.table("messages").select("*").eq("chat_session_id", chat_id).is_("deleted_at", "null").order("created_at").execute()
+            logger.info(f"🔍 CHAT_DEBUG: Raw messages query returned {len(messages_result.data)} records for chat_session_id {chat_id}")
+            
+            # Debug log the first few messages
+            for i, msg_data in enumerate(messages_result.data[:3]):
+                preview = msg_data['content'][:50] + "..." if len(msg_data['content']) > 50 else msg_data['content']
+                logger.info(f"🔍 CHAT_DEBUG: Raw message {i+1} ({msg_data['role']}): {preview}")
+            
             messages = [Message(role=msg["role"], content=msg["content"]) for msg in messages_result.data]
             
             logger.info(f"Retrieved single chat session {chat_id} with {len(messages)} messages for user {user_id}")
