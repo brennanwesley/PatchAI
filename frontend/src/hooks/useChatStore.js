@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ChatService } from '../services/chatService';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,94 +6,262 @@ import { v4 as uuidv4 } from 'uuid';
 // Create context
 const ChatContext = createContext();
 
+// Helper function to generate debug info
+const createDebugInfo = (type, data = {}) => ({
+  _debug: {
+    type,
+    timestamp: new Date().toISOString(),
+    timestampMs: Date.now(),
+    ...data
+  }
+});
+
 // Initial state for single chat architecture
 const initialState = {
   messages: [],
   isLoading: false,
   isTyping: false,
   error: null,
-  chatTitle: 'Chat Session'
+  chatTitle: 'Chat Session',
+  _debug: createDebugInfo('INITIAL_STATE')
 };
 
 // DEBUG: Track state resets
 let stateResetCount = 0;
 console.log('🏗️ CHAT_STORE_DEBUG: useChatStore.js loaded, initialState created');
 
-// Reducer for single chat architecture
+// Enhanced reducer with detailed logging
 function chatReducer(state, action) {
-  console.log(`🔄 REDUCER_DEBUG: Action '${action.type}' called with current state.messages.length: ${state.messages.length}`);
-  
-  switch (action.type) {
-    case 'LOAD_MESSAGES':
-      console.log('📥 LOAD_MESSAGES: Loading', action.payload?.length || 0, 'messages');
-      console.log('📥 LOAD_MESSAGES_DEBUG: Previous state.messages.length:', state.messages.length);
-      console.log('📥 LOAD_MESSAGES_DEBUG: New payload length:', action.payload?.length || 0);
-      const newState = {
+  const actionId = Math.random().toString(36).substring(2, 9);
+  const actionDebug = {
+    actionId,
+    type: action.type,
+    payload: action.payload,
+    timestamp: Date.now(),
+    prevState: {
+      messagesCount: state.messages.length,
+      isLoading: state.isLoading,
+      isTyping: state.isTyping
+    }
+  };
+
+  console.group(`🎬 Action: ${action.type} [${actionId}]`);
+  console.log('📦 Action Payload:', action.payload);
+  console.log('📊 Previous State:', {
+    messagesCount: state.messages.length,
+    messages: state.messages.map(m => ({
+      id: m.id,
+      role: m.role,
+      preview: m.content?.substring(0, 30) + (m.content?.length > 30 ? '...' : '')
+    })),
+    isLoading: state.isLoading,
+    isTyping: state.isTyping
+  });
+
+  let newState;
+  try {
+    switch (action.type) {
+    case 'LOAD_MESSAGES': {
+      const payload = Array.isArray(action.payload) ? action.payload : [];
+      console.log(`📥 Loading ${payload.length} messages`);
+      
+      newState = {
         ...state,
-        messages: Array.isArray(action.payload) ? action.payload : [],
+        messages: payload,
         isLoading: false,
-        error: null
+        error: null,
+        _debug: createDebugInfo('STATE_UPDATE', {
+          action: 'LOAD_MESSAGES',
+          messageCount: payload.length,
+          actionId
+        })
       };
-      console.log('📥 LOAD_MESSAGES_DEBUG: Returning state with messages.length:', newState.messages.length);
-      return newState;
+      
+      console.log('📥 Loaded Messages:', {
+        count: newState.messages.length,
+        messages: newState.messages.map(m => ({
+          id: m.id,
+          role: m.role,
+          preview: m.content?.substring(0, 50) + (m.content?.length > 50 ? '...' : '')
+        }))
+      });
+      break;
+    }
     
-    case 'ADD_MESSAGE':
-      console.log('➕ ADD_MESSAGE: Adding message:', action.payload.role);
-      return {
-        ...state,
-        messages: [...state.messages, action.payload]
+    case 'ADD_MESSAGE': {
+      const message = {
+        ...action.payload,
+        _debug: createDebugInfo('MESSAGE_ADDED', { actionId })
       };
+      
+      console.log(`➕ Adding ${message.role} message:`, {
+        id: message.id,
+        content: message.content?.substring(0, 50) + (message.content?.length > 50 ? '...' : ''),
+        timestamp: message.timestamp || new Date().toISOString()
+      });
+      
+      newState = {
+        ...state,
+        messages: [...state.messages, message],
+        _debug: createDebugInfo('STATE_UPDATE', {
+          action: 'ADD_MESSAGE',
+          messageId: message.id,
+          role: message.role,
+          actionId
+        })
+      };
+      break;
+    }
     
     case 'CLEAR_MESSAGES':
-      console.log('🗑️ CLEAR_MESSAGES: Clearing all messages');
-      return {
+      console.log('🗑️ Clearing all messages');
+      newState = {
         ...state,
-        messages: []
+        messages: [],
+        _debug: createDebugInfo('STATE_UPDATE', {
+          action: 'CLEAR_MESSAGES',
+          actionId
+        })
       };
+      break;
     
     case 'SET_LOADING':
-      return {
+      console.log(`⏳ Setting loading: ${action.payload}`);
+      newState = {
         ...state,
-        isLoading: action.payload
+        isLoading: action.payload,
+        _debug: createDebugInfo('STATE_UPDATE', {
+          action: 'SET_LOADING',
+          loading: action.payload,
+          actionId
+        })
       };
+      break;
     
     case 'SET_TYPING':
-      return {
+      console.log(`⌨️ Setting typing: ${action.payload}`);
+      newState = {
         ...state,
-        isTyping: action.payload
+        isTyping: action.payload,
+        _debug: createDebugInfo('STATE_UPDATE', {
+          action: 'SET_TYPING',
+          isTyping: action.payload,
+          actionId
+        })
       };
+      break;
     
     case 'SET_ERROR':
-      return {
+      console.error('❌ Error:', action.payload);
+      newState = {
         ...state,
         error: action.payload,
         isLoading: false,
-        isTyping: false
+        isTyping: false,
+        _debug: createDebugInfo('STATE_UPDATE', {
+          action: 'SET_ERROR',
+          error: action.payload?.message || String(action.payload),
+          actionId
+        })
       };
+      break;
     
     case 'SET_CHAT_TITLE':
-      return {
+      console.log(`🏷️ Setting chat title: ${action.payload}`);
+      newState = {
         ...state,
-        chatTitle: action.payload
+        chatTitle: action.payload,
+        _debug: createDebugInfo('STATE_UPDATE', {
+          action: 'SET_CHAT_TITLE',
+          title: action.payload,
+          actionId
+        })
       };
+      break;
     
     // REMOVED: All multi-chat cases (CREATE_CHAT, SWITCH_CHAT, UPDATE_CHAT_TITLE, DELETE_CHAT, UPDATE_CHAT)
     // Single chat architecture doesn't need these operations
     
     default:
-      return state;
+      console.warn(`⚠️ Unknown action type: ${action.type}`);
+      newState = state;
+    }
+
+    console.log('🆕 New State:', {
+      messagesCount: newState.messages.length,
+      messages: newState.messages.map(m => ({
+        id: m.id,
+        role: m.role,
+        preview: m.content?.substring(0, 30) + (m.content?.length > 30 ? '...' : '')
+      })),
+      isLoading: newState.isLoading,
+      isTyping: newState.isTyping,
+      _debug: newState._debug
+    });
+
+    return newState;
+  } catch (error) {
+    console.error('❌ Reducer Error:', {
+      action,
+      error: error.message,
+      stack: error.stack,
+      state: {
+        messagesCount: state.messages.length,
+        isLoading: state.isLoading,
+        isTyping: state.isTyping
+      }
+    });
+    return state;
+  } finally {
+    console.groupEnd();
   }
 }
 
-export function ChatProvider({ children }) {
-  console.log('🏗️ PROVIDER_DEBUG: ChatProvider component mounting/re-mounting');
-  stateResetCount++;
-  console.log(`🏗️ PROVIDER_DEBUG: This is mount #${stateResetCount}`);
+function useMountTracking(name) {
+  const mountCount = useRef(0);
+  const isMounted = useRef(false);
+  const mountId = useRef(Math.random().toString(36).substring(2, 8));
   
+  useEffect(() => {
+    mountCount.current++;
+    isMounted.current = true;
+    const mountTime = Date.now();
+    
+    console.group(`🏗️ ${name} Mount #${mountCount.current} [${mountId.current}]`);
+    console.log('Mount Time:', new Date().toISOString());
+    console.log('Mount ID:', mountId.current);
+    console.trace('Mount Trace');
+    console.groupEnd();
+    
+    return () => {
+      isMounted.current = false;
+      const uptime = Date.now() - mountTime;
+      console.group(`♻️ ${name} Unmount [${mountId.current}]`);
+      console.log('Uptime:', `${(uptime / 1000).toFixed(2)}s`);
+      console.log('Unmount Time:', new Date().toISOString());
+      console.trace('Unmount Trace');
+      console.groupEnd();
+    };
+  }, [name]);
+  
+  return { mountCount, isMounted, mountId };
+}
+
+export function ChatProvider({ children }) {
+  const { mountCount, isMounted, mountId } = useMountTracking('ChatProvider');
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { user } = useAuth();
   
-  console.log('🏗️ PROVIDER_DEBUG: useReducer initialized with state.messages.length:', state.messages.length);
+  console.log(`🏗️ ChatProvider Render #${mountCount.current} [${mountId.current}]`, {
+    isMounted: isMounted.current,
+    state: {
+      messagesCount: state.messages.length,
+      isLoading: state.isLoading,
+      isTyping: state.isTyping,
+      error: state.error ? 'Error present' : 'No error'
+    },
+    user: user ? 'Authenticated' : 'Not authenticated'
+  });
 
   // SINGLE CHAT: Load messages for single chat session (STABLE)
   const loadMessages = useCallback(async () => {
