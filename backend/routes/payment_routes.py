@@ -490,10 +490,10 @@ async def sync_subscription_manually(
     request: SyncSubscriptionRequest,
     current_user: dict = Depends(verify_jwt_token)
 ):
-    """Enhanced manual subscription sync using the new comprehensive sync service"""
+    """Simple, direct subscription sync - queries Stripe and updates database"""
     try:
         correlation_id = str(uuid.uuid4())
-        logger.info(f"🔄 [SYNC-{correlation_id}] Enhanced manual subscription sync requested by user {current_user.get('email', 'unknown')}")
+        logger.info(f"🔄 [SYNC-{correlation_id}] Direct subscription sync requested by user {current_user.get('email', 'unknown')}")
         
         # Determine target email
         target_email = request.email if request.email else current_user.get('email')
@@ -512,46 +512,174 @@ async def sync_subscription_manually(
         
         logger.info(f"🎯 [SYNC-{correlation_id}] Target email: {target_email}")
         
-        # Use the enhanced sync service
-        sync_result = await subscription_sync_service.comprehensive_user_sync(target_email)
+        # Step 1: Get user profile from database
+        logger.info(f"📋 [SYNC-{correlation_id}] Fetching user profile for {target_email}")
+        user_response = supabase.table("user_profiles").select(
+            "id, email, stripe_customer_id, subscription_status, plan_tier"
+        ).eq("email", target_email).single().execute()
         
-        if sync_result["success"]:
-            logger.info(f"✅ [SYNC-{correlation_id}] Enhanced subscription sync successful for {target_email}")
+        if not user_response.data:
+            logger.error(f"❌ [SYNC-{correlation_id}] User profile not found for {target_email}")
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "success": False,
+                    "message": "User profile not found",
+                    "error_code": "USER_NOT_FOUND",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        user_profile = user_response.data
+        user_id = user_profile['id']
+        stripe_customer_id = user_profile.get('stripe_customer_id')
+        
+        logger.info(f"👤 [SYNC-{correlation_id}] User found - ID: {user_id}, Stripe Customer: {bool(stripe_customer_id)}")
+        
+        if not stripe_customer_id:
+            logger.warning(f"⚠️ [SYNC-{correlation_id}] No Stripe customer ID found for {target_email}")
             return JSONResponse(
                 status_code=200,
                 content={
                     "success": True,
-                    "message": sync_result.get("message", "Subscription synchronized successfully"),
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "correlation_id": correlation_id,
-                    "synced_subscriptions": sync_result.get("synced_subscriptions", 0)
+                    "message": "No Stripe customer found - user may not have a subscription",
+                    "subscription_status": "inactive",
+                    "plan_tier": "free",
+                    "timestamp": datetime.utcnow().isoformat()
                 }
             )
-        else:
-            logger.warning(f"⚠️ [SYNC-{correlation_id}] Enhanced subscription sync failed for {target_email}: {sync_result.get('error', 'Unknown error')}")
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "success": False,
-                    "message": sync_result.get("error", "Subscription sync failed"),
-                    "error_code": sync_result.get("error_code", "SYNC_FAILED"),
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "correlation_id": correlation_id
-                }
-            )
+        
+        # Step 2: Query Stripe for active subscriptions
+        logger.info(f"💳 [SYNC-{correlation_id}] Querying Stripe for customer {stripe_customer_id}")
+        stripe_subscriptions = stripe.Subscription.list(
+            customer=stripe_customer_id,
+            status='active',
+            limit=10
+        )
+        
+        logger.info(f"📊 [SYNC-{correlation_id}] Found {len(stripe_subscriptions.data)} active Stripe subscriptions")
+        
+        if not stripe_subscriptions.data:
+            # No active subscriptions in Stripe - update user to inactive
+            logger.info(f"🔄 [SYNC-{correlation_id}] No active Stripe subscriptions - updating user to inactive")
             
+            update_response = supabase.table("user_profiles").update({
+                "subscription_status": "inactive",
+                "plan_tier": "free",
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", user_id).execute()
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": "No active subscription found - updated to free tier",
+                    "subscription_status": "inactive",
+                    "plan_tier": "free",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            )
+        
+        # Step 3: Process the most recent active subscription
+        latest_subscription = stripe_subscriptions.data[0]
+        subscription_id = latest_subscription.id
+        subscription_status = latest_subscription.status
+        
+        # Determine plan tier from Stripe price ID
+        plan_tier = "standard"  # Default
+        if latest_subscription.items and latest_subscription.items.data:
+            price_id = latest_subscription.items.data[0].price.id
+            standard_price_id = os.getenv("STRIPE_STANDARD_PRICE_ID")
+            if price_id == standard_price_id:
+                plan_tier = "standard"
+        
+        logger.info(f"✅ [SYNC-{correlation_id}] Active subscription found - Status: {subscription_status}, Plan: {plan_tier}")
+        
+        # Step 4: Update user profile
+        logger.info(f"💾 [SYNC-{correlation_id}] Updating user profile with subscription data")
+        profile_update = supabase.table("user_profiles").update({
+            "subscription_status": "active" if subscription_status == "active" else "inactive",
+            "plan_tier": plan_tier,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", user_id).execute()
+        
+        # Step 5: Ensure user_subscriptions record exists
+        logger.info(f"🔍 [SYNC-{correlation_id}] Checking user_subscriptions table")
+        
+        # Get subscription plan ID
+        plan_response = supabase.table("subscription_plans").select(
+            "id, name"
+        ).eq("name", "Standard Plan").single().execute()
+        
+        plan_id = None
+        if plan_response.data:
+            plan_id = plan_response.data['id']
+            logger.info(f"📋 [SYNC-{correlation_id}] Found plan ID: {plan_id}")
+        
+        # Check if user_subscriptions record exists
+        existing_sub = supabase.table("user_subscriptions").select(
+            "id, subscription_id"
+        ).eq("user_id", user_id).eq("subscription_id", subscription_id).execute()
+        
+        if not existing_sub.data and plan_id:
+            # Create user_subscriptions record
+            logger.info(f"➕ [SYNC-{correlation_id}] Creating user_subscriptions record")
+            
+            current_period_end = None
+            if latest_subscription.current_period_end:
+                current_period_end = datetime.fromtimestamp(latest_subscription.current_period_end).isoformat()
+            
+            sub_insert = supabase.table("user_subscriptions").insert({
+                "user_id": user_id,
+                "plan_id": plan_id,
+                "subscription_id": subscription_id,
+                "status": subscription_status,
+                "current_period_start": datetime.fromtimestamp(latest_subscription.current_period_start).isoformat() if latest_subscription.current_period_start else None,
+                "current_period_end": current_period_end,
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat()
+            }).execute()
+            
+            logger.info(f"✅ [SYNC-{correlation_id}] Created user_subscriptions record")
+        
+        logger.info(f"🎉 [SYNC-{correlation_id}] Subscription sync completed successfully for {target_email}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Subscription synchronized successfully",
+                "subscription_status": "active" if subscription_status == "active" else "inactive",
+                "plan_tier": plan_tier,
+                "stripe_subscription_id": subscription_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "correlation_id": correlation_id
+            }
+        )
+        
     except HTTPException:
         # Re-raise HTTP exceptions (like 401)
         raise
+    except stripe.error.StripeError as e:
+        logger.error(f"💳 [SYNC] Stripe API error: {str(e)}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "message": "Unable to connect to payment system. Please try again later.",
+                "error_code": "STRIPE_ERROR",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        )
     except Exception as e:
-        logger.error(f"❌ [SYNC] Enhanced manual subscription sync exception: {str(e)}")
+        logger.error(f"❌ [SYNC] Direct subscription sync exception: {str(e)}")
         logger.error(f"❌ [SYNC] Exception traceback: {traceback.format_exc()}")
         return JSONResponse(
             status_code=500,
             content={
                 "success": False,
-                "message": "An unexpected error occurred. Please try again or contact support.",
-                "error_code": "UNEXPECTED_ERROR",
+                "message": f"Sync failed: {str(e)}",
+                "error_code": "SYNC_ERROR",
                 "timestamp": datetime.utcnow().isoformat()
             }
         )
