@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import stripe
 from services.supabase_service import supabase
-from core.stripe_config import get_stripe_config
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +24,7 @@ class SubscriptionSyncService:
     
     def __init__(self):
         self.supabase = supabase
-        stripe_config = get_stripe_config()
-        stripe.api_key = stripe_config.secret_key
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
         self.max_retry_attempts = 3
         self.sync_cooldown_minutes = 5
         
