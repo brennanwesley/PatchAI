@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ChatService } from '../services/chatService';
 import { v4 as uuidv4 } from 'uuid';
@@ -272,31 +272,31 @@ export function useChat() {
   return context;
 }
 
-// BACKWARD COMPATIBILITY: Export useChatStore for existing components
+// BACKWARD COMPATIBILITY: Export useChatStore for existing components (MEMOIZED)
 export function useChatStore() {
   const context = useContext(ChatContext);
   if (!context) {
     throw new Error('useChatStore must be used within a ChatProvider');
   }
   
-  // Get last message timestamp for sidebar display
-  const getLastMessageTime = () => {
+  // MEMOIZED: Get last message timestamp for sidebar display
+  const getLastMessageTime = useMemo(() => {
     if (context.messages.length === 0) return null;
     const lastMessage = context.messages[context.messages.length - 1];
     return lastMessage.timestamp || new Date().toISOString();
-  };
+  }, [context.messages]);
 
-  // Create single chat object with proper timestamp
-  const singleChatObject = {
+  // MEMOIZED: Create single chat object with proper timestamp
+  const singleChatObject = useMemo(() => ({
     id: 'single-chat',
     title: context.chatTitle,
     messages: context.messages,
-    createdAt: getLastMessageTime(),
+    createdAt: getLastMessageTime,
     lastMessage: context.messages.length > 0 ? context.messages[context.messages.length - 1].content?.substring(0, 50) + '...' : null
-  };
+  }), [context.chatTitle, context.messages, getLastMessageTime]);
 
-  // Map single chat API to multi-chat API for backward compatibility
-  return {
+  // MEMOIZED: Map single chat API to multi-chat API for backward compatibility
+  return useMemo(() => ({
     // Single chat state mapped to multi-chat expectations
     chats: context.messages.length > 0 || context.chatTitle !== 'Chat Session' ? [singleChatObject] : [],
     activeChat: context.messages.length > 0 || context.chatTitle !== 'Chat Session' ? singleChatObject : null,
@@ -324,12 +324,12 @@ export function useChatStore() {
       return context.updateChatTitle(chatId, newTitle);
     },
     deleteChat: () => {
-      console.log('🗑️ DELETE_CHAT: Clearing messages to start over (single chat mode)');
+      console.log('🗑️ DELETE_CHAT: Clearing messages for single chat');
       return context.clearMessages();
     },
     loadChats: () => {
       console.log('📂 LOAD_CHATS: Loading single chat session');
       return context.loadMessages();
     }
-  };
+  }), [context.messages, context.chatTitle, context.isLoading, context.isTyping, context.error, singleChatObject, context.sendMessage, context.loadMessages, context.clearMessages, context.updateChatTitle]);
 }
