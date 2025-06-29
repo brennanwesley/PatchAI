@@ -229,8 +229,8 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         
         # Get the user's single chat session with full message history
         try:
-            chat_session = await chat_service.get_chat_session(user_id)
-            stored_messages = chat_session.get('messages', []) if chat_session else []
+            chat_session = await chat_service.get_single_chat_session(user_id)
+            stored_messages = chat_session.messages if chat_session else []
             logger.info(f"📚 CONTEXT_DEBUG: Retrieved {len(stored_messages)} stored messages from database")
         except Exception as e:
             logger.error(f"❌ CONTEXT_DEBUG: Failed to retrieve chat history: {e}")
@@ -246,13 +246,13 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         # Prepare complete conversation history for OpenAI
         openai_messages = [{"role": "system", "content": get_system_prompt()}]
         
-        # Add all stored messages first
+        # Add all stored messages first (Message objects with .role and .content attributes)
         for i, stored_msg in enumerate(stored_messages):
             openai_messages.append({
-                "role": stored_msg["role"],
-                "content": stored_msg["content"]
+                "role": stored_msg.role,
+                "content": stored_msg.content
             })
-            logger.info(f"🔄 CONTEXT_DEBUG: Added stored message {i+1} ({stored_msg['role']})")
+            logger.info(f"🔄 CONTEXT_DEBUG: Added stored message {i+1} ({stored_msg.role})")
         
         # Add the new message
         if new_message:
