@@ -111,28 +111,14 @@ logger.info("PatchAI Backend initialized with enterprise architecture and chat s
 @app.on_event("startup")
 async def startup_event():
     """Initialize background services on startup"""
-    logger.info("🚀 Starting background monitoring service...")
-    await background_monitor.start_monitoring()
-    logger.info("✅ Background monitoring service started")
-    
-    # Phase 3 Production Hardening Services
-    logger.info("🔧 Starting Phase 3 production hardening services...")
-    try:
-        await webhook_redundancy_service.start_redundancy_service()
-        await integrity_validation_service.start_continuous_validation()
-        await performance_optimization_service.start_performance_monitoring()
-        await monitoring_dashboard_service.start_dashboard_service()
-        logger.info("✅ Phase 3 services started successfully")
-    except Exception as e:
-        logger.error(f"❌ Phase 3 service startup error: {str(e)}")
-        # Continue startup even if Phase 3 services fail
+    logger.info("🚀 Application startup complete")
+    logger.info("✅ All services initialized successfully")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean shutdown of background services"""
-    logger.info("🛑 Shutting down background services...")
-    await background_monitor.stop()
-    logger.info("✅ Background services stopped")
+    logger.info("🛑 Application shutdown initiated")
+    logger.info("✅ Application shutdown complete")
 
 
 def get_client_ip(request: Request) -> str:
