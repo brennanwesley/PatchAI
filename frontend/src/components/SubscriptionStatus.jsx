@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useSubscription } from '../hooks/useSubscription';
 import { createPortalSession, syncSubscriptionManually } from '../services/paymentService';
+import SubscriptionManageModal from './SubscriptionManageModal';
 
 export default function SubscriptionStatus() {
   const { 
@@ -13,18 +14,11 @@ export default function SubscriptionStatus() {
   
   const [isCreatingPortal, setIsCreatingPortal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
 
   const handleManageSubscription = async () => {
-    try {
-      setIsCreatingPortal(true);
-      const { url } = await createPortalSession(window.location.href);
-      window.location.href = url;
-    } catch (error) {
-      console.error('Error opening customer portal:', error);
-      alert('Failed to open subscription management. Please try again.');
-    } finally {
-      setIsCreatingPortal(false);
-    }
+    // Show the modal instead of trying to create portal session
+    setIsManageModalOpen(true);
   };
 
   const handleSyncSubscription = async () => {
@@ -163,6 +157,7 @@ export default function SubscriptionStatus() {
   };
 
   return (
+    <>
     <div className={`border rounded-lg p-4 ${getStatusColor(subscription?.status)}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-2">
@@ -207,5 +202,13 @@ export default function SubscriptionStatus() {
         </button>
       </div>
     </div>
+    
+    {/* Subscription Management Modal */}
+    <SubscriptionManageModal
+      isOpen={isManageModalOpen}
+      onClose={() => setIsManageModalOpen(false)}
+      subscription={subscription}
+    />
+    </>
   );
 }
