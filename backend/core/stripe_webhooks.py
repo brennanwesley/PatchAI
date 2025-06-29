@@ -355,7 +355,7 @@ class StripeWebhookHandler:
             # Get referral relationship to check status and calculate subscription month
             referral_relationship = supabase.table("referral_relationships").select(
                 "id, created_at, status"
-            ).eq("referring_user_id", referring_user_id).eq("referred_user_id", referred_user_id).single().execute()
+            ).eq("referrer_user_id", referring_user_id).eq("referee_user_id", referred_user_id).single().execute()
             
             if not referral_relationship.data or referral_relationship.data.get('status') != 'active':
                 self.logger.warning(f" Referral relationship not active for users {referring_user_id} -> {referred_user_id}")
@@ -380,8 +380,8 @@ class StripeWebhookHandler:
             # Create referral reward record
             reward_data = {
                 "id": str(uuid.uuid4()),
-                "referring_user_id": referring_user_id,
-                "referred_user_id": referred_user_id,
+                "referrer_user_id": referring_user_id,
+                "referee_user_id": referred_user_id,
                 "payment_transaction_id": transaction_id,
                 "reward_amount": reward_amount,
                 "reward_percentage": reward_percentage,

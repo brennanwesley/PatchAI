@@ -171,8 +171,8 @@ class ReferralSystemTester:
         
         # Verify relationship was created
         relationship = supabase.table("referral_relationships").select("*").eq(
-            "referring_user_id", referring_user_id
-        ).eq("referred_user_id", referred_user_id).single().execute()
+            "referrer_user_id", referring_user_id
+        ).eq("referee_user_id", referred_user_id).single().execute()
         
         assert relationship.data, "Referral relationship not found in database"
         assert relationship.data["status"] == "active", "Referral relationship should be active"
@@ -259,8 +259,8 @@ class ReferralSystemTester:
                 
             # Delete test referral relationships
             for user_id in self.test_users:
-                supabase.table("referral_relationships").delete().eq("referring_user_id", user_id).execute()
-                supabase.table("referral_relationships").delete().eq("referred_user_id", user_id).execute()
+                supabase.table("referral_relationships").delete().eq("referrer_user_id", user_id).execute()
+                supabase.table("referral_relationships").delete().eq("referee_user_id", user_id).execute()
             
             logger.info("✅ Test data cleanup completed")
             

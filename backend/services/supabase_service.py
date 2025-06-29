@@ -79,8 +79,8 @@ async def record_referral_reward(reward_data: dict) -> bool:
     try:
         reward_record = {
             "id": reward_data.get("id"),
-            "referring_user_id": reward_data.get("referring_user_id"),
-            "referred_user_id": reward_data.get("referred_user_id"),
+            "referrer_user_id": reward_data.get("referrer_user_id"),
+            "referee_user_id": reward_data.get("referee_user_id"),
             "payment_transaction_id": reward_data.get("payment_transaction_id"),
             "reward_amount": reward_data.get("reward_amount"),
             "reward_percentage": reward_data.get("reward_percentage"),

@@ -143,8 +143,10 @@ class ReferralService:
                 return False
             
             # Check if referred user already has a referral relationship
-            existing_relationship = self.supabase.table("referral_relationships").select("id").eq(
-                "referred_user_id", referred_user_id
+            existing_relationship = self.supabase.table("referral_relationships").select(
+                "referee_user_id"
+            ).eq(
+                "referee_user_id", referred_user_id
             ).execute()
             
             if existing_relationship.data:
@@ -154,9 +156,9 @@ class ReferralService:
             # Create referral relationship record
             relationship_data = {
                 "id": str(uuid.uuid4()),
-                "referring_user_id": referring_user_id,
-                "referred_user_id": referred_user_id,
-                "referral_code_used": referral_code,
+                "referrer_user_id": referring_user_id,
+                "referee_user_id": referred_user_id,
+                "referral_code": referral_code,
                 "created_at": datetime.utcnow().isoformat(),
                 "status": "active"
             }
@@ -224,12 +226,12 @@ class ReferralService:
             
             # Get list of users this user has referred
             referrals_made = self.supabase.table("referral_relationships").select(
-                "referred_user_id, referral_code_used, created_at, status"
-            ).eq("referring_user_id", user_id).order("created_at", desc=True).execute()
+                "referee_user_id, referral_code, created_at, status"
+            ).eq("referrer_user_id", user_id).order("created_at", desc=True).execute()
             
             if referrals_made.data:
                 # Get referred users' email addresses
-                referred_user_ids = [r['referred_user_id'] for r in referrals_made.data]
+                referred_user_ids = [r['referee_user_id'] for r in referrals_made.data]
                 referred_users = self.supabase.table("user_profiles").select(
                     "id, email"
                 ).in_("id", referred_user_ids).execute()
@@ -240,9 +242,9 @@ class ReferralService:
                 # Build referrals list with email information
                 for referral in referrals_made.data:
                     referral_info["referrals_made"].append({
-                        "referred_user_id": referral['referred_user_id'],
-                        "referred_user_email": email_lookup.get(referral['referred_user_id'], 'Unknown'),
-                        "referral_code_used": referral['referral_code_used'],
+                        "referred_user_id": referral['referee_user_id'],
+                        "referred_user_email": email_lookup.get(referral['referee_user_id'], 'Unknown'),
+                        "referral_code_used": referral['referral_code'],
                         "created_at": referral['created_at'],
                         "status": referral['status']
                     })
@@ -262,11 +264,11 @@ class ReferralService:
         """
         try:
             # Get all referral rewards for this user
-            rewards = self.supabase.table("referral_rewards").select(
+            referral_rewards = self.supabase.table("referral_rewards").select(
                 "*"
-            ).eq("referring_user_id", user_id).order("created_at", desc=True).execute()
+            ).eq("referrer_user_id", user_id).order("created_at", desc=True).execute()
             
-            if not rewards.data:
+            if not referral_rewards.data:
                 return {
                     "user_id": user_id,
                     "total_rewards": 0,
