@@ -6,6 +6,7 @@ Stripe payment processing endpoints for subscription management
 import logging
 import stripe
 from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 from supabase import create_client, Client
@@ -64,6 +65,9 @@ class SubscriptionStatusResponse(BaseModel):
 
 class SyncSubscriptionRequest(BaseModel):
     email: Optional[str] = None
+
+class CancellationRequest(BaseModel):
+    reason: Optional[str] = None
 
 @router.post("/create-checkout-session", response_model=CheckoutResponse)
 async def create_checkout_session(
@@ -689,3 +693,62 @@ async def sync_user_subscription(
     except Exception as e:
         logger.error(f"💥 USER SYNC: Failed for {email}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+@router.post("/request-cancellation")
+async def request_subscription_cancellation(
+    request: CancellationRequest,
+    current_user: dict = Depends(verify_jwt_token)
+):
+    """
+    Log a subscription cancellation request from the user.
+    This does not actually cancel the Stripe subscription - just logs the intent.
+    """
+    try:
+        user_id = current_user.get('id')
+        user_email = current_user.get('email')
+        
+        if not user_id or not user_email:
+            raise HTTPException(status_code=400, detail="User information not available")
+        
+        logger.info(f"🚫 Cancellation request from user: {user_email}")
+        
+        # Get current subscription info
+        user_profile = supabase.table("user_profiles").select(
+            "subscription_status, plan_tier, stripe_customer_id"
+        ).eq("id", user_id).execute()
+        
+        if not user_profile.data:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        profile = user_profile.data[0]
+        
+        # Insert cancellation request
+        cancellation_data = {
+            "user_id": user_id,
+            "email": user_email,
+            "subscription_status": profile.get("subscription_status", "unknown"),
+            "plan_tier": profile.get("plan_tier", "unknown"),
+            "stripe_customer_id": profile.get("stripe_customer_id"),
+            "reason": request.reason,
+            "requested_at": datetime.utcnow().isoformat(),
+            "processed": False
+        }
+        
+        result = supabase.table("subscription_cancellation_requests").insert(cancellation_data).execute()
+        
+        if result.data:
+            logger.info(f"✅ Cancellation request logged for {user_email}")
+            return {
+                "success": True,
+                "message": "Cancellation request has been logged. We're sorry to see you go!",
+                "request_id": result.data[0]["id"],
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to log cancellation request")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 CANCELLATION REQUEST: Failed for {current_user.get('email', 'unknown')}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process cancellation request: {str(e)}")
