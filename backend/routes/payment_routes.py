@@ -481,33 +481,95 @@ async def sync_subscription_manually(
     request: SyncSubscriptionRequest,
     current_user: dict = Depends(verify_jwt_token)
 ):
-    """Manually sync a user's subscription from Stripe - for fixing stuck subscriptions"""
+    """Manually sync a user's subscription from Stripe - enhanced with robust error handling"""
     try:
-        # Only allow admin users or the user themselves to sync
+        # Get user information with validation
         user_id = current_user.get("sub")
         user_email = current_user.get("email")
         
-        # If email is provided in request, use that (admin feature)
+        if not user_id or not user_email:
+            logger.error(f"🚨 SYNC ENDPOINT: Invalid user token data - user_id: {user_id}, email: {user_email}")
+            raise HTTPException(status_code=401, detail="Invalid user authentication")
+        
+        # Determine target email (admin feature or self-sync)
         target_email = request.email if hasattr(request, 'email') and request.email else user_email
         
-        logger.info(f"🔄 Manual subscription sync requested for: {target_email}")
+        logger.info(f"🔄 SYNC ENDPOINT: Manual subscription sync requested by {user_email} for: {target_email}")
         
-        success = await webhook_handler.sync_subscription_from_stripe(target_email)
-        
-        if success:
-            return {
-                "success": True,
-                "message": f"Successfully synced subscription for {target_email}"
-            }
-        else:
+        # Validate Stripe configuration before attempting sync
+        try:
+            stripe_secret = os.getenv('STRIPE_SECRET_KEY')
+            if not stripe_secret:
+                logger.error(f"🚨 SYNC ENDPOINT: Stripe secret key not configured")
+                return {
+                    "success": False,
+                    "message": "Payment system configuration error. Please contact support.",
+                    "error_code": "STRIPE_CONFIG_ERROR"
+                }
+        except Exception as config_e:
+            logger.error(f"🚨 SYNC ENDPOINT: Stripe config validation failed: {str(config_e)}")
             return {
                 "success": False,
-                "message": f"No active subscription found for {target_email}"
+                "message": "Payment system configuration error. Please contact support.",
+                "error_code": "STRIPE_CONFIG_ERROR"
+            }
+        
+        # Attempt the sync with comprehensive error handling
+        try:
+            logger.info(f"🔧 SYNC ENDPOINT: Calling webhook handler sync for {target_email}")
+            success = await webhook_handler.sync_subscription_from_stripe(target_email)
+            
+            if success:
+                logger.info(f"✅ SYNC ENDPOINT: Sync successful for {target_email}")
+                return {
+                    "success": True,
+                    "message": f"Successfully synced subscription for {target_email}",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            else:
+                logger.warning(f"⚠️ SYNC ENDPOINT: Sync returned false for {target_email}")
+                return {
+                    "success": False,
+                    "message": f"No active subscription found for {target_email}. If you just completed payment, please wait a few minutes and try again.",
+                    "error_code": "NO_SUBSCRIPTION_FOUND",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                
+        except stripe.error.StripeError as stripe_e:
+            logger.error(f"🚨 SYNC ENDPOINT: Stripe API error: {str(stripe_e)}")
+            return {
+                "success": False,
+                "message": "Unable to connect to payment system. Please try again in a few minutes.",
+                "error_code": "STRIPE_API_ERROR",
+                "timestamp": datetime.utcnow().isoformat()
             }
             
+        except Exception as sync_e:
+            logger.error(f"🚨 SYNC ENDPOINT: Sync process error: {str(sync_e)}")
+            import traceback
+            logger.error(f"🚨 SYNC ENDPOINT: Sync traceback: {traceback.format_exc()}")
+            return {
+                "success": False,
+                "message": "Sync process encountered an error. Please try again or contact support.",
+                "error_code": "SYNC_PROCESS_ERROR",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 401)
+        raise
     except Exception as e:
-        logger.error(f"💥 Manual sync error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Manual sync failed")
+        logger.error(f"💥 SYNC ENDPOINT: Unexpected error: {str(e)}")
+        import traceback
+        logger.error(f"💥 SYNC ENDPOINT: Full traceback: {traceback.format_exc()}")
+        
+        # Return a proper error response instead of letting it bubble up
+        return {
+            "success": False,
+            "message": "An unexpected error occurred. Please try again or contact support.",
+            "error_code": "UNEXPECTED_ERROR",
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 @router.post("/sync-all-subscriptions")
 async def sync_all_subscriptions(current_user: dict = Depends(verify_jwt_token)):

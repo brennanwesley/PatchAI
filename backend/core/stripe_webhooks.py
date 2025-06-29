@@ -519,46 +519,121 @@ class StripeWebhookHandler:
             raise
     
     async def sync_subscription_from_stripe(self, user_email: str):
-        """Manually sync a user's subscription from Stripe - useful for fixing stuck subscriptions"""
+        """Manually sync a user's subscription from Stripe - robust version with multiple fallback strategies"""
         try:
-            self.logger.info(f" Manual sync for user: {user_email}")
+            self.logger.info(f"🔄 SYNC: Starting manual sync for user: {user_email}")
             
-            # Find user in database
-            user_response = supabase.table("user_profiles").select("*").eq("email", user_email).execute()
-            if not user_response.data:
-                self.logger.error(f" User not found: {user_email}")
-                return False
+            # Find user in database with comprehensive error handling
+            try:
+                user_response = supabase.table("user_profiles").select("*").eq("email", user_email).execute()
+                if not user_response.data:
+                    self.logger.error(f"❌ SYNC: User not found in database: {user_email}")
+                    return False
+                    
+                user = user_response.data[0]
+                user_id = user['id']
+                stripe_customer_id = user.get('stripe_customer_id')
                 
-            user = user_response.data[0]
-            user_id = user['id']
-            stripe_customer_id = user.get('stripe_customer_id')
+                self.logger.info(f"✅ SYNC: Found user {user_id} with customer ID: {stripe_customer_id}")
+                
+            except Exception as e:
+                self.logger.error(f"❌ SYNC: Database query failed: {str(e)}")
+                return False
             
             if not stripe_customer_id:
-                self.logger.error(f" No Stripe customer ID for user: {user_email}")
+                self.logger.error(f"❌ SYNC: No Stripe customer ID for user: {user_email}")
                 return False
             
-            # Get active subscriptions from Stripe
-            subscriptions = stripe.Subscription.list(customer=stripe_customer_id, status='active')
-            
-            if not subscriptions.data:
-                self.logger.info(f" No active subscriptions found for {user_email}")
+            # Get ALL subscriptions from Stripe (active, past_due, trialing, etc.)
+            try:
+                self.logger.info(f"🔍 SYNC: Querying Stripe for customer: {stripe_customer_id}")
+                
+                # Check multiple subscription statuses
+                all_subscriptions = []
+                for status in ['active', 'past_due', 'trialing', 'incomplete']:
+                    subs = stripe.Subscription.list(customer=stripe_customer_id, status=status)
+                    all_subscriptions.extend(subs.data)
+                    self.logger.info(f"🔍 SYNC: Found {len(subs.data)} {status} subscriptions")
+                
+                if not all_subscriptions:
+                    self.logger.warning(f"⚠️ SYNC: No subscriptions found for customer {stripe_customer_id}")
+                    # Try to get recent payments as fallback
+                    try:
+                        payments = stripe.PaymentIntent.list(customer=stripe_customer_id, limit=10)
+                        recent_successful = [p for p in payments.data if p.status == 'succeeded']
+                        if recent_successful:
+                            self.logger.info(f"💰 SYNC: Found {len(recent_successful)} recent successful payments")
+                            # If we have recent payments but no subscriptions, this indicates a webhook failure
+                            self.logger.error(f"🚨 SYNC: WEBHOOK FAILURE DETECTED - Recent payments exist but no subscriptions processed")
+                    except Exception as payment_e:
+                        self.logger.error(f"❌ SYNC: Could not check recent payments: {str(payment_e)}")
+                    return False
+                
+                # Process the most recent subscription
+                subscription = max(all_subscriptions, key=lambda s: s.created)
+                self.logger.info(f"✅ SYNC: Processing most recent subscription: {subscription.id} (status: {subscription.status})")
+                
+            except Exception as e:
+                self.logger.error(f"❌ SYNC: Stripe API query failed: {str(e)}")
                 return False
             
-            # Process the first active subscription
-            subscription = subscriptions.data[0]
-            self.logger.info(f" Processing subscription: {subscription.id}")
-            
-            # Simulate webhook event processing
-            await self.handle_customer_subscription_created(subscription)
-            
-            self.logger.info(f" Manual sync completed for {user_email}")
-            return True
+            # Enhanced subscription processing with validation
+            try:
+                self.logger.info(f"🔧 SYNC: Processing subscription data...")
+                
+                # Validate subscription has required data
+                if not subscription.get('items') or not subscription['items'].get('data'):
+                    self.logger.error(f"❌ SYNC: Subscription missing items data: {subscription.id}")
+                    return False
+                
+                price_id = subscription['items']['data'][0]['price']['id']
+                self.logger.info(f"💰 SYNC: Subscription price ID: {price_id}")
+                
+                # Check if subscription already exists in database
+                existing_sub = supabase.table("user_subscriptions").select("id").eq(
+                    "stripe_subscription_id", subscription.id
+                ).execute()
+                
+                if existing_sub.data:
+                    self.logger.info(f"ℹ️ SYNC: Subscription already exists in database, updating status...")
+                    # Update existing subscription
+                    await self.handle_customer_subscription_updated(subscription)
+                else:
+                    self.logger.info(f"🆕 SYNC: Creating new subscription record...")
+                    # Create new subscription
+                    await self.handle_customer_subscription_created(subscription)
+                
+                # Verify the sync worked by checking database
+                verification = supabase.table("user_profiles").select(
+                    "subscription_status, plan_tier"
+                ).eq("id", user_id).single().execute()
+                
+                if verification.data:
+                    new_status = verification.data.get('subscription_status')
+                    new_tier = verification.data.get('plan_tier')
+                    self.logger.info(f"✅ SYNC: Verification - Status: {new_status}, Tier: {new_tier}")
+                    
+                    if new_status != 'inactive' and new_tier != 'none':
+                        self.logger.info(f"🎉 SYNC: Manual sync completed successfully for {user_email}")
+                        return True
+                    else:
+                        self.logger.error(f"❌ SYNC: Sync failed - user still inactive after processing")
+                        return False
+                else:
+                    self.logger.error(f"❌ SYNC: Could not verify sync results")
+                    return False
+                
+            except Exception as e:
+                self.logger.error(f"❌ SYNC: Subscription processing failed: {str(e)}")
+                import traceback
+                self.logger.error(f"❌ SYNC: Processing traceback: {traceback.format_exc()}")
+                return False
             
         except Exception as e:
-            self.logger.error(f" Error in manual sync: {str(e)}")
-            self.logger.error(f" User email: {user_email}")
+            self.logger.error(f"💥 SYNC: Unexpected error in manual sync: {str(e)}")
+            self.logger.error(f"💥 SYNC: User email: {user_email}")
             import traceback
-            self.logger.error(f" Traceback: {traceback.format_exc()}")
+            self.logger.error(f"💥 SYNC: Full traceback: {traceback.format_exc()}")
             return False
 
 # Global instance
