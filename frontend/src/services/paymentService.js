@@ -107,8 +107,17 @@ export async function syncSubscriptionManually(email = null) {
     
     console.log('✅ Session found, user:', session.user?.email);
     
+    // Use current user's email if no specific email provided
+    const targetEmail = email || session.user?.email;
+    console.log('🎯 Target email for sync:', targetEmail);
+    
+    if (!targetEmail) {
+      console.error('❌ No email available for sync');
+      throw new Error('No email available for subscription sync');
+    }
+    
     const requestBody = {
-      email: email, // Optional: sync specific user (admin feature)
+      email: targetEmail, // Use current user's email or provided email
     };
     
     console.log('📤 Request details:');
