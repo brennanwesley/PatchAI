@@ -171,9 +171,9 @@ class ReferralService:
                 logger.error(f"Failed to create referral relationship: {relationship_data}")
                 return False
             
-            # Update referred user's profile with referring user ID
+            # Update referred user's profile with referral code (FIXED: was storing user ID)
             profile_update = self.supabase.table("user_profiles").update({
-                "referred_by": referring_user_id,
+                "referred_by": referral_code,
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("id", referred_user_id).execute()
             
