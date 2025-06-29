@@ -15,6 +15,8 @@ export default function SubscriptionStatus() {
   const [isCreatingPortal, setIsCreatingPortal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [syncMessage, setSyncMessage] = useState(null);
+  const [syncMessageType, setSyncMessageType] = useState('success'); // 'success', 'error', 'info'
 
   const handleManageSubscription = async () => {
     // Show the modal instead of trying to create portal session
@@ -37,14 +39,20 @@ export default function SubscriptionStatus() {
       // Provide detailed feedback based on result
       if (result && result.success) {
         const message = result.message || 'Subscription synced successfully!';
-        alert(`✅ Success: ${message}`);
+        setSyncMessage(message);
+        setSyncMessageType('success');
       } else if (result && result.success === false) {
         const message = result.message || 'Sync completed, but no changes were needed.';
-        alert(`ℹ️ Info: ${message}`);
+        setSyncMessage(message);
+        setSyncMessageType('info');
       } else {
         // Fallback for unexpected response format
-        alert('✅ Sync completed. Please check your subscription status.');
+        setSyncMessage('Sync completed. Please check your subscription status.');
+        setSyncMessageType('success');
       }
+      
+      // Clear message after 5 seconds
+      setTimeout(() => setSyncMessage(null), 5000);
       
     } catch (error) {
       console.error('❌ Sync failed:', error);
@@ -64,7 +72,11 @@ export default function SubscriptionStatus() {
         errorMessage = `Sync failed: ${error.message}`;
       }
       
-      alert(`❌ ${errorMessage}`);
+      setSyncMessage(errorMessage);
+      setSyncMessageType('error');
+      
+      // Clear error message after 8 seconds (longer for errors)
+      setTimeout(() => setSyncMessage(null), 8000);
       
       // Still try to refresh data in case there were partial updates
       try {
@@ -158,6 +170,30 @@ export default function SubscriptionStatus() {
 
   return (
     <>
+      {/* Sync Message Notification */}
+      {syncMessage && (
+        <div className={`mb-4 p-3 rounded-lg border ${
+          syncMessageType === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+          syncMessageType === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
+          'bg-blue-50 border-blue-200 text-blue-800'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">
+                {syncMessageType === 'success' ? '✅' : syncMessageType === 'error' ? '❌' : 'ℹ️'}
+              </span>
+              <span className="text-sm font-medium">{syncMessage}</span>
+            </div>
+            <button
+              onClick={() => setSyncMessage(null)}
+              className="text-current opacity-70 hover:opacity-100"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+      
     <div className={`border rounded-lg p-4 ${getStatusColor(subscription?.status)}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-2">

@@ -138,23 +138,42 @@ export async function syncSubscriptionManually(email = null) {
     console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Response error:', errorText);
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { message: await response.text() };
+      }
       
-      // Provide specific error messages based on status code
+      console.error('❌ Sync failed:', {
+        status: response.status,
+        error: errorData
+      });
+      
+      // Provide specific error messages based on status code and error data
       if (response.status === 401 || response.status === 403) {
-        throw new Error('Authentication failed - please log out and log back in');
+        throw new Error('Please log out and log back in to refresh your session');
       } else if (response.status === 404) {
-        throw new Error('Sync endpoint not found - please contact support');
-      } else if (response.status >= 500) {
-        throw new Error('Server error - please try again later');
+        throw new Error('User account not found - please contact support');
+      } else if (response.status === 503) {
+        throw new Error('Payment system temporarily unavailable - please try again in a few minutes');
+      } else if (errorData.error_code === 'STRIPE_ERROR') {
+        throw new Error('Unable to connect to payment system - please try again later');
+      } else if (errorData.message) {
+        throw new Error(errorData.message);
       } else {
-        throw new Error(`Sync failed (${response.status}): ${errorText}`);
+        throw new Error(`Sync failed with status ${response.status} - please try again or contact support`);
       }
     }
 
     const result = await response.json();
-    console.log('✅ Sync response:', result);
+    console.log('✅ Sync completed successfully:', {
+      success: result.success,
+      status: result.subscription_status,
+      plan: result.plan_tier,
+      message: result.message
+    });
+    
     return result;
     
   } catch (error) {
@@ -165,8 +184,8 @@ export async function syncSubscriptionManually(email = null) {
     });
     
     // Re-throw with more user-friendly message if needed
-    if (error.message.includes('fetch')) {
-      throw new Error('Network error - please check your connection and try again');
+    if (error.message.includes('fetch') || error.name === 'TypeError') {
+      throw new Error('Network connection failed - please check your internet and try again');
     }
     
     throw error;
