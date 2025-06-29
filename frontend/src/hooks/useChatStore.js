@@ -296,30 +296,35 @@ export function ChatProvider({ children }) {
   
   // SINGLE CHAT: Load messages for single chat session (OPTIMIZED)
   const loadMessages = useCallback(async () => {
-    // Enhanced loading guard with cooldown (5 seconds between loads)
+    console.log('🚀 LOAD_DEBUG: loadMessages function called');
     const now = Date.now();
     const timeSinceLastLoad = now - lastLoadTimeRef.current;
     const COOLDOWN_PERIOD = 5000; // 5 seconds
     
     if (isLoadingRef.current) {
+      console.log('⏸️ LOAD_DEBUG: Skipping - already loading');
       logger.debug('Skipping duplicate loadMessages call - already loading');
       return;
     }
     
     if (timeSinceLastLoad < COOLDOWN_PERIOD) {
+      console.log(`⏸️ LOAD_DEBUG: Skipping - cooldown period (${timeSinceLastLoad}ms < ${COOLDOWN_PERIOD}ms)`);
       logger.debug(`Skipping loadMessages - cooldown period (${timeSinceLastLoad}ms < ${COOLDOWN_PERIOD}ms)`);
       return;
     }
     
     try {
+      console.log('🔄 LOAD_DEBUG: Starting message load process');
       isLoadingRef.current = true;
       lastLoadTimeRef.current = now;
       
       logger.info('Loading messages for single chat session');
       dispatch({ type: 'SET_LOADING', payload: true });
       
+      console.log('📡 LOAD_DEBUG: About to call ChatService.getSingleChatSession()');
       // Fetch single chat session from backend
       const chatSession = await ChatService.getSingleChatSession();
+      console.log('📨 LOAD_DEBUG: ChatService.getSingleChatSession() returned:', chatSession);
       
       // Extract messages and title from single chat session
       const messages = chatSession?.messages || [];
