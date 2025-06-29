@@ -26,9 +26,23 @@ const initialState = {
   _debug: createDebugInfo('INITIAL_STATE')
 };
 
-// DEBUG: Track state resets
+// Track state resets and request deduplication
 let stateResetCount = 0;
-console.log('🏗️ CHAT_STORE_DEBUG: useChatStore.js loaded, initialState created');
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Optimized logger with log levels
+const logger = {
+  debug: (...args) => !isProduction && console.debug(...args),
+  info: (...args) => !isProduction && console.info(...args),
+  warn: (...args) => console.warn(...args),
+  error: (...args) => console.error(...args),
+  group: (...args) => !isProduction && console.group(...args),
+  groupEnd: (...args) => !isProduction && console.groupEnd(...args)
+};
+
+if (!isProduction) {
+  logger.info('Chat store initialized in development mode');
+}
 
 // Enhanced reducer with detailed logging
 function chatReducer(state, action) {
@@ -45,18 +59,20 @@ function chatReducer(state, action) {
     }
   };
 
-  console.group(`🎬 Action: ${action.type} [${actionId}]`);
-  console.log('📦 Action Payload:', action.payload);
-  console.log('📊 Previous State:', {
-    messagesCount: state.messages.length,
-    messages: state.messages.map(m => ({
-      id: m.id,
-      role: m.role,
-      preview: m.content?.substring(0, 30) + (m.content?.length > 30 ? '...' : '')
-    })),
-    isLoading: state.isLoading,
-    isTyping: state.isTyping
-  });
+  if (!isProduction) {
+    logger.group(`Action: ${action.type} [${actionId}]`);
+    logger.debug('Action Payload:', action.payload);
+    logger.debug('Previous State:', {
+      messagesCount: state.messages.length,
+      messages: state.messages.map(m => ({
+        id: m.id,
+        role: m.role,
+        preview: m.content?.substring(0, 30) + (m.content?.length > 30 ? '...' : '')
+      })),
+      isLoading: state.isLoading,
+      isTyping: state.isTyping
+    });
+  }
 
   let newState;
   try {
@@ -179,29 +195,36 @@ function chatReducer(state, action) {
       };
       break;
     
-    // REMOVED: All multi-chat cases (CREATE_CHAT, SWITCH_CHAT, UPDATE_CHAT_TITLE, DELETE_CHAT, UPDATE_CHAT)
-    // Single chat architecture doesn't need these operations
+    case 'BATCH_UPDATE':
+      // Process multiple actions in a single state update
+      if (!isProduction) {
+        logger.debug(`Processing batch update with ${action.payload.length} actions`);
+      }
+      return action.payload.reduce((currentState, action) => {
+        return chatReducer(currentState, action);
+      }, state);
     
     default:
-      console.warn(`⚠️ Unknown action type: ${action.type}`);
+      logger.warn(`Unknown action type: ${action.type}`);
       newState = state;
     }
 
-    console.log('🆕 New State:', {
-      messagesCount: newState.messages.length,
-      messages: newState.messages.map(m => ({
-        id: m.id,
-        role: m.role,
-        preview: m.content?.substring(0, 30) + (m.content?.length > 30 ? '...' : '')
-      })),
-      isLoading: newState.isLoading,
-      isTyping: newState.isTyping,
-      _debug: newState._debug
-    });
+    if (!isProduction) {
+      logger.debug('New State:', {
+        messagesCount: newState.messages.length,
+        messages: newState.messages.map(m => ({
+          id: m.id,
+          role: m.role,
+          preview: m.content?.substring(0, 30) + (m.content?.length > 30 ? '...' : '')
+        })),
+        isLoading: newState.isLoading,
+        isTyping: newState.isTyping
+      });
+    }
 
     return newState;
   } catch (error) {
-    console.error('❌ Reducer Error:', {
+    logger.error('Reducer Error:', {
       action,
       error: error.message,
       stack: error.stack,
@@ -213,7 +236,7 @@ function chatReducer(state, action) {
     });
     return state;
   } finally {
-    console.groupEnd();
+    logger.groupEnd();
   }
 }
 
@@ -227,20 +250,22 @@ function useMountTracking(name) {
     isMounted.current = true;
     const mountTime = Date.now();
     
-    console.group(`🏗️ ${name} Mount #${mountCount.current} [${mountId.current}]`);
-    console.log('Mount Time:', new Date().toISOString());
-    console.log('Mount ID:', mountId.current);
-    console.trace('Mount Trace');
-    console.groupEnd();
+    if (!isProduction) {
+      logger.group(`${name} Mount #${mountCount.current} [${mountId.current}]`);
+      logger.debug('Mount Time:', new Date().toISOString());
+      logger.debug('Mount ID:', mountId.current);
+      logger.groupEnd();
+    }
     
     return () => {
       isMounted.current = false;
-      const uptime = Date.now() - mountTime;
-      console.group(`♻️ ${name} Unmount [${mountId.current}]`);
-      console.log('Uptime:', `${(uptime / 1000).toFixed(2)}s`);
-      console.log('Unmount Time:', new Date().toISOString());
-      console.trace('Unmount Trace');
-      console.groupEnd();
+      if (!isProduction) {
+        const uptime = Date.now() - mountTime;
+        logger.group(`${name} Unmount [${mountId.current}]`);
+        logger.debug('Uptime:', `${(uptime / 1000).toFixed(2)}s`);
+        logger.debug('Unmount Time:', new Date().toISOString());
+        logger.groupEnd();
+      }
     };
   }, [name]);
   
@@ -252,93 +277,126 @@ export function ChatProvider({ children }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { user } = useAuth();
   
-  console.log(`🏗️ ChatProvider Render #${mountCount.current} [${mountId.current}]`, {
-    isMounted: isMounted.current,
-    state: {
-      messagesCount: state.messages.length,
-      isLoading: state.isLoading,
-      isTyping: state.isTyping,
-      error: state.error ? 'Error present' : 'No error'
-    },
-    user: user ? 'Authenticated' : 'Not authenticated'
-  });
+  if (!isProduction) {
+    logger.debug(`ChatProvider Render #${mountCount.current} [${mountId.current}]`, {
+      isMounted: isMounted.current,
+      state: {
+        messagesCount: state.messages.length,
+        isLoading: state.isLoading,
+        isTyping: state.isTyping,
+        error: state.error ? 'Error present' : 'No error'
+      },
+      user: user ? 'Authenticated' : 'Not authenticated'
+    });
+  }
 
-  // SINGLE CHAT: Load messages for single chat session (STABLE)
+  // Track loading state to prevent duplicate requests
+  const isLoadingRef = useRef(false);
+  const lastLoadTimeRef = useRef(0);
+  
+  // SINGLE CHAT: Load messages for single chat session (OPTIMIZED)
   const loadMessages = useCallback(async () => {
-    // LOADING GUARD: Prevent multiple simultaneous calls
-    if (state.loading) {
-      console.log('⏳ LOAD_MESSAGES_GUARD: Already loading, skipping duplicate call');
+    // Enhanced loading guard with cooldown (5 seconds between loads)
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastLoadTimeRef.current;
+    const COOLDOWN_PERIOD = 5000; // 5 seconds
+    
+    if (isLoadingRef.current) {
+      logger.debug('Skipping duplicate loadMessages call - already loading');
+      return;
+    }
+    
+    if (timeSinceLastLoad < COOLDOWN_PERIOD) {
+      logger.debug(`Skipping loadMessages - cooldown period (${timeSinceLastLoad}ms < ${COOLDOWN_PERIOD}ms)`);
       return;
     }
     
     try {
-      console.log('🔄 LOAD_MESSAGES: Loading messages for single chat session');
+      isLoadingRef.current = true;
+      lastLoadTimeRef.current = now;
+      
+      logger.info('Loading messages for single chat session');
       dispatch({ type: 'SET_LOADING', payload: true });
       
       // Fetch single chat session from backend
       const chatSession = await ChatService.getSingleChatSession();
-      console.log('🔍 LOAD_MESSAGES: Backend response:', chatSession);
       
       // Extract messages and title from single chat session
       const messages = chatSession?.messages || [];
       const title = chatSession?.title || 'Chat Session';
       
-      console.log('✅ LOAD_MESSAGES: Retrieved', messages.length, 'messages from backend');
-      console.log('📝 LOAD_MESSAGES: Message details:', messages.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })));
+      logger.info(`Retrieved ${messages.length} messages from backend`);
       
-      dispatch({ type: 'LOAD_MESSAGES', payload: messages });
-      dispatch({ type: 'SET_CHAT_TITLE', payload: title });
-      dispatch({ type: 'SET_LOADING', payload: false }); // ✅ Reset loading state
+      // Batch updates to prevent multiple renders
+      dispatch({
+        type: 'BATCH_UPDATE',
+        payload: [
+          { type: 'LOAD_MESSAGES', payload: messages },
+          { type: 'SET_CHAT_TITLE', payload: title },
+          { type: 'SET_LOADING', payload: false }
+        ]
+      });
       
     } catch (error) {
-      console.error('❌ LOAD_MESSAGES: Failed to load messages:', error);
-      dispatch({ type: 'SET_ERROR', payload: error.message });
-      dispatch({ type: 'SET_LOADING', payload: false }); // ✅ Reset loading state on error
+      logger.error('Failed to load messages:', error);
+      // Batch error handling
+      dispatch({
+        type: 'BATCH_UPDATE',
+        payload: [
+          { type: 'SET_ERROR', payload: error.message },
+          { type: 'SET_LOADING', payload: false }
+        ]
+      });
+    } finally {
+      isLoadingRef.current = false;
     }
-  }, []); // ✅ NO DEPENDENCIES - completely stable
+  }, []); // Stable dependency array
 
   // SINGLE CHAT: Send message to single chat session
   const sendMessage = useCallback(async (content) => {
     if (!user) {
-      console.error('❌ SEND_MESSAGE: No user authenticated');
+      logger.error('No user authenticated');
       return;
     }
 
     try {
-      console.log('📤 SEND_MESSAGE: Sending message to single chat session');
+      logger.info('Sending message to single chat session');
       
       // CRITICAL FIX: Use functional state update to get the most current state
-      // This ensures we capture the actual current state, not a stale closure
       let currentConversationHistory = [];
       
       // Get current state using functional update pattern
       dispatch((currentState) => {
         currentConversationHistory = [...currentState.messages];
-        console.log(`🔍 FUNCTIONAL_STATE_DEBUG: Captured ${currentConversationHistory.length} messages from current state`);
+        if (!isProduction) {
+          logger.debug(`Captured ${currentConversationHistory.length} messages from current state`);
+        }
         return currentState; // No state change, just capturing
       });
       
-      // COMPREHENSIVE STATE DEBUGGING
-      console.log(`🔍 STATE_DEBUG: Captured conversation history length: ${currentConversationHistory.length}`);
-      console.log(`🔍 STATE_DEBUG: Original state.messages length: ${state.messages.length}`);
-      
-      // Detailed message analysis
-      const userMsgs = currentConversationHistory.filter(m => m.role === 'user');
-      const assistantMsgs = currentConversationHistory.filter(m => m.role === 'assistant');
-      console.log(`📊 STATE_DEBUG: Message breakdown - User: ${userMsgs.length}, Assistant: ${assistantMsgs.length}`);
-      
-      // Log each message for debugging
-      currentConversationHistory.forEach((msg, i) => {
-        const preview = msg.content?.substring(0, 50) + '...' || 'No content';
-        console.log(`📄 STATE_DEBUG: Message ${i+1} (${msg.role}): ${preview}`);
-      });
-      
-      // Critical validation
-      if (currentConversationHistory.length === 0) {
-        console.error(`❌ STATE_DEBUG: CRITICAL - No conversation history found! This will cause context loss.`);
-        console.error(`❌ STATE_DEBUG: This indicates a state management issue that needs immediate attention.`);
-      } else {
-        console.log(`✅ STATE_DEBUG: Context preservation ACTIVE - sending ${currentConversationHistory.length} historical + 1 new = ${currentConversationHistory.length + 1} total messages`);
+      // Debug logging in development only
+      if (!isProduction) {
+        logger.debug(`Captured conversation history length: ${currentConversationHistory.length}`);
+        logger.debug(`Original state.messages length: ${state.messages.length}`);
+        
+        // Detailed message analysis
+        const userMsgs = currentConversationHistory.filter(m => m.role === 'user');
+        const assistantMsgs = currentConversationHistory.filter(m => m.role === 'assistant');
+        
+        logger.debug(`Message breakdown - User: ${userMsgs.length}, Assistant: ${assistantMsgs.length}`);
+        
+        // Log each message for debugging
+        currentConversationHistory.forEach((msg, i) => {
+          const preview = msg.content?.substring(0, 50) + '...' || 'No content';
+          logger.debug(`Message ${i+1} (${msg.role}): ${preview}`);
+        });
+        
+        // Critical validation
+        if (currentConversationHistory.length === 0) {
+          logger.warn('No conversation history found - this may cause context loss');
+        } else {
+          logger.debug(`Context preservation active - sending ${currentConversationHistory.length} historical + 1 new = ${currentConversationHistory.length + 1} total messages`);
+        }
       }
       
       // Add user message immediately (optimistic UI)
@@ -378,25 +436,34 @@ export function ChatProvider({ children }) {
   // SINGLE CHAT: Clear all messages from single chat session
   const clearMessages = useCallback(async () => {
     try {
-      console.log('🗑️ CLEAR_MESSAGES: Clearing messages from single chat session');
+      logger.info('Clearing messages from single chat session');
       await ChatService.clearMessages();
       dispatch({ type: 'CLEAR_MESSAGES' });
-      console.log('✅ CLEAR_MESSAGES: Messages cleared successfully');
+      logger.info('Messages cleared successfully');
     } catch (error) {
-      console.error('❌ CLEAR_MESSAGES: Failed to clear messages:', error);
+      logger.error('Failed to clear messages:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message });
     }
   }, []);
 
-  // Load messages ONLY ONCE when user is authenticated (STABLE - no infinite loop)
+  // Track initial load to prevent duplicate loads
+  const initialLoadRef = useRef(false);
+  
+  // Load messages when user is authenticated (OPTIMIZED)
   useEffect(() => {
-    console.log('🔄 USEEFFECT_DEBUG: useEffect triggered');
-    console.log('🔄 USEEFFECT_DEBUG: user exists:', !!user);
-    console.log('🔄 USEEFFECT_DEBUG: current state.messages.length:', state.messages.length);
-    console.log('🔄 USEEFFECT_DEBUG: current state.loading:', state.loading);
+    if (!isProduction) {
+      logger.debug('useEffect triggered', {
+        hasUser: !!user,
+        messageCount: state.messages.length,
+        isLoading: state.loading,
+        initialLoad: initialLoadRef.current
+      });
+    }
     
-    if (user && state.messages.length === 0 && !state.loading) {
-      console.log('🔄 INITIAL_LOAD: Loading messages for newly authenticated user (ONCE)');
+    // Only load messages if we have a user, no messages, not loading, and haven't loaded yet
+    if (user && state.messages.length === 0 && !state.loading && !initialLoadRef.current) {
+      initialLoadRef.current = true;
+      logger.info('Performing initial message load for authenticated user');
       loadMessages();
     } else if (!user) {
       // Clear messages when user logs out
