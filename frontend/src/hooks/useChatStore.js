@@ -226,7 +226,7 @@ export function ChatProvider({ children }) {
       console.log('🔒 USER_LOGOUT: Clearing messages due to logout');
       dispatch({ type: 'CLEAR_MESSAGES' });
     }
-  }, [user, loadMessages]); // ✅ STABLE - loadMessages has no dependencies
+  }, [user]); // ✅ FIXED - Remove loadMessages dependency to break infinite loop
 
   // SINGLE CHAT: Update chat title
   const updateChatTitle = useCallback(async (chatId, newTitle) => {
