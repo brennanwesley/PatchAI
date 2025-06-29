@@ -95,13 +95,8 @@ export function ChatProvider({ children }) {
   
   console.log('🏗️ PROVIDER_DEBUG: useReducer initialized with state.messages.length:', state.messages.length);
 
-  // SINGLE CHAT: Load messages for user's single chat session
+  // SINGLE CHAT: Load messages for single chat session (STABLE)
   const loadMessages = useCallback(async () => {
-    if (!user) {
-      console.log('🔍 LOAD_MESSAGES: No user authenticated, skipping message loading');
-      return;
-    }
-
     try {
       console.log('🔄 LOAD_MESSAGES: Loading messages for single chat session');
       dispatch({ type: 'SET_LOADING', payload: true });
@@ -124,7 +119,7 @@ export function ChatProvider({ children }) {
       console.error('❌ LOAD_MESSAGES: Failed to load messages:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message });
     }
-  }, [user]);
+  }, []); // ✅ NO DEPENDENCIES - completely stable
 
   // SINGLE CHAT: Send message to single chat session
   const sendMessage = useCallback(async (content) => {
@@ -217,21 +212,21 @@ export function ChatProvider({ children }) {
     }
   }, []);
 
-  // Load messages ONLY on initial user authentication (not on every state change)
+  // Load messages ONLY ONCE when user is authenticated (STABLE - no infinite loop)
   useEffect(() => {
     console.log('🔄 USEEFFECT_DEBUG: useEffect triggered');
     console.log('🔄 USEEFFECT_DEBUG: user exists:', !!user);
     console.log('🔄 USEEFFECT_DEBUG: current state.messages.length:', state.messages.length);
     
-    if (user) {
-      console.log('🔄 INITIAL_LOAD: Loading messages for newly authenticated user');
+    if (user && state.messages.length === 0) {
+      console.log('🔄 INITIAL_LOAD: Loading messages for newly authenticated user (ONCE)');
       loadMessages();
-    } else {
+    } else if (!user) {
       // Clear messages when user logs out
       console.log('🔒 USER_LOGOUT: Clearing messages due to logout');
       dispatch({ type: 'CLEAR_MESSAGES' });
     }
-  }, [user]); // ❌ REMOVED loadMessages dependency to prevent state overwrites
+  }, [user, loadMessages]); // ✅ STABLE - loadMessages has no dependencies
 
   // SINGLE CHAT: Update chat title
   const updateChatTitle = useCallback(async (chatId, newTitle) => {
