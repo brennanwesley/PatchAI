@@ -536,6 +536,9 @@ async def sync_subscription_manually(
                 }
             )
             
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 401)
+        raise
     except Exception as e:
         logger.error(f"❌ [SYNC] Enhanced manual subscription sync exception: {str(e)}")
         logger.error(f"❌ [SYNC] Exception traceback: {traceback.format_exc()}")
@@ -547,22 +550,7 @@ async def sync_subscription_manually(
                 "error_code": "UNEXPECTED_ERROR",
                 "timestamp": datetime.utcnow().isoformat()
             }
-        )    
-    except HTTPException:
-        # Re-raise HTTP exceptions (like 401)
-        raise
-    except Exception as e:
-        logger.error(f"💥 SYNC ENDPOINT: Unexpected error: {str(e)}")
-        import traceback
-        logger.error(f"💥 SYNC ENDPOINT: Full traceback: {traceback.format_exc()}")
-        
-        # Return a proper error response instead of letting it bubble up
-        return {
-            "success": False,
-            "message": "An unexpected error occurred. Please try again or contact support.",
-            "error_code": "UNEXPECTED_ERROR",
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        )
 
 @router.post("/sync-all-subscriptions")
 async def sync_all_subscriptions(current_user: dict = Depends(verify_jwt_token)):
