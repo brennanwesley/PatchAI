@@ -37,7 +37,13 @@ from routes.payment_routes import router as payment_router
 from routes.referral_routes import router as referral_router
 from routes.monitoring_routes import router as monitoring_router
 from routes.sync_routes import router as sync_router
+from routes.phase3_routes import router as phase3_router
 from services.background_monitor import background_monitor
+# Phase 3 Production Hardening Services
+from services.webhook_redundancy_service import webhook_redundancy_service
+from services.integrity_validation_service import integrity_validation_service
+from services.performance_optimization_service import performance_optimization_service
+from services.monitoring_dashboard_service import monitoring_dashboard_service
 
 # Initialize structured logging
 structured_logger = StructuredLogger()
@@ -106,8 +112,20 @@ logger.info("PatchAI Backend initialized with enterprise architecture and chat s
 async def startup_event():
     """Initialize background services on startup"""
     logger.info("🚀 Starting background monitoring service...")
-    await background_monitor.start()
-    logger.info("✅ Background services initialized")
+    await background_monitor.start_monitoring()
+    logger.info("✅ Background monitoring service started")
+    
+    # Phase 3 Production Hardening Services
+    logger.info("🔧 Starting Phase 3 production hardening services...")
+    try:
+        await webhook_redundancy_service.start_redundancy_service()
+        await integrity_validation_service.start_continuous_validation()
+        await performance_optimization_service.start_performance_monitoring()
+        await monitoring_dashboard_service.start_dashboard_service()
+        logger.info("✅ Phase 3 services started successfully")
+    except Exception as e:
+        logger.error(f"❌ Phase 3 service startup error: {str(e)}")
+        # Continue startup even if Phase 3 services fail
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -554,6 +572,7 @@ app.include_router(payment_router)
 app.include_router(referral_router)
 app.include_router(monitoring_router)
 app.include_router(sync_router)
+app.include_router(phase3_router)
 
 if __name__ == "__main__":
     import uvicorn
