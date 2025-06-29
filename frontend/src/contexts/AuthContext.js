@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 
@@ -235,7 +235,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
   
-  const value = {
+  // CRITICAL FIX: Memoize context value to prevent infinite ChatProvider re-mounting
+  const value = useMemo(() => ({
     user,
     loading,
     initialized,
@@ -243,7 +244,7 @@ export const AuthProvider = ({ children }) => {
     signOut,
     login,
     signUp,
-  };
+  }), [user, loading, initialized, signIn, signOut, login, signUp]);
 
   return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
 };
