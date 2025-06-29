@@ -10,13 +10,17 @@ from pydantic import BaseModel
 from typing import Optional
 from supabase import create_client, Client
 import os
+import uuid
+import logging
+import stripe
+import traceback
 from datetime import datetime
 from dotenv import load_dotenv
 from core.auth import verify_jwt_token
-from core.stripe_webhooks import webhook_handler
-from core.stripe_config import get_stripe_publishable_key
-
-# Load environment variables
+from core.stripe_webhooks import StripeWebhookHandler
+from core.stripe_config import validate_stripe_config
+from services.supabase_service import supabase
+from services.subscription_sync_service import subscription_sync_service
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -482,96 +486,68 @@ async def sync_subscription_manually(
     request: SyncSubscriptionRequest,
     current_user: dict = Depends(verify_jwt_token)
 ):
-    """Manually sync a user's subscription from Stripe - enhanced with robust error handling"""
+    """Enhanced manual subscription sync using the new comprehensive sync service"""
     try:
-        # Get user information with validation
-        user_id = current_user.get("sub")
-        user_email = current_user.get("email")
+        correlation_id = str(uuid.uuid4())
+        logger.info(f"🔄 [SYNC-{correlation_id}] Enhanced manual subscription sync requested by user {current_user.get('email', 'unknown')}")
         
-        if not user_id or not user_email:
-            logger.error(f"🚨 SYNC ENDPOINT: Invalid user token data - user_id: {user_id}, email: {user_email}")
-            raise HTTPException(status_code=401, detail="Invalid user authentication")
+        # Determine target email
+        target_email = request.email if request.email else current_user.get('email')
         
-        # Determine target email (admin feature or self-sync)
-        target_email = request.email if hasattr(request, 'email') and request.email else user_email
-        
-        logger.info(f"🔄 SYNC ENDPOINT: Manual subscription sync requested by {user_email} for: {target_email}")
-        
-        # Debug webhook handler availability
-        try:
-            logger.info(f"🔍 SYNC ENDPOINT: Webhook handler available: {webhook_handler is not None}")
-            logger.info(f"🔍 SYNC ENDPOINT: Webhook handler methods: {dir(webhook_handler)}")
-            if hasattr(webhook_handler, 'sync_subscription_from_stripe'):
-                logger.info(f"✅ SYNC ENDPOINT: sync_subscription_from_stripe method exists")
-            else:
-                logger.error(f"❌ SYNC ENDPOINT: sync_subscription_from_stripe method NOT found")
-        except Exception as debug_e:
-            logger.error(f"🚨 SYNC ENDPOINT: Webhook handler debug failed: {str(debug_e)}")
-        
-        # Validate Stripe configuration before attempting sync
-        try:
-            stripe_secret = os.getenv('STRIPE_SECRET_KEY')
-            if not stripe_secret:
-                logger.error(f"🚨 SYNC ENDPOINT: Stripe secret key not configured")
-                return {
+        if not target_email:
+            logger.error(f"❌ [SYNC-{correlation_id}] No email provided for sync")
+            return JSONResponse(
+                status_code=400,
+                content={
                     "success": False,
-                    "message": "Payment system configuration error. Please contact support.",
-                    "error_code": "STRIPE_CONFIG_ERROR"
+                    "message": "Email is required for subscription sync",
+                    "error_code": "EMAIL_REQUIRED",
+                    "timestamp": datetime.utcnow().isoformat()
                 }
-        except Exception as config_e:
-            logger.error(f"🚨 SYNC ENDPOINT: Stripe config validation failed: {str(config_e)}")
-            return {
-                "success": False,
-                "message": "Payment system configuration error. Please contact support.",
-                "error_code": "STRIPE_CONFIG_ERROR"
-            }
+            )
         
-        # Attempt the sync with comprehensive error handling
-        try:
-            logger.info(f"🔧 SYNC ENDPOINT: Calling webhook handler sync for {target_email}")
-            logger.info(f"🔧 SYNC ENDPOINT: Webhook handler type: {type(webhook_handler)}")
-            logger.info(f"🔧 SYNC ENDPOINT: About to call sync_subscription_from_stripe method")
-            
-            success = await webhook_handler.sync_subscription_from_stripe(target_email)
-            
-            logger.info(f"🔧 SYNC ENDPOINT: Sync method returned: {success} (type: {type(success)})")
-            
-            if success:
-                logger.info(f"✅ SYNC ENDPOINT: Sync successful for {target_email}")
-                return {
+        logger.info(f"🎯 [SYNC-{correlation_id}] Target email: {target_email}")
+        
+        # Use the enhanced sync service
+        sync_result = await subscription_sync_service.comprehensive_user_sync(target_email)
+        
+        if sync_result["success"]:
+            logger.info(f"✅ [SYNC-{correlation_id}] Enhanced subscription sync successful for {target_email}")
+            return JSONResponse(
+                status_code=200,
+                content={
                     "success": True,
-                    "message": f"Successfully synced subscription for {target_email}",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "message": sync_result.get("message", "Subscription synchronized successfully"),
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "correlation_id": correlation_id,
+                    "synced_subscriptions": sync_result.get("synced_subscriptions", 0)
                 }
-            else:
-                logger.warning(f"⚠️ SYNC ENDPOINT: Sync returned false for {target_email}")
-                return {
+            )
+        else:
+            logger.warning(f"⚠️ [SYNC-{correlation_id}] Enhanced subscription sync failed for {target_email}: {sync_result.get('error', 'Unknown error')}")
+            return JSONResponse(
+                status_code=400,
+                content={
                     "success": False,
-                    "message": f"No active subscription found for {target_email}. If you just completed payment, please wait a few minutes and try again.",
-                    "error_code": "NO_SUBSCRIPTION_FOUND",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "message": sync_result.get("error", "Subscription sync failed"),
+                    "error_code": sync_result.get("error_code", "SYNC_FAILED"),
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "correlation_id": correlation_id
                 }
-                
-        except stripe.error.StripeError as stripe_e:
-            logger.error(f"🚨 SYNC ENDPOINT: Stripe API error: {str(stripe_e)}")
-            return {
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ [SYNC] Enhanced manual subscription sync exception: {str(e)}")
+        logger.error(f"❌ [SYNC] Exception traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            status_code=500,
+            content={
                 "success": False,
-                "message": "Unable to connect to payment system. Please try again in a few minutes.",
-                "error_code": "STRIPE_API_ERROR",
+                "message": "An unexpected error occurred. Please try again or contact support.",
+                "error_code": "UNEXPECTED_ERROR",
                 "timestamp": datetime.utcnow().isoformat()
             }
-            
-        except Exception as sync_e:
-            logger.error(f"🚨 SYNC ENDPOINT: Sync process error: {str(sync_e)}")
-            import traceback
-            logger.error(f"🚨 SYNC ENDPOINT: Sync traceback: {traceback.format_exc()}")
-            return {
-                "success": False,
-                "message": "Sync process encountered an error. Please try again or contact support.",
-                "error_code": "SYNC_PROCESS_ERROR",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            
+        )    
     except HTTPException:
         # Re-raise HTTP exceptions (like 401)
         raise

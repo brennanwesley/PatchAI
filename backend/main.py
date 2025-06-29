@@ -36,6 +36,7 @@ from services.chat_service import ChatService
 from routes.payment_routes import router as payment_router
 from routes.referral_routes import router as referral_router
 from routes.monitoring_routes import router as monitoring_router
+from routes.sync_routes import router as sync_router
 from services.background_monitor import background_monitor
 
 # Initialize structured logging
@@ -552,6 +553,7 @@ async def delete_user_history(user_id: str, req: Request):
 app.include_router(payment_router)
 app.include_router(referral_router)
 app.include_router(monitoring_router)
+app.include_router(sync_router)
 
 if __name__ == "__main__":
     import uvicorn
