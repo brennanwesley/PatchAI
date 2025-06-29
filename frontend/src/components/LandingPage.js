@@ -148,7 +148,11 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <span className="text-xl font-bold text-blue-600 dark:text-blue-400">PatchAI</span>
+              <img 
+                src="/images/PatchAI_transparent-background.png" 
+                alt="PatchAI" 
+                className="h-10 md:h-12 w-auto max-w-[180px] md:max-w-[220px]" 
+              />
             </div>
             <div className="flex items-center space-x-4">
               <button 
@@ -181,11 +185,19 @@ const LandingPage = () => {
           <div className="lg:grid lg:grid-cols-2 lg:gap-12 items-center">
             {/* Left side - Hero text */}
             <div className="text-center lg:text-left mb-12 lg:mb-0">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 dark:text-white mb-6">
-                Your Virtual Oilfield Consultant
-              </h1>
+              {/* Oil drop image - above text on mobile, inline on desktop */}
+              <div className="flex flex-col lg:flex-row lg:items-center mb-6">
+                <img 
+                  src="/images/PatchAI_oil drop-remove-background.png" 
+                  alt="PatchAI Oil Drop" 
+                  className="h-24 w-24 md:h-32 md:w-32 lg:h-36 lg:w-36 mx-auto lg:mx-0 lg:mr-6 mb-4 lg:mb-0" 
+                />
+                <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 dark:text-white">
+                  Your Personal Oilfield Consultant
+                </h1>
+              </div>
               <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
-                AI-powered insights and recommendations for the modern energy professional
+                AI-powered insights and recommendations for the modern oil and gas professional
               </p>
               <button 
                 onClick={() => document.getElementById('features').scrollIntoView({ behavior: 'smooth' })}
