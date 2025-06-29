@@ -97,6 +97,12 @@ export function ChatProvider({ children }) {
 
   // SINGLE CHAT: Load messages for single chat session (STABLE)
   const loadMessages = useCallback(async () => {
+    // LOADING GUARD: Prevent multiple simultaneous calls
+    if (state.loading) {
+      console.log('⏳ LOAD_MESSAGES_GUARD: Already loading, skipping duplicate call');
+      return;
+    }
+    
     try {
       console.log('🔄 LOAD_MESSAGES: Loading messages for single chat session');
       dispatch({ type: 'SET_LOADING', payload: true });
@@ -114,10 +120,12 @@ export function ChatProvider({ children }) {
       
       dispatch({ type: 'LOAD_MESSAGES', payload: messages });
       dispatch({ type: 'SET_CHAT_TITLE', payload: title });
+      dispatch({ type: 'SET_LOADING', payload: false }); // ✅ Reset loading state
       
     } catch (error) {
       console.error('❌ LOAD_MESSAGES: Failed to load messages:', error);
       dispatch({ type: 'SET_ERROR', payload: error.message });
+      dispatch({ type: 'SET_LOADING', payload: false }); // ✅ Reset loading state on error
     }
   }, []); // ✅ NO DEPENDENCIES - completely stable
 
@@ -217,14 +225,17 @@ export function ChatProvider({ children }) {
     console.log('🔄 USEEFFECT_DEBUG: useEffect triggered');
     console.log('🔄 USEEFFECT_DEBUG: user exists:', !!user);
     console.log('🔄 USEEFFECT_DEBUG: current state.messages.length:', state.messages.length);
+    console.log('🔄 USEEFFECT_DEBUG: current state.loading:', state.loading);
     
-    if (user && state.messages.length === 0) {
+    if (user && state.messages.length === 0 && !state.loading) {
       console.log('🔄 INITIAL_LOAD: Loading messages for newly authenticated user (ONCE)');
       loadMessages();
     } else if (!user) {
       // Clear messages when user logs out
       console.log('🔒 USER_LOGOUT: Clearing messages due to logout');
       dispatch({ type: 'CLEAR_MESSAGES' });
+    } else if (state.loading) {
+      console.log('⏳ LOADING_GUARD: Skipping loadMessages - already loading');
     }
   }, [user]); // ✅ FIXED - Remove loadMessages dependency to break infinite loop
 
