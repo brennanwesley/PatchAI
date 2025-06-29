@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import Optional
 from supabase import create_client, Client
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from core.auth import verify_jwt_token
 from core.stripe_webhooks import webhook_handler
