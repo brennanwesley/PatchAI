@@ -319,8 +319,24 @@ async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
                 "created_at": chat_session.created_at.isoformat(),
                 "updated_at": chat_session.updated_at.isoformat()
             }
+            
+            # Properly serialize Message objects for JSON response
+            serialized_messages = []
+            for msg in chat_session.messages:
+                serialized_messages.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
+            
             logger.info(f"Single chat session retrieved for user {user_id} with {len(chat_session.messages)} messages")
-            return {"sessions": [session_data], "messages": [msg.__dict__ for msg in chat_session.messages]}
+            logger.info(f"🔍 HISTORY_DEBUG: Returning {len(serialized_messages)} serialized messages to frontend")
+            
+            # Debug log first few messages for verification
+            for i, msg in enumerate(serialized_messages[:3]):
+                preview = msg['content'][:50] + "..." if len(msg['content']) > 50 else msg['content']
+                logger.info(f"📄 HISTORY_DEBUG: Message {i+1} ({msg['role']}): {preview}")
+            
+            return {"sessions": [session_data], "messages": serialized_messages}
         else:
             # No chat session exists yet
             logger.info(f"No chat session found for user {user_id} - will be created on first message")
