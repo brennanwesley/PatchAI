@@ -909,12 +909,59 @@ async def grant_provisional_access(
     try:
         logger.info(f"🎯 PROVISIONAL ACCESS: Granting 24hr Standard access to user {current_user_id}")
         
-        # Calculate 24-hour expiration
-        from datetime import datetime, timedelta
-        provisional_until = datetime.utcnow() + timedelta(hours=24)
+        # VALIDATION 1: Check if user exists and get current status
+        user_check = supabase.table("user_profiles").select(
+            "subscription_status, plan_tier, provisional_access_until, created_at"
+        ).eq("id", current_user_id).execute()
         
-        # Generate payment intent ID for tracking
-        payment_intent_id = f"provisional_{uuid.uuid4().hex[:12]}"
+        if not user_check.data:
+            logger.error(f"❌ PROVISIONAL ACCESS: User {current_user_id} not found")
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        user_data = user_check.data[0]
+        
+        # VALIDATION 2: Check if user already has active subscription
+        if user_data.get("subscription_status") == "active" and user_data.get("plan_tier") == "standard":
+            logger.warning(f"⚠️ PROVISIONAL ACCESS: User {current_user_id} already has active Standard subscription")
+            raise HTTPException(status_code=400, detail="User already has active Standard Plan subscription")
+            
+        # VALIDATION 3: Check if user already has provisional access
+        existing_provisional = user_data.get("provisional_access_until")
+        if existing_provisional:
+            from datetime import datetime
+            try:
+                expiry_time = datetime.fromisoformat(existing_provisional.replace('Z', '+00:00'))
+                current_time = datetime.utcnow().replace(tzinfo=expiry_time.tzinfo)
+                
+                if current_time <= expiry_time:
+                    logger.warning(f"⚠️ PROVISIONAL ACCESS: User {current_user_id} already has active provisional access until {existing_provisional}")
+                    raise HTTPException(status_code=400, detail=f"User already has provisional access until {existing_provisional}")
+            except Exception as e:
+                logger.warning(f"⚠️ Error parsing existing provisional time: {str(e)}")
+                
+        # VALIDATION 4: Rate limiting - prevent abuse from new accounts
+        user_created = user_data.get("created_at")
+        if user_created:
+            from datetime import datetime, timedelta
+            try:
+                created_time = datetime.fromisoformat(user_created.replace('Z', '+00:00'))
+                current_time = datetime.utcnow().replace(tzinfo=created_time.tzinfo)
+                time_since_creation = current_time - created_time
+                
+                # New users (< 1 hour old) get stricter rate limiting
+                if time_since_creation < timedelta(hours=1):
+                    logger.warning(f"⚠️ PROVISIONAL ACCESS: User {current_user_id} account too new ({time_since_creation})")
+                    raise HTTPException(status_code=429, detail="Account too new. Please wait before requesting provisional access.")
+            except Exception as e:
+                logger.warning(f"⚠️ Error parsing user creation time: {str(e)}")
+        
+        # Calculate 24-hour expiration with proper timezone handling
+        from datetime import datetime, timedelta, timezone
+        current_utc = datetime.now(timezone.utc)
+        provisional_until = current_utc + timedelta(hours=24)
+        
+        # Generate payment intent ID for tracking (using full UUID for uniqueness)
+        payment_intent_id = f"provisional_{uuid.uuid4().hex}"
         
         # Update user profile with provisional access
         update_result = supabase.table("user_profiles").update({
@@ -923,7 +970,7 @@ async def grant_provisional_access(
             "provisional_access_until": provisional_until.isoformat(),
             "provisional_plan_tier": "standard",
             "payment_intent_id": payment_intent_id,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": current_utc.isoformat()
         }).eq("id", current_user_id).execute()
         
         if not update_result.data:
@@ -976,3 +1023,50 @@ async def verify_provisional_payments(
     except Exception as e:
         logger.error(f"💥 PROVISIONAL VERIFICATION: Failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to verify provisional payments: {str(e)}")
+
+
+@router.get("/provisional-scheduler-status")
+async def get_provisional_scheduler_status(
+    req: Request,
+    current_user_id: str = Depends(verify_jwt_token)
+):
+    """
+    Get status of the provisional access scheduler
+    """
+    try:
+        from services.provisional_scheduler import provisional_scheduler
+        
+        status = provisional_scheduler.get_status()
+        
+        return {
+            "success": True,
+            "scheduler_status": status
+        }
+        
+    except Exception as e:
+        logger.error(f"💥 Failed to get scheduler status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get scheduler status: {str(e)}")
+
+
+@router.post("/force-provisional-verification")
+async def force_provisional_verification(
+    req: Request,
+    current_user_id: str = Depends(verify_jwt_token)
+):
+    """
+    Force immediate provisional access verification (admin/testing)
+    """
+    try:
+        from services.provisional_scheduler import provisional_scheduler
+        
+        logger.info(f"🔧 User {current_user_id} forcing provisional verification")
+        provisional_scheduler.force_verification()
+        
+        return {
+            "success": True,
+            "message": "Forced provisional verification completed"
+        }
+        
+    except Exception as e:
+        logger.error(f"💥 Failed to force verification: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to force verification: {str(e)}")

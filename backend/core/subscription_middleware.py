@@ -68,10 +68,18 @@ class SubscriptionMiddleware:
             
             # Check for provisional access first (24hr Standard Plan access)
             if provisional_until and provisional_tier:
-                from datetime import datetime
+                from datetime import datetime, timezone
                 try:
-                    expiry_time = datetime.fromisoformat(provisional_until.replace('Z', '+00:00'))
-                    current_time = datetime.utcnow().replace(tzinfo=expiry_time.tzinfo)
+                    # Parse expiry time with proper timezone handling
+                    if provisional_until.endswith('Z'):
+                        expiry_time = datetime.fromisoformat(provisional_until.replace('Z', '+00:00'))
+                    elif '+' in provisional_until or provisional_until.endswith('00:00'):
+                        expiry_time = datetime.fromisoformat(provisional_until)
+                    else:
+                        # Assume UTC if no timezone info
+                        expiry_time = datetime.fromisoformat(provisional_until).replace(tzinfo=timezone.utc)
+                    
+                    current_time = datetime.now(timezone.utc)
                     
                     if current_time <= expiry_time:
                         self.logger.info(f"✅ User {user_id} has valid provisional {provisional_tier} access until {provisional_until}")

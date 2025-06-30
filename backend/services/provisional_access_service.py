@@ -95,9 +95,19 @@ class ProvisionalAccessService:
         
         # Check if provisional access has expired
         if provisional_until:
-            expiry_time = datetime.fromisoformat(provisional_until.replace('Z', '+00:00'))
-            if datetime.utcnow().replace(tzinfo=expiry_time.tzinfo) > expiry_time:
-                self.logger.info(f"⏰ Provisional access expired for {email}")
+            from datetime import timezone
+            # Parse expiry time with proper timezone handling
+            if provisional_until.endswith('Z'):
+                expiry_time = datetime.fromisoformat(provisional_until.replace('Z', '+00:00'))
+            elif '+' in provisional_until or provisional_until.endswith('00:00'):
+                expiry_time = datetime.fromisoformat(provisional_until)
+            else:
+                # Assume UTC if no timezone info
+                expiry_time = datetime.fromisoformat(provisional_until).replace(tzinfo=timezone.utc)
+            
+            current_time = datetime.now(timezone.utc)
+            if current_time > expiry_time:
+                self.logger.info(f"⏰ Provisional access expired for {email} at {expiry_time}")
                 return await self._handle_expired_access(user)
         
         # Check if user has completed payment via Stripe

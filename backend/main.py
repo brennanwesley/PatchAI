@@ -44,6 +44,7 @@ from services.webhook_redundancy_service import webhook_redundancy_service
 from services.integrity_validation_service import integrity_validation_service
 from services.performance_optimization_service import performance_optimization_service
 from services.monitoring_dashboard_service import monitoring_dashboard_service
+from services.provisional_scheduler import provisional_scheduler
 
 # Initialize structured logging
 structured_logger = StructuredLogger()
@@ -111,6 +112,15 @@ logger.info("PatchAI Backend initialized with enterprise architecture and chat s
 @app.on_event("startup")
 async def startup_event():
     """Initialize background services on startup"""
+    logger.info("🚀 Application startup initiated")
+    
+    # Start provisional access scheduler
+    try:
+        provisional_scheduler.start()
+        logger.info("✅ Provisional access scheduler started")
+    except Exception as e:
+        logger.error(f"❌ Failed to start provisional scheduler: {str(e)}")
+    
     logger.info("🚀 Application startup complete")
     logger.info("✅ All services initialized successfully")
 
@@ -118,6 +128,14 @@ async def startup_event():
 async def shutdown_event():
     """Clean shutdown of background services"""
     logger.info("🛑 Application shutdown initiated")
+    
+    # Stop provisional access scheduler
+    try:
+        provisional_scheduler.stop()
+        logger.info("✅ Provisional access scheduler stopped")
+    except Exception as e:
+        logger.error(f"❌ Error stopping provisional scheduler: {str(e)}")
+    
     logger.info("✅ Application shutdown complete")
 
 
