@@ -253,8 +253,8 @@ class StripeWebhookHandler:
                         
                         # Get plan information from subscription
                         plan_tier = "standard"  # Default
-                        if stripe_subscription.items and stripe_subscription.items.data:
-                            price_id = stripe_subscription.items.data[0].price.id
+                        if stripe_subscription.get('items') and stripe_subscription['items'].get('data'):
+                            price_id = stripe_subscription['items']['data'][0]['price']['id']
                             plan_response = supabase.table("subscription_plans").select(
                                 "plan_id"
                             ).eq("stripe_price_id", price_id).single().execute()

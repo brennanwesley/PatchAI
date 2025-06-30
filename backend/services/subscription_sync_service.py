@@ -155,7 +155,7 @@ class SubscriptionSyncService:
     async def _get_plan_info(self, stripe_subscription) -> Optional[Dict]:
         """Get plan information from database based on Stripe price ID"""
         try:
-            price_id = stripe_subscription.items.data[0].price.id
+            price_id = stripe_subscription['items']['data'][0]['price']['id']
             result = self.supabase.table("subscription_plans").select("*").eq("stripe_price_id", price_id).execute()
             return result.data[0] if result.data else None
         except Exception as e:

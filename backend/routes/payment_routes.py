@@ -602,8 +602,8 @@ async def sync_subscription_manually(
         
         # Determine plan tier from Stripe price ID
         plan_tier = "standard"  # Default
-        if latest_subscription.items and latest_subscription.items.data:
-            price_id = latest_subscription.items.data[0].price.id
+        if latest_subscription.get('items') and latest_subscription['items'].get('data'):
+            price_id = latest_subscription['items']['data'][0]['price']['id']
             standard_price_id = os.getenv("STRIPE_STANDARD_PRICE_ID")
             if price_id == standard_price_id:
                 plan_tier = "standard"
