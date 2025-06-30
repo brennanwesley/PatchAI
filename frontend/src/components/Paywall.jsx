@@ -7,6 +7,8 @@ export default function Paywall({ onClose }) {
   const [error, setError] = useState(null);
 
   const handleUpgrade = async () => {
+    let provisionalAccessGranted = false;
+    
     try {
       setLoading(true);
       setError(null);
@@ -16,6 +18,7 @@ export default function Paywall({ onClose }) {
       // STEP 1: Grant immediate provisional Standard Plan access (24 hours)
       console.log('🎯 Granting provisional access...');
       await grantProvisionalAccess();
+      provisionalAccessGranted = true;
       console.log('✅ Provisional access granted - user now has Standard Plan!');
       
       // STEP 2: Close paywall immediately (user gets instant access)
@@ -36,7 +39,23 @@ export default function Paywall({ onClose }) {
       
     } catch (err) {
       console.error('💥 Error in provisional access upgrade flow:', err);
-      setError(err.message);
+      
+      // Enhanced error recovery based on what succeeded
+      if (provisionalAccessGranted) {
+        // Provisional access was granted but checkout failed
+        console.log('⚠️ Provisional access granted but checkout failed - user still has 24hr access');
+        setError(
+          'You now have 24-hour Standard Plan access! Payment setup failed, but you can try upgrading again later or contact support.'
+        );
+        // Still close paywall since user has provisional access
+        setTimeout(() => onClose(), 3000);
+      } else {
+        // Provisional access failed - user gets no access
+        console.log('❌ Provisional access failed - user has no access');
+        setError(
+          `Upgrade failed: ${err.message}. Please try again or contact support if the problem persists.`
+        );
+      }
     } finally {
       setLoading(false);
     }

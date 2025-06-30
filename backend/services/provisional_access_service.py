@@ -12,8 +12,10 @@ from services.supabase_service import supabase
 
 logger = logging.getLogger(__name__)
 
-# Initialize Stripe
+# Initialize Stripe API key with proper error handling
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+if not stripe.api_key:
+    raise ValueError("STRIPE_SECRET_KEY environment variable is required")
 
 class ProvisionalAccessService:
     """Service to manage provisional access verification and cleanup"""
