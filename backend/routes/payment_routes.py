@@ -21,13 +21,15 @@ from core.auth import verify_jwt_token
 from core.stripe_webhooks import StripeWebhookHandler
 from core.stripe_config import validate_stripe_config
 from services.supabase_service import supabase
-from services.subscription_sync_service import subscription_sync_service
 load_dotenv()
 
-# Initialize Stripe API key
+# Initialize Stripe API key BEFORE importing services that use Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
 if not stripe.api_key:
     raise ValueError("STRIPE_SECRET_KEY environment variable is required")
+
+# Import Stripe-dependent services AFTER API key initialization
+from services.subscription_sync_service import subscription_sync_service
 
 logger = logging.getLogger(__name__)
 
