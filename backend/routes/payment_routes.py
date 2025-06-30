@@ -623,8 +623,8 @@ async def sync_subscription_manually(
         
         # Get subscription plan ID
         plan_response = supabase.table("subscription_plans").select(
-            "id, name"
-        ).eq("name", "Standard Plan").single().execute()
+            "id, plan_name"
+        ).eq("plan_name", "Standard Plan").single().execute()
         
         plan_id = None
         if plan_response.data:

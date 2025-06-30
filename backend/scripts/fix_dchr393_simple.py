@@ -72,7 +72,7 @@ async def fix_dchr393_simple():
             plan_uuid = plan_response.data['id']
         else:
             # Fallback: get any standard plan
-            fallback_plan = supabase.table("subscription_plans").select("id").eq("name", "Standard").single().execute()
+            fallback_plan = supabase.table("subscription_plans").select("id").eq("plan_name", "Standard Plan").single().execute()
             plan_uuid = fallback_plan.data['id'] if fallback_plan.data else None
         
         if not plan_uuid:
