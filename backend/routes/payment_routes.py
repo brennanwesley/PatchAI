@@ -488,15 +488,23 @@ async def webhook_test(request: Request):
 @router.post("/sync-subscription")
 async def sync_subscription_manually(
     request: SyncSubscriptionRequest,
-    current_user: dict = Depends(verify_jwt_token)
+    current_user_id: str = Depends(verify_jwt_token)
 ):
     """Simple, direct subscription sync - queries Stripe and updates database"""
     try:
         correlation_id = str(uuid.uuid4())
-        logger.info(f"🔄 [SYNC-{correlation_id}] Direct subscription sync requested by user {current_user.get('email', 'unknown')}")
+        logger.info(f"🔄 [SYNC-{correlation_id}] Direct subscription sync requested by user {current_user_id}")
         
-        # Determine target email
-        target_email = request.email if request.email else current_user.get('email')
+        # Determine target email - if not provided, get from user profile
+        target_email = request.email
+        if not target_email:
+            # Get user's email from their profile
+            user_profile_response = supabase.table("user_profiles").select(
+                "email"
+            ).eq("id", current_user_id).single().execute()
+            
+            if user_profile_response.data:
+                target_email = user_profile_response.data.get('email')
         
         if not target_email:
             logger.error(f"❌ [SYNC-{correlation_id}] No email provided for sync")
