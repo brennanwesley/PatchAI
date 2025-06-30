@@ -191,3 +191,37 @@ export async function syncSubscriptionManually(email = null) {
     throw error;
   }
 }
+
+/**
+ * Grant 24-hour provisional Standard Plan access before Stripe payment
+ * This eliminates subscription modal loops and provides immediate access
+ */
+export async function grantProvisionalAccess() {
+  try {
+    console.log('🎯 Granting provisional Standard Plan access...');
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated');
+
+    const response = await fetch(`${API_BASE_URL}/payments/grant-provisional-access`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('✅ Provisional access granted:', result);
+    
+    return result;
+  } catch (error) {
+    console.error('💥 Failed to grant provisional access:', error);
+    throw error;
+  }
+}

@@ -44,8 +44,9 @@ class SubscriptionMiddleware:
         """
         try:
             # Get user's subscription status from user_profiles (fast lookup)
+            # Include provisional access fields for 24hr Standard Plan access
             user_response = supabase.table("user_profiles").select(
-                "subscription_status, plan_tier, stripe_customer_id"
+                "subscription_status, plan_tier, stripe_customer_id, provisional_access_until, provisional_plan_tier"
             ).eq("id", user_id).single().execute()
             
             if not user_response.data:
@@ -62,6 +63,31 @@ class SubscriptionMiddleware:
             user_profile = user_response.data
             subscription_status = user_profile.get("subscription_status", "inactive")
             plan_tier = user_profile.get("plan_tier", "none")
+            provisional_until = user_profile.get("provisional_access_until")
+            provisional_tier = user_profile.get("provisional_plan_tier")
+            
+            # Check for provisional access first (24hr Standard Plan access)
+            if provisional_until and provisional_tier:
+                from datetime import datetime
+                try:
+                    expiry_time = datetime.fromisoformat(provisional_until.replace('Z', '+00:00'))
+                    current_time = datetime.utcnow().replace(tzinfo=expiry_time.tzinfo)
+                    
+                    if current_time <= expiry_time:
+                        self.logger.info(f"✅ User {user_id} has valid provisional {provisional_tier} access until {provisional_until}")
+                        return {
+                            "has_access": True,
+                            "subscription_status": "active",  # Treat as active during provisional period
+                            "plan_tier": provisional_tier,
+                            "access_type": "provisional",
+                            "provisional_until": provisional_until,
+                            "stripe_customer_id": user_profile.get("stripe_customer_id")
+                        }
+                    else:
+                        self.logger.info(f"⏰ User {user_id} provisional access expired at {provisional_until}")
+                        # Provisional access expired - continue to regular subscription check
+                except Exception as e:
+                    self.logger.error(f"❌ Error parsing provisional access time for {user_id}: {str(e)}")
             
             # Check if user has active or trialing subscription
             if subscription_status not in ["active", "trialing"]:
@@ -83,16 +109,16 @@ class SubscriptionMiddleware:
                 {"user_uuid": user_id}
             ).execute()
             
-            subscription_info = {
+            return {
                 "has_access": True,
                 "subscription_status": subscription_status,
                 "plan_tier": plan_tier,
+                "access_type": "permanent",
                 "stripe_customer_id": user_profile.get("stripe_customer_id"),
                 "subscription_details": subscription_response.data[0] if subscription_response.data else None
             }
             
             self.logger.info(f"User {user_id} granted access - {plan_tier} plan, status: {subscription_status}")
-            return subscription_info
             
         except HTTPException:
             # Re-raise HTTP exceptions (402 Payment Required)

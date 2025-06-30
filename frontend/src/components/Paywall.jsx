@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createCheckoutSession } from '../services/paymentService';
+import { createCheckoutSession, grantProvisionalAccess } from '../services/paymentService';
 import stripePromise from '../lib/stripe';
 
 export default function Paywall({ onClose }) {
@@ -11,17 +11,31 @@ export default function Paywall({ onClose }) {
       setLoading(true);
       setError(null);
 
-      // Create checkout session
+      console.log('🚀 Starting provisional access upgrade flow...');
+      
+      // STEP 1: Grant immediate provisional Standard Plan access (24 hours)
+      console.log('🎯 Granting provisional access...');
+      await grantProvisionalAccess();
+      console.log('✅ Provisional access granted - user now has Standard Plan!');
+      
+      // STEP 2: Close paywall immediately (user gets instant access)
+      console.log('🎉 Closing paywall - user can start using Standard features!');
+      onClose(); // This gives immediate access to the app
+      
+      // STEP 3: Create checkout session for actual payment
+      console.log('💳 Creating Stripe checkout session...');
       const { checkout_url } = await createCheckoutSession(
         'standard', // plan_id
         `${window.location.origin}/dashboard?payment=success`,
         `${window.location.origin}/dashboard?payment=cancelled`
       );
 
-      // Redirect to Stripe Checkout
+      // STEP 4: Redirect to Stripe Checkout (user already has access)
+      console.log('🔄 Redirecting to Stripe for payment...');
       window.location.href = checkout_url;
+      
     } catch (err) {
-      console.error('Error creating checkout session:', err);
+      console.error('💥 Error in provisional access upgrade flow:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -48,8 +62,8 @@ export default function Paywall({ onClose }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Unlock Full Access</h2>
-          <p className="text-gray-600">Continue your conversation with PatchAI</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Upgrade to Standard Plan</h2>
+          <p className="text-gray-600">Get instant access + unlimited conversations and advanced features</p>
         </div>
 
         {/* Plan Details */}

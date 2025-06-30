@@ -5,14 +5,14 @@ Stripe payment processing endpoints for subscription management
 
 import logging
 import stripe
-from fastapi import APIRouter, HTTPException, Request, Depends
+import uuid
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 from supabase import create_client, Client
 import os
-import uuid
-import logging
 import stripe
 import traceback
 from datetime import datetime
@@ -895,3 +895,84 @@ async def request_subscription_cancellation(
     except Exception as e:
         logger.error(f"💥 CANCELLATION REQUEST: Failed for {current_user.get('email', 'unknown')}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to process cancellation request: {str(e)}")
+
+
+@router.post("/grant-provisional-access")
+async def grant_provisional_access(
+    req: Request,
+    current_user_id: str = Depends(verify_jwt_token)
+):
+    """
+    Grant 24-hour provisional Standard Plan access to user before Stripe payment
+    This eliminates the subscription modal loop and provides immediate access
+    """
+    try:
+        logger.info(f"🎯 PROVISIONAL ACCESS: Granting 24hr Standard access to user {current_user_id}")
+        
+        # Calculate 24-hour expiration
+        from datetime import datetime, timedelta
+        provisional_until = datetime.utcnow() + timedelta(hours=24)
+        
+        # Generate payment intent ID for tracking
+        payment_intent_id = f"provisional_{uuid.uuid4().hex[:12]}"
+        
+        # Update user profile with provisional access
+        update_result = supabase.table("user_profiles").update({
+            "subscription_status": "active",
+            "plan_tier": "standard",
+            "provisional_access_until": provisional_until.isoformat(),
+            "provisional_plan_tier": "standard",
+            "payment_intent_id": payment_intent_id,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", current_user_id).execute()
+        
+        if not update_result.data:
+            logger.error(f"❌ PROVISIONAL ACCESS: Failed to update user profile for {current_user_id}")
+            raise HTTPException(status_code=500, detail="Failed to grant provisional access")
+        
+        logger.info(f"✅ PROVISIONAL ACCESS: Successfully granted to {current_user_id} until {provisional_until}")
+        
+        return {
+            "success": True,
+            "message": "Provisional Standard Plan access granted for 24 hours",
+            "provisional_until": provisional_until.isoformat(),
+            "payment_intent_id": payment_intent_id,
+            "plan_tier": "standard",
+            "subscription_status": "active"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 PROVISIONAL ACCESS: Failed for {current_user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to grant provisional access: {str(e)}")
+
+
+@router.post("/verify-provisional-payments")
+async def verify_provisional_payments(
+    req: Request,
+    current_user_id: str = Depends(verify_jwt_token)
+):
+    """
+    Background verification endpoint to check provisional access payments
+    Can be called by admin or automated systems
+    """
+    try:
+        from services.provisional_access_service import provisional_access_service
+        
+        logger.info(f"🔍 PROVISIONAL VERIFICATION: Starting payment verification sweep")
+        
+        # Run verification sweep
+        summary = await provisional_access_service.verify_provisional_payments()
+        
+        logger.info(f"✅ PROVISIONAL VERIFICATION: Complete - {summary}")
+        
+        return {
+            "success": True,
+            "message": "Provisional payment verification completed",
+            "summary": summary
+        }
+        
+    except Exception as e:
+        logger.error(f"💥 PROVISIONAL VERIFICATION: Failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to verify provisional payments: {str(e)}")
