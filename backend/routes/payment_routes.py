@@ -24,6 +24,11 @@ from services.supabase_service import supabase
 from services.subscription_sync_service import subscription_sync_service
 load_dotenv()
 
+# Initialize Stripe API key
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+if not stripe.api_key:
+    raise ValueError("STRIPE_SECRET_KEY environment variable is required")
+
 logger = logging.getLogger(__name__)
 
 # Initialize Supabase client
