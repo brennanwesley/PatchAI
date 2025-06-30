@@ -252,7 +252,8 @@ const ChatInput = ({
             <button
               type="submit"
               disabled={isDisabled}
-              className={`p-2.5 rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${isDisabled ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              className={`px-3 py-3 rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${isDisabled ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              style={{ minHeight: '44px' }}
               aria-label={isDisabled ? disabledReason : 'Send message'}
               data-tooltip={disabledReason}
             >
@@ -275,7 +276,7 @@ const ChatInput = ({
         <div className="mt-2 text-xs text-center text-gray-500 dark:text-gray-400">
           {isAuthenticated ? (
             <span>
-              Patch can make mistakes. Check important info.
+              Patch can make mistakes, check important info.
             </span>
           ) : (
             <span>Please sign in to start chatting</span>
