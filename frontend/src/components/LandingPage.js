@@ -12,6 +12,9 @@ const LandingPage = () => {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
   const { login, signUp } = useAuth();
 
   // Validate referral code as user types
@@ -500,23 +503,297 @@ const LandingPage = () => {
             </div>
             <div className="mt-4 md:mt-0">
               <div className="flex space-x-6">
-                <a href="#" className="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300">
+                <button 
+                  onClick={() => setShowPrivacyModal(true)}
+                  className="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 hover:underline focus:outline-none focus:underline"
+                >
                   <span className="sr-only">Privacy</span>
                   Privacy Policy
-                </a>
-                <a href="#" className="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300">
+                </button>
+                <button 
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 hover:underline focus:outline-none focus:underline"
+                >
                   <span className="sr-only">Terms</span>
                   Terms of Service
-                </a>
-                <a href="#" className="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300">
+                </button>
+                <button 
+                  onClick={() => setShowContactModal(true)}
+                  className="text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 hover:underline focus:outline-none focus:underline"
+                >
                   <span className="sr-only">Contact</span>
                   Contact Us
-                </a>
+                </button>
               </div>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* Privacy Policy Modal */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setShowPrivacyModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Privacy Policy</h2>
+              <button
+                onClick={() => setShowPrivacyModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full p-1"
+                aria-label="Close Privacy Policy"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Modal Body - Scrollable */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  <strong>Effective Date:</strong> 6/30/2025<br/>
+                  <strong>Owned and Operated by:</strong> TeraScale AI Corporation
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">1. Purpose of This Policy</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  This Privacy Policy explains how PatchAI ("we", "us", "our") handles user data when you use our AI chatbot. PatchAI is a software tool powered by third-party AI engines (such as OpenAI) and is intended solely for informational research purposes.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">2. Use at Your Own Risk</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  PatchAI is not a source of legal, financial, medical, or other professional advice. You use the service entirely at your own risk.
+                </p>
+                <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
+                  <li>We do not warrant the accuracy or reliability of any AI-generated content.</li>
+                  <li>Users are solely responsible for how they interpret, use, or act on the information received.</li>
+                  <li>TeraScale AI Corporation assumes no liability for any direct, indirect, or consequential outcomes from the use of PatchAI.</li>
+                </ul>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">3. No Ownership of AI Outputs</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  We do not own or claim intellectual property over:
+                </p>
+                <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
+                  <li>Any content generated by the AI model</li>
+                  <li>The model itself</li>
+                  <li>The training data of the model</li>
+                  <li>Any embedded third-party data</li>
+                </ul>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  Generated content is the responsibility of the third-party AI provider and is subject to their licensing terms.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">4. Data Collection and Privacy</h3>
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mt-4 mb-2">a. User Inputs</h4>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  We may store user interactions (queries, messages) for short-term operational improvement, abuse prevention, or debugging purposes. We do not sell or monetize user data.
+                </p>
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mt-4 mb-2">b. File Uploads</h4>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  If you upload a file, you do so at your own discretion. We advise against uploading personal, financial, health, or legally sensitive information.
+                </p>
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mt-4 mb-2">c. Third-Party Processing</h4>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  User inputs are transmitted to external AI models (e.g., OpenAI) for processing. By using PatchAI, you consent to this transmission and processing.
+                </p>
+                <h4 className="text-md font-medium text-gray-900 dark:text-white mt-4 mb-2">d. Cookies and Tracking</h4>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  Basic analytics or cookie tools may be used to monitor usage. No targeted advertising tracking is used.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">5. Children's Privacy</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  PatchAI is not intended for users under the age of 13. If you are under 13, do not use this service.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">6. Changes to This Policy</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  We may update this Privacy Policy at any time. Updates take effect upon posting. Continued use of the service means acceptance of the new policy.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">7. Legal Jurisdiction and Limitation of Liability</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  PatchAI is a product of TeraScale AI Corporation, headquartered in the United States.
+                </p>
+                <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
+                  <li>Use is governed by the laws of the State of [Insert State]</li>
+                  <li>You agree to hold TeraScale AI Corporation harmless for all claims arising from use of the service</li>
+                </ul>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">8. Contact Us</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  Questions about this Privacy Policy can be sent to:<br/>
+                  <a href="mailto:feedbacklooploop@gmail.com" className="text-blue-600 dark:text-blue-400 hover:underline">
+                    feedbacklooploop@gmail.com
+                  </a>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terms of Service Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setShowTermsModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Terms of Service</h2>
+              <button
+                onClick={() => setShowTermsModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full p-1"
+                aria-label="Close Terms of Service"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Modal Body - Scrollable */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  <strong>Effective Date:</strong> 6/30/2025<br/>
+                  <strong>Owned and Operated by:</strong> TeraScale AI Corporation
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">1. Acceptance of Terms</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  By accessing or using PatchAI, you agree to be bound by these Terms of Service. If you do not agree to these terms, do not use the service.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">2. Service Description</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  PatchAI is an AI-powered assistant designed to provide informational responses for research and analysis. It is not a source of professional advice.
+                </p>
+                <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
+                  <li>PatchAI does not provide legal, medical, financial, or engineering certifications.</li>
+                  <li>Outputs are generated via third-party AI services and may contain errors or bias.</li>
+                </ul>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">3. User Responsibilities</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  You agree not to:
+                </p>
+                <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
+                  <li>Use PatchAI to generate or distribute harmful, illegal, or fraudulent content</li>
+                  <li>Upload personal, private, financial, or confidential data</li>
+                  <li>Attempt to reverse-engineer, scrape, copy, or clone any part of PatchAI</li>
+                  <li>Represent PatchAI output as legally or scientifically authoritative</li>
+                  <li>Use PatchAI for commercial decision-making without independent validation</li>
+                </ul>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  You are solely responsible for any actions taken based on information received from PatchAI.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">4. Account Access (if applicable)</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  If account-based access is added in the future:
+                </p>
+                <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
+                  <li>You are responsible for maintaining the security of your login credentials.</li>
+                  <li>Any misuse via your account is your liability.</li>
+                </ul>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">5. Ownership and Intellectual Property</h3>
+                <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
+                  <li>All frontend/backend code, user interface design, business logic, and proprietary content of PatchAI are owned by TeraScale AI Corporation</li>
+                  <li>You may not reuse, reproduce, or republish any part of the PatchAI platform without explicit written consent</li>
+                  <li>The underlying AI model is owned by the third-party provider (e.g., OpenAI) and is not owned or operated by PatchAI</li>
+                </ul>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">6. Termination</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  We may suspend or terminate access to PatchAI at any time, with or without cause, especially for violations of these terms.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">7. Disclaimer of Warranties</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-2">
+                  PatchAI is provided "as-is" without warranty of any kind. We do not guarantee:
+                </p>
+                <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
+                  <li>Accuracy of outputs</li>
+                  <li>Availability or uptime</li>
+                  <li>Suitability for any specific purpose</li>
+                </ul>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">8. Limitation of Liability</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  To the maximum extent allowed by law, TeraScale AI Corporation is not liable for any damages, losses, or claims resulting from the use or misuse of PatchAI.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">9. Indemnification</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  You agree to defend, indemnify, and hold harmless TeraScale AI Corporation, its officers, and affiliates from any claims, damages, or liabilities arising from your use of PatchAI.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">10. Governing Law</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  These Terms are governed by the laws of the State of [Insert State], USA. You agree to resolve any legal disputes in that jurisdiction.
+                </p>
+
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">11. Contact Us</h3>
+                <p className="text-gray-700 dark:text-gray-300 mb-4">
+                  For questions regarding these Terms of Service:<br/>
+                  <a href="mailto:feedbacklooploop@gmail.com" className="text-blue-600 dark:text-blue-400 hover:underline">
+                    feedbacklooploop@gmail.com
+                  </a>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contact Us Modal */}
+      {showContactModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setShowContactModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Contact Us</h2>
+              <button
+                onClick={() => setShowContactModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full p-1"
+                aria-label="Close Contact Us"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="p-6">
+              <div className="text-center">
+                <p className="text-gray-700 dark:text-gray-300 mb-6">
+                  For general inquiries, feedback, or support related to PatchAI, please contact our team at:
+                </p>
+                
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-center space-x-2">
+                    <span className="text-2xl">📧</span>
+                    <a 
+                      href="mailto:feedbacklooploop@gmail.com" 
+                      className="text-xl font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      feedbacklooploop@gmail.com
+                    </a>
+                  </div>
+                </div>
+                
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  We typically respond within 1–2 business days.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
