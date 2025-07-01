@@ -1,5 +1,5 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" fill="#2563eb" rx="64"/>
-  <text x="256" y="200" font-family="Arial, sans-serif" font-size="85" font-weight="bold" fill="white" text-anchor="middle">Patch</text>
-  <text x="256" y="330" font-family="Arial, sans-serif" font-size="85" font-weight="bold" fill="white" text-anchor="middle">AI</text>
+  <text x="256" y="220" font-family="'SF Pro Display', 'Helvetica Neue', 'Arial Black', 'Impact', sans-serif" font-size="110" font-weight="900" fill="white" text-anchor="middle">Patch</text>
+  <text x="256" y="350" font-family="'SF Pro Display', 'Helvetica Neue', 'Arial Black', 'Impact', sans-serif" font-size="110" font-weight="900" fill="white" text-anchor="middle">AI</text>
 </svg>
