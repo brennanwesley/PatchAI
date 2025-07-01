@@ -8,13 +8,13 @@
       "type": "image/x-icon"
     },
     {
-      "src": "images/PatchAI_transparent-background.png",
-      "type": "image/png",
+      "src": "patchai-icon.svg",
+      "type": "image/svg+xml",
       "sizes": "192x192"
     },
     {
-      "src": "images/PatchAI_oil drop.png",
-      "type": "image/png",
+      "src": "patchai-icon-512.svg",
+      "type": "image/svg+xml",
       "sizes": "512x512"
     }
   ],
