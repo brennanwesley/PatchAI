@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create PNG Icons</title>
+</head>
+<body>
+    <canvas id="canvas192" width="192" height="192" style="border: 1px solid black;"></canvas>
+    <canvas id="canvas180" width="180" height="180" style="border: 1px solid black;"></canvas>
+    <br>
+    <button onclick="downloadIcons()">Download PNG Icons</button>
+
+    <script>
+        // Create 192x192 icon
+        const canvas192 = document.getElementById('canvas192');
+        const ctx192 = canvas192.getContext('2d');
+        
+        // Blue background with rounded corners
+        ctx192.fillStyle = '#2563eb';
+        ctx192.fillRect(0, 0, 192, 192);
+        
+        // White text
+        ctx192.fillStyle = 'white';
+        ctx192.font = 'bold 42px Arial';
+        ctx192.textAlign = 'center';
+        ctx192.fillText('Patch', 96, 80);
+        ctx192.fillText('AI', 96, 135);
+
+        // Create 180x180 icon (iOS standard)
+        const canvas180 = document.getElementById('canvas180');
+        const ctx180 = canvas180.getContext('2d');
+        
+        // Blue background
+        ctx180.fillStyle = '#2563eb';
+        ctx180.fillRect(0, 0, 180, 180);
+        
+        // White text
+        ctx180.fillStyle = 'white';
+        ctx180.font = 'bold 39px Arial';
+        ctx180.textAlign = 'center';
+        ctx180.fillText('Patch', 90, 75);
+        ctx180.fillText('AI', 90, 125);
+
+        function downloadIcons() {
+            // Download 192x192
+            const link192 = document.createElement('a');
+            link192.download = 'apple-touch-icon-192x192.png';
+            link192.href = canvas192.toDataURL();
+            link192.click();
+            
+            // Download 180x180
+            setTimeout(() => {
+                const link180 = document.createElement('a');
+                link180.download = 'apple-touch-icon-180x180.png';
+                link180.href = canvas180.toDataURL();
+                link180.click();
+            }, 500);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create 180x180 Icon</title>
+</head>
+<body>
+    <canvas id="canvas180" width="180" height="180" style="border: 1px solid black;"></canvas>
+    <br>
+    <button onclick="download180()">Download 180x180 Icon</button>
+
+    <script>
+        // Create 180x180 icon (iOS standard)
+        const canvas180 = document.getElementById('canvas180');
+        const ctx180 = canvas180.getContext('2d');
+        
+        // Blue background
+        ctx180.fillStyle = '#2563eb';
+        ctx180.fillRect(0, 0, 180, 180);
+        
+        // White text
+        ctx180.fillStyle = 'white';
+        ctx180.font = 'bold 39px Arial';
+        ctx180.textAlign = 'center';
+        ctx180.fillText('Patch', 90, 75);
+        ctx180.fillText('AI', 90, 125);
+
+        function download180() {
+            const link180 = document.createElement('a');
+            link180.download = 'apple-touch-icon-180x180.png';
+            link180.href = canvas180.toDataURL();
+            link180.click();
+        }
+    </script>
+</body>
+</html>
