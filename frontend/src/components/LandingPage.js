@@ -618,7 +618,7 @@ const LandingPage = () => {
                   PatchAI is a product of TeraScale AI Corporation, headquartered in the United States.
                 </p>
                 <ul className="list-disc list-inside text-gray-700 dark:text-gray-300 mb-4 ml-4">
-                  <li>Use is governed by the laws of the State of [Insert State]</li>
+                  <li>Use is governed by the laws of the State of Texas</li>
                   <li>You agree to hold TeraScale AI Corporation harmless for all claims arising from use of the service</li>
                 </ul>
 
@@ -733,7 +733,7 @@ const LandingPage = () => {
 
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">10. Governing Law</h3>
                 <p className="text-gray-700 dark:text-gray-300 mb-4">
-                  These Terms are governed by the laws of the State of [Insert State], USA. You agree to resolve any legal disputes in that jurisdiction.
+                  These Terms are governed by the laws of the State of Texas, USA. You agree to resolve any legal disputes in that jurisdiction.
                 </p>
 
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-3">11. Contact Us</h3>
