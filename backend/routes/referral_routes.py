@@ -77,6 +77,26 @@ async def signup_with_referral(request: SignupWithReferralRequest):
             # Don't fail signup if referral code assignment fails
             user_referral_code = None
         
+        # AUTO-GRANT 7-DAY PROVISIONAL ACCESS TO ALL NEW USERS
+        try:
+            from datetime import datetime, timedelta, timezone
+            current_utc = datetime.now(timezone.utc)
+            provisional_until = current_utc + timedelta(hours=168)  # 7 days
+            
+            # Update user profile with automatic 7-day provisional access
+            supabase.table("user_profiles").update({
+                "subscription_status": "active",
+                "plan_tier": "standard", 
+                "provisional_access_until": provisional_until.isoformat(),
+                "provisional_plan_tier": "standard"
+            }).eq("id", user_id).execute()
+            
+            logger.info(f"✅ AUTO-GRANTED 7-day provisional access to new user {user_id} until {provisional_until}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to auto-grant provisional access to user {user_id}: {e}")
+            # Don't fail signup if provisional access grant fails
+        
         # Create referral relationship if referral code was used
         referral_relationship_created = False
         if referring_user_info:
