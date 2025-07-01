@@ -958,7 +958,7 @@ async def grant_provisional_access(
         # Calculate 24-hour expiration with proper timezone handling
         from datetime import datetime, timedelta, timezone
         current_utc = datetime.now(timezone.utc)
-        provisional_until = current_utc + timedelta(hours=24)
+        provisional_until = current_utc + timedelta(hours=168)  # 7 days for vacation coverage
         
         # Generate payment intent ID for tracking (using full UUID for uniqueness)
         payment_intent_id = f"provisional_{uuid.uuid4().hex}"
