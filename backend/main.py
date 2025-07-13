@@ -33,11 +33,13 @@ from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Messa
 from services.openai_service import initialize_openai_client, get_system_prompt
 from services.supabase_service import supabase
 from services.chat_service import ChatService
+from services.pump_context_service import PumpContextService
 from routes.payment_routes import router as payment_router
 from routes.referral_routes import router as referral_router
 from routes.monitoring_routes import router as monitoring_router
 from routes.sync_routes import router as sync_router
 from routes.phase3_routes import router as phase3_router
+from routes.pump_routes import router as pump_router
 from services.background_monitor import background_monitor
 # Phase 3 Production Hardening Services
 from services.webhook_redundancy_service import webhook_redundancy_service
@@ -97,6 +99,7 @@ app.add_middleware(
 openai_client = initialize_openai_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
+pump_context_service = PumpContextService()
 
 # Validate Stripe configuration
 try:
@@ -283,8 +286,27 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         if new_message:
             logger.info(f"📝 CONTEXT_DEBUG: New message ({new_message.role}): {new_message.content[:50]}...")
         
+        # Generate pump-specific context if relevant
+        pump_context = None
+        if new_message and pump_context_service:
+            try:
+                pump_context = pump_context_service.generate_pump_context(new_message.content)
+                if pump_context:
+                    logger.info(f"🔧 PUMP_CONTEXT: Generated pump expertise context for user query")
+            except Exception as e:
+                logger.error(f"❌ PUMP_CONTEXT: Error generating pump context: {e}")
+        
         # Prepare complete conversation history for OpenAI
-        openai_messages = [{"role": "system", "content": get_system_prompt()}]
+        system_prompt = get_system_prompt()
+        
+        # Enhance system prompt with pump context if available
+        if pump_context:
+            enhanced_system_prompt = f"{system_prompt}\n\nCURRENT PUMP DATA CONTEXT:\n{pump_context}"
+            logger.info(f"🔧 PUMP_CONTEXT: Enhanced system prompt with real-time pump data")
+        else:
+            enhanced_system_prompt = system_prompt
+        
+        openai_messages = [{"role": "system", "content": enhanced_system_prompt}]
         
         # Add all stored messages first (Message objects with .role and .content attributes)
         for i, stored_msg in enumerate(stored_messages):
@@ -577,6 +599,7 @@ app.include_router(referral_router)
 app.include_router(monitoring_router)
 app.include_router(sync_router)
 app.include_router(phase3_router)
+app.include_router(pump_router)
 
 if __name__ == "__main__":
     import uvicorn
