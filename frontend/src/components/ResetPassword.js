@@ -12,9 +12,17 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if we have the required tokens from the URL
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
+    // Check if we have the required tokens from the URL (query params or hash fragments)
+    let accessToken = searchParams.get('access_token');
+    let refreshToken = searchParams.get('refresh_token');
+    
+    // If not in query params, check hash fragments (Supabase sometimes uses hash)
+    if (!accessToken || !refreshToken) {
+      const hash = window.location.hash.substring(1); // Remove the # symbol
+      const hashParams = new URLSearchParams(hash);
+      accessToken = hashParams.get('access_token');
+      refreshToken = hashParams.get('refresh_token');
+    }
     
     if (!accessToken || !refreshToken) {
       setError('Invalid or expired password reset link. Please request a new password reset.');
@@ -32,6 +40,9 @@ export default function ResetPassword() {
         if (error) {
           console.error('Error setting session:', error);
           setError('Invalid or expired password reset link. Please request a new password reset.');
+        } else {
+          // Clear the URL hash/params for security
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
       } catch (error) {
         console.error('Error in setSession:', error);
