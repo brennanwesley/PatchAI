@@ -160,15 +160,23 @@ class PumpContextService:
                 params['rpm'] = int(match.group(1))
                 break
         
-        # Extract pump size
+        # Extract pump size - handle both formats: "4x6-13" (JSON) and "4x6x13" (user query)
         pump_size_patterns = [
-            r'(\d+x\d+-\d+)',
-            r'(\d+\s*x\s*\d+\s*-\s*\d+)'
+            r'(\d+x\d+-\d+)',  # Matches "4x6-13" (JSON format)
+            r'(\d+\s*x\s*\d+\s*-\s*\d+)',  # Matches "4 x 6 - 13" (spaced JSON format)
+            r'(\d+x\d+x\d+)',  # Matches "4x6x13" (user query format)
+            r'(\d+\s*x\s*\d+\s*x\s*\d+)'  # Matches "4 x 6 x 13" (spaced user format)
         ]
         for pattern in pump_size_patterns:
             match = re.search(pattern, message_lower.replace(' ', ''))
             if match:
-                params['pump_size'] = match.group(1).replace(' ', '')
+                # Normalize to JSON format (convert "4x6x13" to "4x6-13")
+                pump_size = match.group(1).replace(' ', '')
+                if 'x' in pump_size and pump_size.count('x') == 2:
+                    # Convert "4x6x13" to "4x6-13"
+                    parts = pump_size.split('x')
+                    pump_size = f"{parts[0]}x{parts[1]}-{parts[2]}"
+                params['pump_size'] = pump_size
                 break
         
         # Extract fluid type
