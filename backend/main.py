@@ -289,23 +289,37 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         
         # Generate pump-specific context if relevant
         pump_context = None
+        logger.info(f"🔍 PUMP_DEBUG: Starting pump context generation for message: {new_message.content[:100] if new_message else 'None'}...")
+        logger.info(f"🔍 PUMP_DEBUG: pump_context_service available: {pump_context_service is not None}")
+        
         if new_message and pump_context_service:
             try:
+                logger.info(f"🔍 PUMP_DEBUG: Calling generate_pump_context...")
                 pump_context = pump_context_service.generate_pump_context(new_message.content)
+                logger.info(f"🔍 PUMP_DEBUG: Pump context generated: {pump_context is not None}")
                 if pump_context:
                     logger.info(f"🔧 PUMP_CONTEXT: Generated pump expertise context for user query")
+                    logger.info(f"🔍 PUMP_DEBUG: Context length: {len(pump_context)} characters")
+                    logger.info(f"🔍 PUMP_DEBUG: Context preview: {pump_context[:200]}...")
+                else:
+                    logger.info(f"🔍 PUMP_DEBUG: No pump context generated - query not pump-related")
             except Exception as e:
                 logger.error(f"❌ PUMP_CONTEXT: Error generating pump context: {e}")
+                logger.error(f"❌ PUMP_DEBUG: Full traceback: {traceback.format_exc()}")
         
         # Prepare complete conversation history for OpenAI
         system_prompt = get_system_prompt()
+        logger.info(f"🔍 PUMP_DEBUG: Base system prompt length: {len(system_prompt)} characters")
         
         # Enhance system prompt with pump context if available
         if pump_context:
-            enhanced_system_prompt = f"{system_prompt}\n\nCURRENT PUMP DATA CONTEXT:\n{pump_context}"
+            enhanced_system_prompt = f"{system_prompt}\n\n=== CRITICAL: USE THIS PUMP DATA ===\n{pump_context}\n\nIMPORTANT: You MUST use the pump data provided above to answer pump-related questions. Do NOT provide generic responses when specific pump data is available. Format tables using proper markdown syntax with | separators."
             logger.info(f"🔧 PUMP_CONTEXT: Enhanced system prompt with real-time pump data")
+            logger.info(f"🔍 PUMP_DEBUG: Enhanced prompt length: {len(enhanced_system_prompt)} characters")
+            logger.info(f"🔍 PUMP_DEBUG: Enhanced prompt preview: ...{enhanced_system_prompt[-300:]}")
         else:
             enhanced_system_prompt = system_prompt
+            logger.info(f"🔍 PUMP_DEBUG: Using base system prompt (no pump context)")
         
         openai_messages = [{"role": "system", "content": enhanced_system_prompt}]
         

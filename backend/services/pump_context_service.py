@@ -80,9 +80,9 @@ class PumpContextService:
             logger.error(f"Error getting pump recommendations: {str(e)}")
             return f"PUMP RECOMMENDATIONS: Error calculating recommendations for {flow_gpm} GPM @ {head_ft} ft"
     
-    def get_pump_performance_context(self, pump_size: str, flow_gpm: float, 
-                                   rpm: int = 1750, fluid_sg: float = 1.1) -> str:
-        """Get specific pump performance data as context"""
+    def get_pump_performance_context(self, pump_size: str, flow_gpm: float = None, 
+                               rpm: int = 1750, fluid_sg: float = 1.1) -> str:
+        """Get specific pump performance data as context with full curve tables"""
         try:
             pump = self.pump_data_loader.get_pump_by_size(pump_size)
             if not pump:
@@ -95,21 +95,43 @@ class PumpContextService:
             
             curve_data = pump['curve_data'][rpm_key]
             
-            # Calculate performance at specified flow
-            efficiency = self.pump_selection_service._interpolate_curve(curve_data['efficiency'], flow_gpm)
-            power_hp = self.pump_selection_service._interpolate_curve(curve_data['power_required'], flow_gpm)
-            npsh_req = self.pump_selection_service._interpolate_curve(curve_data['npsh_required'], flow_gpm)
-            head_at_flow = self.pump_selection_service._interpolate_curve(curve_data['head_vs_flow'], flow_gpm)
+            # Generate complete pump curve table
+            context = f"PUMP CURVE DATA - {pump_size} @ {rpm} RPM:\n\n"
+            context += "| Flow (GPM) | Head (ft) | Efficiency (%) | Power (HP) | NPSH Req (ft) |\n"
+            context += "|------------|-----------|----------------|------------|---------------|\n"
             
-            if any(x is None for x in [efficiency, power_hp, npsh_req, head_at_flow]):
-                return f"PUMP PERFORMANCE: Flow {flow_gpm} GPM outside curve range for {pump_size}"
+            # Get all flow points from head_vs_flow curve
+            head_curve = curve_data['head_vs_flow']
+            eff_curve = curve_data['efficiency']
+            power_curve = curve_data['power_required']
+            npsh_curve = curve_data['npsh_required']
             
-            brake_hp = power_hp * fluid_sg
+            for head_point in head_curve:
+                flow = head_point['flow']
+                head = head_point['head']
+                
+                # Find corresponding efficiency, power, and NPSH
+                eff = next((p['eff'] for p in eff_curve if p['flow'] == flow), 'N/A')
+                power = next((p['hp'] for p in power_curve if p['flow'] == flow), 'N/A')
+                npsh = next((p['npsh'] for p in npsh_curve if p['flow'] == flow), 'N/A')
+                
+                context += f"| {flow:>8} | {head:>7.1f} | {eff:>12} | {power:>8} | {npsh:>11} |\n"
             
-            context = f"PUMP PERFORMANCE - {pump_size} @ {flow_gpm} GPM, {rpm} RPM:\n"
-            context += f"Head: {head_at_flow:.1f} ft, Efficiency: {efficiency:.1f}%\n"
-            context += f"Power Required: {power_hp:.1f} HP, Brake HP: {brake_hp:.1f} HP\n"
-            context += f"NPSH Required: {npsh_req:.1f} ft\n"
+            # If specific flow requested, add performance calculation
+            if flow_gpm is not None:
+                efficiency = self.pump_selection_service._interpolate_curve(curve_data['efficiency'], flow_gpm)
+                power_hp = self.pump_selection_service._interpolate_curve(curve_data['power_required'], flow_gpm)
+                npsh_req = self.pump_selection_service._interpolate_curve(curve_data['npsh_required'], flow_gpm)
+                head_at_flow = self.pump_selection_service._interpolate_curve(curve_data['head_vs_flow'], flow_gpm)
+                
+                if all(x is not None for x in [efficiency, power_hp, npsh_req, head_at_flow]):
+                    brake_hp = power_hp * fluid_sg
+                    context += f"\n**Performance at {flow_gpm} GPM:**\n"
+                    context += f"- Head: {head_at_flow:.1f} ft\n"
+                    context += f"- Efficiency: {efficiency:.1f}%\n"
+                    context += f"- Power Required: {power_hp:.1f} HP\n"
+                    context += f"- Brake HP: {brake_hp:.1f} HP\n"
+                    context += f"- NPSH Required: {npsh_req:.1f} ft\n"
             
             return context
             
@@ -211,11 +233,12 @@ class PumpContextService:
                 )
                 context_parts.append(recommendations_context)
             
-            # If specific pump and flow specified, provide performance data
-            if 'pump_size' in params and 'flow_gpm' in params:
+            # If specific pump specified, provide full curve data (with or without specific flow)
+            if 'pump_size' in params:
                 rpm = params.get('rpm', 1750)
+                flow_gpm = params.get('flow_gpm')  # May be None
                 performance_context = self.get_pump_performance_context(
-                    params['pump_size'], params['flow_gpm'], rpm
+                    params['pump_size'], flow_gpm, rpm
                 )
                 context_parts.append(performance_context)
             
