@@ -99,6 +99,7 @@ app.add_middleware(
 openai_client = initialize_openai_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
+# DEPLOYMENT TRIGGER: 2025-01-13T20:17:00Z - PUMP CONTEXT SERVICE INTEGRATION FIX
 pump_context_service = PumpContextService()
 
 # Validate Stripe configuration
