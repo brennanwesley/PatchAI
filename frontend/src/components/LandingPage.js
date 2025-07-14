@@ -15,46 +15,9 @@ const LandingPage = () => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetMessage, setResetMessage] = useState('');
-  const [resetError, setResetError] = useState('');
-  const { login, signUp, resetPassword } = useAuth();
+  const { login, signUp } = useAuth();
 
-  // Handle forgot password
-  const handleForgotPassword = async (e) => {
-    e.preventDefault();
-    if (!resetEmail) {
-      setResetError('Please enter your email address');
-      return;
-    }
 
-    setResetLoading(true);
-    setResetError('');
-    setResetMessage('');
-
-    try {
-      const { error } = await resetPassword(resetEmail);
-      
-      if (error) {
-        setResetError(error.message || 'Failed to send password reset email');
-      } else {
-        setResetMessage('Password reset email sent! Check your inbox and follow the instructions.');
-        // Clear the form after successful send
-        setTimeout(() => {
-          setShowForgotPassword(false);
-          setResetEmail('');
-          setResetMessage('');
-          setResetError('');
-        }, 3000);
-      }
-    } catch (error) {
-      setResetError('An unexpected error occurred. Please try again.');
-    } finally {
-      setResetLoading(false);
-    }
-  };
 
   // Validate referral code as user types
   const validateReferralCode = async (code) => {
@@ -419,21 +382,7 @@ const LandingPage = () => {
                   </button>
                 </div>
                 
-                {/* Forgot Password Link - Only show for login */}
-                {isLogin && (
-                  <div className="text-center mt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowForgotPassword(true);
-                        setResetEmail(email); // Pre-fill with current email if available
-                      }}
-                      className="text-sm text-gray-600 hover:text-gray-500 dark:text-gray-400 dark:hover:text-gray-300"
-                    >
-                      Forgot your password?
-                    </button>
-                  </div>
-                )}
+
               </form>
             </div>
           </div>
@@ -849,94 +798,7 @@ const LandingPage = () => {
           </div>
         </div>
       )}
-      
-      {/* Forgot Password Modal */}
-      {showForgotPassword && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">Reset Password</h3>
-                <button
-                  onClick={() => {
-                    setShowForgotPassword(false);
-                    setResetEmail('');
-                    setResetMessage('');
-                    setResetError('');
-                  }}
-                  className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                Enter your email address and we'll send you a link to reset your password.
-              </p>
-              
-              <form onSubmit={handleForgotPassword}>
-                <div className="mb-4">
-                  <label htmlFor="resetEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Email Address
-                  </label>
-                  <input
-                    id="resetEmail"
-                    type="email"
-                    required
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="Enter your email"
-                  />
-                </div>
-                
-                {resetError && (
-                  <div className="mb-4 text-sm text-red-600 dark:text-red-400">
-                    {resetError}
-                  </div>
-                )}
-                
-                {resetMessage && (
-                  <div className="mb-4 text-sm text-green-600 dark:text-green-400">
-                    {resetMessage}
-                  </div>
-                )}
-                
-                <div className="flex space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowForgotPassword(false);
-                      setResetEmail('');
-                      setResetMessage('');
-                      setResetError('');
-                    }}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={resetLoading}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {resetLoading ? (
-                      <div className="flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Sending...
-                      </div>
-                    ) : (
-                      'Send Reset Email'
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

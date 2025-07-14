@@ -5,8 +5,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 import App from './App';
 import LandingPage from './components/LandingPage';
-import ResetPassword from './components/ResetPassword';
-import AuthCallback from './components/AuthCallback';
 import reportWebVitals from './reportWebVitals';
 
 // Fresh deployment after database cleanup - 2025-06-22
@@ -54,18 +52,7 @@ const AppRoutes = () => {
           </PublicRoute>
         }
       />
-      <Route
-        path="/reset-password"
-        element={
-          <PublicRoute>
-            <ResetPassword />
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/auth/callback"
-        element={<AuthCallback />}
-      />
+
       <Route
         path="/chat"
         element={

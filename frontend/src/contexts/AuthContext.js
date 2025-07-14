@@ -235,24 +235,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
   
-  // Reset password
-  const resetPassword = async (email) => {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      
-      if (error) {
-        console.error('Error sending password reset email:', error);
-        return { error };
-      }
-      
-      return { error: null };
-    } catch (error) {
-      console.error('Error in password reset:', error);
-      return { error };
-    }
-  };
+
   
   // CRITICAL FIX: Memoize context value to prevent infinite ChatProvider re-mounting
   const value = useMemo(() => ({
@@ -263,8 +246,7 @@ export const AuthProvider = ({ children }) => {
     signOut,
     login,
     signUp,
-    resetPassword,
-  }), [user, loading, initialized, signIn, signOut, login, signUp, resetPassword]);
+  }), [user, loading, initialized, signIn, signOut, login, signUp]);
 
   return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
 };
