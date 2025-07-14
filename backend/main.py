@@ -99,8 +99,17 @@ app.add_middleware(
 openai_client = initialize_openai_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
+
 # DEPLOYMENT TRIGGER: 2025-01-13T20:17:00Z - PUMP CONTEXT SERVICE INTEGRATION FIX
-pump_context_service = PumpContextService()
+# Initialize pump context service with error handling to prevent backend crashes
+try:
+    pump_context_service = PumpContextService()
+    logger.info("✅ PumpContextService initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize PumpContextService: {e}")
+    logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+    pump_context_service = None
+    logger.warning("⚠️ Pump context features will be disabled")
 
 # Validate Stripe configuration
 try:
@@ -306,6 +315,9 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
             except Exception as e:
                 logger.error(f"❌ PUMP_CONTEXT: Error generating pump context: {e}")
                 logger.error(f"❌ PUMP_DEBUG: Full traceback: {traceback.format_exc()}")
+                pump_context = None  # Ensure pump_context is None on error
+        elif new_message and not pump_context_service:
+            logger.warning(f"⚠️ PUMP_DEBUG: Pump context service not available - pump features disabled")
         
         # Prepare complete conversation history for OpenAI
         system_prompt = get_system_prompt()
