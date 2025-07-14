@@ -100,7 +100,7 @@ openai_client = initialize_openai_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
 
-# DEPLOYMENT TRIGGER: 2025-01-13T20:17:00Z - PUMP CONTEXT SERVICE INTEGRATION FIX
+# DEPLOYMENT TRIGGER: 2025-07-14T01:52:30Z - FORCE RENDER REBUILD WITH 500 ERROR FIX
 # Initialize pump context service with error handling to prevent backend crashes
 try:
     pump_context_service = PumpContextService()
