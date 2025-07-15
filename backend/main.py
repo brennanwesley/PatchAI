@@ -85,6 +85,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Global variable for pump context service
+pump_context_service = None
+
 # Initialize FastAPI app
 app = FastAPI(
     title="PatchAI Backend",
@@ -254,6 +257,7 @@ logger.info("PatchAI Backend initialized with enterprise architecture and chat s
 @app.on_event("startup")
 async def startup_event():
     """Initialize background services on startup"""
+    global pump_context_service
     logger.info("🚀 Application startup initiated")
     
     # Start provisional access scheduler
@@ -262,6 +266,25 @@ async def startup_event():
         logger.info("✅ Provisional access scheduler started")
     except Exception as e:
         logger.error(f"❌ Failed to start provisional scheduler: {str(e)}")
+    
+    # Initialize pump context service
+    try:
+        logger.info("🔄 Initializing pump context service...")
+        from services.pump_context_service import PumpContextService
+        pump_context_service = PumpContextService()
+        
+        # Test the service
+        test_query = "4x6-13 pump"
+        logger.info("🧪 Testing pump context service...")
+        test_result = pump_context_service.generate_pump_context(test_query)
+        if test_result:
+            logger.info(f"✅ Pump context service initialized successfully (test query: {test_query})")
+            logger.debug(f"Test result preview: {test_result[:200]}...")
+        else:
+            logger.warning("⚠️ Pump context service returned None for test query")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize pump context service: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
     
     logger.info("🚀 Application startup complete")
     logger.info("✅ All services initialized successfully")
@@ -413,44 +436,31 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
             logger.info(f"[MESSAGE] Processing user message: {last_user_message.content[:200]}...")
         
         # Log pump context service status with more details
+        global pump_context_service
         try:
-            if 'pump_context_service' in globals():
-                logger.debug("[PUMP] Pump context service is available in globals")
-                if pump_context_service is not None:
-                    logger.debug("[PUMP] Pump context service is initialized")
-                    # Test the pump context service with a sample query
-                    test_query = "4x6-13 pump"
-                    logger.debug(f"[PUMP] Testing pump context generation with query: {test_query}")
-                    try:
-                        pump_context = pump_context_service.generate_pump_context(test_query)
-                        if pump_context:
-                            logger.debug(f"[PUMP] Successfully generated pump context ({len(pump_context)} chars)")
-                            logger.debug(f"[PUMP] Context preview: {pump_context[:200]}...")
-                        else:
-                            logger.warning("[PUMP] No pump context generated (query may not be pump-related)")
-                    except Exception as e:
-                        logger.error(f"[PUMP] Error generating pump context: {str(e)}")
-                        logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
-                else:
-                    logger.error("[PUMP] Pump context service is None - check initialization")
-                    # Try to reinitialize the service
-                    try:
-                        from services.pump_context_service import PumpContextService
-                        global pump_context_service
-                        pump_context_service = PumpContextService()
-                        logger.info("[PUMP] Successfully reinitialized pump context service")
-                    except Exception as e:
-                        logger.error(f"[PUMP] Failed to reinitialize pump context service: {str(e)}")
+            if pump_context_service is not None:
+                logger.debug("[PUMP] Pump context service is initialized")
+                # Test the pump context service with a sample query
+                test_query = "4x6-13 pump"
+                logger.debug(f"[PUMP] Testing pump context generation with query: {test_query}")
+                try:
+                    pump_context = pump_context_service.generate_pump_context(test_query)
+                    if pump_context:
+                        logger.debug(f"[PUMP] Successfully generated pump context ({len(pump_context)} chars)")
+                        logger.debug(f"[PUMP] Context preview: {pump_context[:200]}...")
+                    else:
+                        logger.warning("[PUMP] No pump context generated (query may not be pump-related)")
+                except Exception as e:
+                    logger.error(f"[PUMP] Error generating pump context: {str(e)}")
+                    logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
             else:
-                logger.error("[PUMP] Pump context service not found in globals - checking imports")
-                # Try to import and initialize the service
+                logger.error("[PUMP] Pump context service is None - initializing...")
                 try:
                     from services.pump_context_service import PumpContextService
-                    global pump_context_service
                     pump_context_service = PumpContextService()
-                    logger.info("[PUMP] Successfully imported and initialized pump context service")
+                    logger.info("[PUMP] Successfully initialized pump context service")
                 except Exception as e:
-                    logger.error(f"[PUMP] Failed to import or initialize pump context service: {str(e)}")
+                    logger.error(f"[PUMP] Failed to initialize pump context service: {str(e)}")
                     logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
         except Exception as e:
             logger.error(f"[PUMP] Unexpected error checking pump context service: {str(e)}")
