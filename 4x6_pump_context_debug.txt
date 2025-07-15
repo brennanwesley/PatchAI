@@ -1,0 +1,42 @@
+CURRENT PUMP INVENTORY:
+- 2x3-13: Goulds_3196_Equivalent (centrifugal_ansi_transfer)
+  Max HP: 100, RPMs: [1750, 3550]
+  Fluids: produced_water, oil, brine
+  SG Range: 0.8-1.2
+- 3x4-13: Goulds_3196_Equivalent (centrifugal_ansi_transfer)
+  Max HP: 150, RPMs: [1750, 3550]
+  Fluids: produced_water, oil, brine
+  SG Range: 0.8-1.2
+- 4x6-13: Goulds_3196_Equivalent (centrifugal_ansi_transfer)
+  Max HP: 150, RPMs: [1750, 3550]
+  Fluids: produced_water, oil, brine
+  SG Range: 0.8-1.2
+- 6x8-15: Goulds_3196_Equivalent (centrifugal_ansi_transfer)
+  Max HP: 200, RPMs: [1750, 3550]
+  Fluids: produced_water, oil, brine
+  SG Range: 0.8-1.2
+- 8x10-17: Goulds_3196_Equivalent (centrifugal_ansi_charge)
+  Max HP: 100, RPMs: [1200, 1750]
+  Fluids: produced_water, oil, brine
+  SG Range: 0.8-1.2
+
+
+PUMP CURVE DATA - 4x6-13 @ 1750 RPM:
+
+| Flow (GPM) | Head (ft) | Efficiency (%) | Power (HP) | NPSH Req (ft) |
+|------------|-----------|----------------|------------|---------------|
+|        0 |    36.0 |           48 |        0 |         2.5 |
+|      250 |    35.0 |           58 |        6 |           3 |
+|      500 |    32.0 |           63 |       12 |         3.5 |
+|      750 |    28.0 |           66 |       20 |         4.5 |
+|     1000 |    24.0 |           63 |       28 |           5 |
+|     1250 |    18.0 |           58 |       32 |         5.5 |
+|     1500 |    12.0 |           48 |       35 |           6 |
+|     1750 |     5.0 |           38 |       38 |           7 |
+
+**Performance at 4.0 GPM:**
+- Head: 36.0 ft
+- Efficiency: 48.2%
+- Power Required: 0.1 HP
+- Brake HP: 0.1 HP
+- NPSH Required: 2.5 ft

@@ -101,15 +101,77 @@ rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
 
 # DEPLOYMENT TRIGGER: 2025-07-14T01:52:30Z - FORCE RENDER REBUILD WITH 500 ERROR FIX
-# Initialize pump context service with error handling to prevent backend crashes
+# Initialize pump context service with comprehensive error handling and diagnostics
+logger.info("🔧 PUMP_INIT: Starting PumpContextService initialization...")
+
+# Pre-initialization diagnostics
 try:
+    import os
+    from pathlib import Path
+    
+    # Check if pump data directory exists
+    pump_data_dir = Path(__file__).parent / "data" / "pumps"
+    logger.info(f"🔍 PUMP_INIT: Checking pump data directory: {pump_data_dir}")
+    logger.info(f"🔍 PUMP_INIT: Directory exists: {pump_data_dir.exists()}")
+    
+    if pump_data_dir.exists():
+        pump_files = list(pump_data_dir.glob("*.json"))
+        logger.info(f"🔍 PUMP_INIT: Found {len(pump_files)} JSON files in pump data directory")
+        for pump_file in pump_files:
+            logger.info(f"🔍 PUMP_INIT: - {pump_file.name} (size: {pump_file.stat().st_size} bytes)")
+    else:
+        logger.error(f"❌ PUMP_INIT: Pump data directory does not exist: {pump_data_dir}")
+    
+    # Check specific transfer_pumps.json file
+    transfer_pumps_file = pump_data_dir / "transfer_pumps.json"
+    logger.info(f"🔍 PUMP_INIT: Checking transfer_pumps.json: {transfer_pumps_file}")
+    logger.info(f"🔍 PUMP_INIT: File exists: {transfer_pumps_file.exists()}")
+    
+    if transfer_pumps_file.exists():
+        logger.info(f"🔍 PUMP_INIT: File size: {transfer_pumps_file.stat().st_size} bytes")
+        logger.info(f"🔍 PUMP_INIT: File readable: {os.access(transfer_pumps_file, os.R_OK)}")
+    
+except Exception as diag_e:
+    logger.error(f"❌ PUMP_INIT: Error during pre-initialization diagnostics: {diag_e}")
+    logger.error(f"❌ PUMP_INIT: Diagnostics traceback: {traceback.format_exc()}")
+
+# Attempt PumpContextService initialization
+try:
+    logger.info("🔧 PUMP_INIT: Attempting to import PumpContextService...")
+    from services.pump_context_service import PumpContextService
+    logger.info("✅ PUMP_INIT: PumpContextService import successful")
+    
+    logger.info("🔧 PUMP_INIT: Attempting to instantiate PumpContextService...")
     pump_context_service = PumpContextService()
-    logger.info("✅ PumpContextService initialized successfully")
-except Exception as e:
-    logger.error(f"❌ Failed to initialize PumpContextService: {e}")
-    logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+    logger.info("✅ PUMP_INIT: PumpContextService initialized successfully")
+    
+    # Validate service functionality
+    logger.info("🔧 PUMP_INIT: Testing service functionality...")
+    if hasattr(pump_context_service, 'generate_pump_context'):
+        logger.info("✅ PUMP_INIT: generate_pump_context method available")
+    else:
+        logger.error("❌ PUMP_INIT: generate_pump_context method missing")
+    
+    # Test with a simple query
+    try:
+        test_result = pump_context_service.generate_pump_context("test pump query")
+        logger.info(f"✅ PUMP_INIT: Service test successful, result type: {type(test_result)}")
+    except Exception as test_e:
+        logger.error(f"❌ PUMP_INIT: Service test failed: {test_e}")
+        
+except ImportError as ie:
+    logger.error(f"❌ PUMP_INIT: Failed to import PumpContextService: {ie}")
+    logger.error(f"❌ PUMP_INIT: Import traceback: {traceback.format_exc()}")
     pump_context_service = None
-    logger.warning("⚠️ Pump context features will be disabled")
+    logger.warning("⚠️ PUMP_INIT: Pump context features disabled due to import failure")
+except Exception as e:
+    logger.error(f"❌ PUMP_INIT: Failed to initialize PumpContextService: {e}")
+    logger.error(f"❌ PUMP_INIT: Error type: {type(e).__name__}")
+    logger.error(f"❌ PUMP_INIT: Full traceback: {traceback.format_exc()}")
+    pump_context_service = None
+    logger.warning("⚠️ PUMP_INIT: Pump context features disabled due to initialization failure")
+
+logger.info(f"🔧 PUMP_INIT: Final pump_context_service state: {pump_context_service is not None}")
 
 # Validate Stripe configuration
 try:
@@ -301,23 +363,37 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         logger.info(f"🔍 PUMP_DEBUG: Starting pump context generation for message: {new_message.content[:100] if new_message else 'None'}...")
         logger.info(f"🔍 PUMP_DEBUG: pump_context_service available: {pump_context_service is not None}")
         
-        if new_message and pump_context_service:
+        # CRITICAL FIX: Enhanced null checking to prevent 500 errors
+        if new_message and pump_context_service is not None:
             try:
                 logger.info(f"🔍 PUMP_DEBUG: Calling generate_pump_context...")
-                pump_context = pump_context_service.generate_pump_context(new_message.content)
-                logger.info(f"🔍 PUMP_DEBUG: Pump context generated: {pump_context is not None}")
-                if pump_context:
-                    logger.info(f"🔧 PUMP_CONTEXT: Generated pump expertise context for user query")
-                    logger.info(f"🔍 PUMP_DEBUG: Context length: {len(pump_context)} characters")
-                    logger.info(f"🔍 PUMP_DEBUG: Context preview: {pump_context[:200]}...")
+                # Additional safety check before calling methods
+                if hasattr(pump_context_service, 'generate_pump_context'):
+                    pump_context = pump_context_service.generate_pump_context(new_message.content)
+                    logger.info(f"🔍 PUMP_DEBUG: Pump context generated: {pump_context is not None}")
+                    if pump_context:
+                        logger.info(f"🔧 PUMP_CONTEXT: Generated pump expertise context for user query")
+                        logger.info(f"🔍 PUMP_DEBUG: Context length: {len(pump_context)} characters")
+                        logger.info(f"🔍 PUMP_DEBUG: Context preview: {pump_context[:200]}...")
+                    else:
+                        logger.info(f"🔍 PUMP_DEBUG: No pump context generated - query not pump-related")
                 else:
-                    logger.info(f"🔍 PUMP_DEBUG: No pump context generated - query not pump-related")
+                    logger.error(f"❌ PUMP_CONTEXT: PumpContextService object exists but missing generate_pump_context method")
+                    pump_context = None
+            except AttributeError as ae:
+                logger.error(f"❌ PUMP_CONTEXT: AttributeError in pump context generation: {ae}")
+                logger.error(f"❌ PUMP_DEBUG: This indicates pump_context_service is None or malformed")
+                logger.error(f"❌ PUMP_DEBUG: Full traceback: {traceback.format_exc()}")
+                pump_context = None
             except Exception as e:
-                logger.error(f"❌ PUMP_CONTEXT: Error generating pump context: {e}")
+                logger.error(f"❌ PUMP_CONTEXT: Unexpected error generating pump context: {e}")
                 logger.error(f"❌ PUMP_DEBUG: Full traceback: {traceback.format_exc()}")
                 pump_context = None  # Ensure pump_context is None on error
-        elif new_message and not pump_context_service:
-            logger.warning(f"⚠️ PUMP_DEBUG: Pump context service not available - pump features disabled")
+        elif new_message and pump_context_service is None:
+            logger.warning(f"⚠️ PUMP_DEBUG: Pump context service is None - pump features disabled due to initialization failure")
+            logger.warning(f"⚠️ PUMP_DEBUG: User query appears pump-related but service unavailable: {new_message.content[:100]}...")
+        elif not new_message:
+            logger.debug(f"🔍 PUMP_DEBUG: No new message to process for pump context")
         
         # Prepare complete conversation history for OpenAI
         system_prompt = get_system_prompt()
