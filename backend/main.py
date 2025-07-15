@@ -17,9 +17,14 @@ import time
 import uuid
 import logging
 import traceback
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+import traceback
+import logging
+from typing import Dict, Any
 
 # Import our modular components
 from core.logging import StructuredLogger
@@ -73,12 +78,74 @@ else:
 
 logger.info("✅ Service initialization complete")
 
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Initialize FastAPI app
 app = FastAPI(
-    title="PatchAI Backend API",
-    description="Enterprise-grade AI assistant for oilfield operations",
-    version="0.3.1"
+    title="PatchAI Backend",
+    description="Enterprise SaaS Platform for PatchAI",
+    version="2.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
 )
+
+# Global exception handler for all unhandled exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Log the full error with traceback
+    logger.error(
+        f"Unhandled exception: {str(exc)}\n"
+        f"Path: {request.url.path}\n"
+        f"Method: {request.method}\n"
+        f"Client: {request.client.host if request.client else 'unknown'}\n"
+        f"Traceback: {traceback.format_exc()}",
+        exc_info=True
+    )
+    
+    # Return a detailed error response
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error",
+            "error": str(exc),
+            "request_url": str(request.url),
+            "request_method": request.method,
+            "error_type": exc.__class__.__name__
+        }
+    )
+
+# Handle HTTP exceptions (like 404, 403, etc.)
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    logger.warning(
+        f"HTTP Exception: {exc.detail}\n"
+        f"Status Code: {exc.status_code}\n"
+        f"Path: {request.url.path}\n"
+        f"Method: {request.method}"
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+
+# Handle request validation errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.warning(
+        f"Request Validation Error: {str(exc)}\n"
+        f"Path: {request.url.path}\n"
+        f"Method: {request.method}\n"
+        f"Errors: {exc.errors()}"
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": "Validation error", "errors": exc.errors()}
+    )
 
 # CORS middleware
 app.add_middleware(
@@ -319,17 +386,75 @@ async def check_rate_limits(request: Request, user_id: str):
 async def chat_completion(request: PromptRequest, req: Request, user_id: str = Depends(verify_jwt_token)):
     """Send conversation to OpenAI and return response with proper chat session management"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
+    logger.info(f"[REQUEST] Starting chat completion - User: {user_id}, Correlation ID: {correlation_id}")
     
     try:
+        # Log the incoming request
+        logger.debug(f"[REQUEST] Incoming request data: {request.model_dump_json()}")
+        
         # Check rate limits
+        logger.debug("[RATE LIMIT] Checking rate limits...")
         await check_rate_limits(req, user_id)
+        logger.debug("[RATE LIMIT] Rate limits check passed")
         
         # Enforce subscription access (PAYWALL)
+        logger.debug("[SUBSCRIPTION] Validating subscription...")
         subscription_info = await enforce_subscription(req, user_id)
+        logger.debug(f"[SUBSCRIPTION] Subscription info: {subscription_info}")
         
         # Validate input
         if not request.messages:
+            logger.warning("[VALIDATION] Empty messages array received")
             raise HTTPException(status_code=400, detail="Messages array cannot be empty")
+            
+        # Log the last user message for context
+        last_user_message = next((msg for msg in reversed(request.messages) if msg.role == "user"), None)
+        if last_user_message:
+            logger.info(f"[MESSAGE] Processing user message: {last_user_message.content[:200]}...")
+        
+        # Log pump context service status with more details
+        try:
+            if 'pump_context_service' in globals():
+                logger.debug("[PUMP] Pump context service is available in globals")
+                if pump_context_service is not None:
+                    logger.debug("[PUMP] Pump context service is initialized")
+                    # Test the pump context service with a sample query
+                    test_query = "4x6-13 pump"
+                    logger.debug(f"[PUMP] Testing pump context generation with query: {test_query}")
+                    try:
+                        pump_context = pump_context_service.generate_pump_context(test_query)
+                        if pump_context:
+                            logger.debug(f"[PUMP] Successfully generated pump context ({len(pump_context)} chars)")
+                            logger.debug(f"[PUMP] Context preview: {pump_context[:200]}...")
+                        else:
+                            logger.warning("[PUMP] No pump context generated (query may not be pump-related)")
+                    except Exception as e:
+                        logger.error(f"[PUMP] Error generating pump context: {str(e)}")
+                        logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
+                else:
+                    logger.error("[PUMP] Pump context service is None - check initialization")
+                    # Try to reinitialize the service
+                    try:
+                        from services.pump_context_service import PumpContextService
+                        global pump_context_service
+                        pump_context_service = PumpContextService()
+                        logger.info("[PUMP] Successfully reinitialized pump context service")
+                    except Exception as e:
+                        logger.error(f"[PUMP] Failed to reinitialize pump context service: {str(e)}")
+            else:
+                logger.error("[PUMP] Pump context service not found in globals - checking imports")
+                # Try to import and initialize the service
+                try:
+                    from services.pump_context_service import PumpContextService
+                    global pump_context_service
+                    pump_context_service = PumpContextService()
+                    logger.info("[PUMP] Successfully imported and initialized pump context service")
+                except Exception as e:
+                    logger.error(f"[PUMP] Failed to import or initialize pump context service: {str(e)}")
+                    logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
+        except Exception as e:
+            logger.error(f"[PUMP] Unexpected error checking pump context service: {str(e)}")
+            logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
         
         if not openai_client:
             structured_logger.log_error(correlation_id, "OpenAI", "OpenAI client not initialized", user_id)
