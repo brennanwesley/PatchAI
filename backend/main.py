@@ -624,32 +624,7 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
             logger.error(f"[OPENAI_API_ERROR] Full traceback: {traceback.format_exc()}")
             structured_logger.log_openai_error(correlation_id, f"OpenAI API call failed: {str(openai_error)}")
             
-            # CRITICAL: Check if this is a pump-related query and provide fallback
-            if pump_fallback_service and pump_fallback_service.is_pump_related_query(new_message.content):
-                logger.info(f"[PUMP_FALLBACK] OpenAI failed for pump query, using fallback service")
-                logger.info(f"[PUMP_FALLBACK] Query: {new_message.content[:100]}...")
-                
-                try:
-                    fallback_response = pump_fallback_service.generate_fallback_response(new_message.content)
-                    logger.info(f"[PUMP_FALLBACK] Generated fallback response ({len(fallback_response)} chars)")
-                    
-                    # Add user message to single chat session
-                    user_message = request.messages[-1]
-                    chat_id = await chat_service.add_message_to_single_chat(user_id, user_message)
-                    
-                    # Add fallback response to single chat session
-                    fallback_message = Message(role="assistant", content=fallback_response)
-                    await chat_service.add_message_to_single_chat(user_id, fallback_message)
-                    
-                    logger.info(f"[PUMP_FALLBACK] Fallback response saved to chat {chat_id} for user {user_id}")
-                    
-                    return PromptResponse(response=fallback_response, chat_id=chat_id)
-                    
-                except Exception as fallback_error:
-                    logger.error(f"[PUMP_FALLBACK] Fallback service also failed: {fallback_error}")
-                    # Fall through to original error handling
-            
-            # Original error handling for non-pump queries or fallback failures
+            # Original error handling when OpenAI API fails
             raise HTTPException(
                 status_code=503,
                 detail="AI service encountered an error. Please try again later."
