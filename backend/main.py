@@ -65,8 +65,14 @@ logger.info("🔍 Enhanced debugging enabled for chat message operations")
 # Initialize OpenAI
 openai_client = initialize_openai_client()
 if not openai_client:
-    logger.error("❌ Failed to initialize OpenAI client")
-    
+    logger.error("❌ CRITICAL: Failed to initialize OpenAI client - chat will not work")
+else:
+    logger.info("✅ OpenAI client initialized successfully")
+
+# Initialize Chat Service
+chat_service = ChatService(supabase)
+logger.info("✅ Chat service initialized")
+
 # Initialize Supabase
 supabase_client = supabase
 
@@ -75,7 +81,7 @@ logger.info("💳 Initializing Stripe...")
 if initialize_stripe():
     logger.info("✅ Stripe initialized successfully")
 else:
-    logger.error("❌ Failed to initialize Stripe - payment features may not work")
+    logger.warning("⚠️ Stripe initialization warning - payment features may not work")
 
 logger.info("✅ Service initialization complete")
 
@@ -209,54 +215,8 @@ except Exception as e:
 
 logger.info("PatchAI Backend initialized with enterprise architecture and chat service")
 
-# Application lifecycle events
-@app.on_event("startup")
-async def startup_event():
-    """Initialize background services on startup"""
-    logger.info("🚀 Application startup initiated")
-    
-    # Start provisional access scheduler
-    try:
-        provisional_scheduler.start()
-        logger.info("✅ Provisional access scheduler started")
-    except Exception as e:
-        logger.error(f"❌ Failed to start provisional scheduler: {str(e)}")
-    
-    # Initialize OpenAI client
-    global openai_client, chat_service
-    try:
-        logger.info("🔄 Initializing OpenAI client...")
-        openai_client = initialize_openai_client()
-        if openai_client:
-            logger.info("✅ OpenAI client initialized successfully")
-        else:
-            logger.error("❌ Failed to initialize OpenAI client - check API key configuration")
-            
-        # Initialize chat service
-        chat_service = ChatService(supabase)
-        logger.info("✅ Chat service initialized")
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize services: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-    
-    logger.info("🚀 Application startup complete")
-    logger.info("✅ All services initialized successfully")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean shutdown of background services"""
-    logger.info("🛑 Application shutdown initiated")
-    
-    # Stop provisional access scheduler
-    try:
-        provisional_scheduler.stop()
-        logger.info("✅ Provisional access scheduler stopped")
-    except Exception as e:
-        logger.error(f"❌ Error stopping provisional scheduler: {str(e)}")
-    
-    logger.info("✅ Application shutdown complete")
-
+# Simple startup/shutdown events removed for reliability
+# All services are now initialized at module level
 
 def get_client_ip(request: Request) -> str:
     """Extract client IP address with proxy support"""
