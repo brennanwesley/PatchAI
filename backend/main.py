@@ -740,7 +740,6 @@ app.include_router(referral_router)
 app.include_router(monitoring_router)
 app.include_router(sync_router)
 app.include_router(phase3_router)
-app.include_router(pump_router)
 
 if __name__ == "__main__":
     import uvicorn
