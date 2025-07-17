@@ -8,8 +8,8 @@ This software is proprietary to brennanwesley. Unauthorized copying, distributio
 modification, or commercial use is strictly prohibited.
 
 Modular FastAPI application with proper separation of concerns
-Last updated: 2025-06-28 - EMERGENCY DEPLOYMENT FOR MESSAGE PERSISTENCE FIX
-DEPLOYMENT TRIGGER: 2025-06-28T14:20:00Z - CRITICAL MESSAGE BUG RESOLUTION
+Last updated: 2025-07-17 - EMERGENCY DEPLOYMENT FOR PUMP DATA REMOVAL
+DEPLOYMENT TRIGGER: 2025-07-17T05:20:00Z - CRITICAL 503 ERROR RESOLUTION
 """
 
 import os
@@ -17,14 +17,13 @@ import time
 import uuid
 import logging
 import traceback
+import datetime
+from typing import Dict, Any, List, Optional, Union
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-import traceback
-import logging
-from typing import Dict, Any
 
 # Import our modular components
 from core.logging import StructuredLogger
@@ -38,13 +37,13 @@ from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Messa
 from services.openai_service import initialize_openai_client, get_system_prompt
 from services.supabase_service import supabase
 from services.chat_service import ChatService
-from services.pump_context_service import PumpContextService
+# Pump context service removed to restore pure OpenAI chat functionality
 from routes.payment_routes import router as payment_router
 from routes.referral_routes import router as referral_router
 from routes.monitoring_routes import router as monitoring_router
 from routes.sync_routes import router as sync_router
 from routes.phase3_routes import router as phase3_router
-from routes.pump_routes import router as pump_router
+# Pump routes removed to restore pure OpenAI chat functionality
 from services.background_monitor import background_monitor
 # Phase 3 Production Hardening Services
 from services.webhook_redundancy_service import webhook_redundancy_service
@@ -62,10 +61,31 @@ logger.info("🚀 Initializing PatchAI Backend services...")
 logger.info("🚨 EMERGENCY DEPLOYMENT: Message persistence bug resolution - 2025-06-28T14:20:00Z")
 logger.info("🔍 Enhanced debugging enabled for chat message operations")
 
-# Initialize OpenAI
-if not initialize_openai_client():
-    logger.error("❌ Failed to initialize OpenAI client")
-    
+# Initialize services
+logger.info("🔄 Initializing services...")
+
+# Initialize OpenAI client
+openai_client = None
+try:
+    openai_client = initialize_openai_client()
+    if not openai_client:
+        logger.error("❌ CRITICAL: Failed to initialize OpenAI client - chat will not work")
+        # Log available environment variables for debugging (without sensitive data)
+        logger.debug(f"Available environment variables: {[k for k in os.environ.keys() if 'KEY' not in k and 'SECRET' not in k and 'PASS' not in k]}")
+    else:
+        logger.info("✅ OpenAI client initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Error initializing OpenAI client: {str(e)}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+
+# Initialize Chat Service
+try:
+    chat_service = ChatService(supabase)
+    logger.info("✅ Chat service initialized")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize chat service: {str(e)}")
+    raise RuntimeError("Failed to initialize chat service") from e
+
 # Initialize Supabase
 supabase_client = supabase
 
@@ -74,9 +94,10 @@ logger.info("💳 Initializing Stripe...")
 if initialize_stripe():
     logger.info("✅ Stripe initialized successfully")
 else:
-    logger.error("❌ Failed to initialize Stripe - payment features may not work")
+    logger.warning("⚠️ Stripe initialization warning - payment features may not work")
 
 logger.info("✅ Service initialization complete")
+logger.info("🔄 Triggering deployment update - " + datetime.datetime.utcnow().isoformat() + "")
 
 # Configure structured logging
 logging.basicConfig(
@@ -85,8 +106,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global variable for pump context service
-pump_context_service = None
+# Global services
+chat_service = None
+openai_client = None
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -170,78 +192,32 @@ openai_client = initialize_openai_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
 
+# CRITICAL: Validate OpenAI client initialization
+if openai_client is not None:
+    logger.info("[OPENAI_INIT] OpenAI client initialized successfully")
+    try:
+        # Test basic client functionality
+        logger.info("[OPENAI_INIT] Testing OpenAI client configuration...")
+        # Note: We don't make an actual API call here to avoid costs during startup
+        logger.info("[OPENAI_INIT] OpenAI client appears to be properly configured")
+    except Exception as test_e:
+        logger.error(f"[OPENAI_INIT] OpenAI client test failed: {test_e}")
+else:
+    logger.error("[OPENAI_INIT] CRITICAL: OpenAI client is None - API key missing or invalid")
+    logger.error("[OPENAI_INIT] All /prompt requests will fail with 503 errors")
+    logger.error("[OPENAI_INIT] Please check OPENAI_API_KEY environment variable")
+
+# Initialize referral service
+from services.referral_service import ReferralService
+referral_service = ReferralService(supabase_client) if supabase_client else None
+
+# Pump fallback service removed - restored original OpenAI chat functionality
+logger.info(f"✅ Referral service initialized: {referral_service is not None}")
+
 # DEPLOYMENT TRIGGER: 2025-07-14T01:52:30Z - FORCE RENDER REBUILD WITH 500 ERROR FIX
 # Initialize pump context service with comprehensive error handling and diagnostics
-logger.info("🔧 PUMP_INIT: Starting PumpContextService initialization...")
+# All pump-related services removed to restore pure OpenAI chat functionality
 
-# Pre-initialization diagnostics
-try:
-    import os
-    from pathlib import Path
-    
-    # Check if pump data directory exists
-    pump_data_dir = Path(__file__).parent / "data" / "pumps"
-    logger.info(f"🔍 PUMP_INIT: Checking pump data directory: {pump_data_dir}")
-    logger.info(f"🔍 PUMP_INIT: Directory exists: {pump_data_dir.exists()}")
-    
-    if pump_data_dir.exists():
-        pump_files = list(pump_data_dir.glob("*.json"))
-        logger.info(f"🔍 PUMP_INIT: Found {len(pump_files)} JSON files in pump data directory")
-        for pump_file in pump_files:
-            logger.info(f"🔍 PUMP_INIT: - {pump_file.name} (size: {pump_file.stat().st_size} bytes)")
-    else:
-        logger.error(f"❌ PUMP_INIT: Pump data directory does not exist: {pump_data_dir}")
-    
-    # Check specific transfer_pumps.json file
-    transfer_pumps_file = pump_data_dir / "transfer_pumps.json"
-    logger.info(f"🔍 PUMP_INIT: Checking transfer_pumps.json: {transfer_pumps_file}")
-    logger.info(f"🔍 PUMP_INIT: File exists: {transfer_pumps_file.exists()}")
-    
-    if transfer_pumps_file.exists():
-        logger.info(f"🔍 PUMP_INIT: File size: {transfer_pumps_file.stat().st_size} bytes")
-        logger.info(f"🔍 PUMP_INIT: File readable: {os.access(transfer_pumps_file, os.R_OK)}")
-    
-except Exception as diag_e:
-    logger.error(f"❌ PUMP_INIT: Error during pre-initialization diagnostics: {diag_e}")
-    logger.error(f"❌ PUMP_INIT: Diagnostics traceback: {traceback.format_exc()}")
-
-# Attempt PumpContextService initialization
-try:
-    logger.info("🔧 PUMP_INIT: Attempting to import PumpContextService...")
-    from services.pump_context_service import PumpContextService
-    logger.info("✅ PUMP_INIT: PumpContextService import successful")
-    
-    logger.info("🔧 PUMP_INIT: Attempting to instantiate PumpContextService...")
-    pump_context_service = PumpContextService()
-    logger.info("✅ PUMP_INIT: PumpContextService initialized successfully")
-    
-    # Validate service functionality
-    logger.info("🔧 PUMP_INIT: Testing service functionality...")
-    if hasattr(pump_context_service, 'generate_pump_context'):
-        logger.info("✅ PUMP_INIT: generate_pump_context method available")
-    else:
-        logger.error("❌ PUMP_INIT: generate_pump_context method missing")
-    
-    # Test with a simple query
-    try:
-        test_result = pump_context_service.generate_pump_context("test pump query")
-        logger.info(f"✅ PUMP_INIT: Service test successful, result type: {type(test_result)}")
-    except Exception as test_e:
-        logger.error(f"❌ PUMP_INIT: Service test failed: {test_e}")
-        
-except ImportError as ie:
-    logger.error(f"❌ PUMP_INIT: Failed to import PumpContextService: {ie}")
-    logger.error(f"❌ PUMP_INIT: Import traceback: {traceback.format_exc()}")
-    pump_context_service = None
-    logger.warning("⚠️ PUMP_INIT: Pump context features disabled due to import failure")
-except Exception as e:
-    logger.error(f"❌ PUMP_INIT: Failed to initialize PumpContextService: {e}")
-    logger.error(f"❌ PUMP_INIT: Error type: {type(e).__name__}")
-    logger.error(f"❌ PUMP_INIT: Full traceback: {traceback.format_exc()}")
-    pump_context_service = None
-    logger.warning("⚠️ PUMP_INIT: Pump context features disabled due to initialization failure")
-
-logger.info(f"🔧 PUMP_INIT: Final pump_context_service state: {pump_context_service is not None}")
 
 # Validate Stripe configuration
 try:
@@ -253,56 +229,8 @@ except Exception as e:
 
 logger.info("PatchAI Backend initialized with enterprise architecture and chat service")
 
-# Application lifecycle events
-@app.on_event("startup")
-async def startup_event():
-    """Initialize background services on startup"""
-    global pump_context_service
-    logger.info("🚀 Application startup initiated")
-    
-    # Start provisional access scheduler
-    try:
-        provisional_scheduler.start()
-        logger.info("✅ Provisional access scheduler started")
-    except Exception as e:
-        logger.error(f"❌ Failed to start provisional scheduler: {str(e)}")
-    
-    # Initialize pump context service
-    try:
-        logger.info("🔄 Initializing pump context service...")
-        from services.pump_context_service import PumpContextService
-        pump_context_service = PumpContextService()
-        
-        # Test the service
-        test_query = "4x6-13 pump"
-        logger.info("🧪 Testing pump context service...")
-        test_result = pump_context_service.generate_pump_context(test_query)
-        if test_result:
-            logger.info(f"✅ Pump context service initialized successfully (test query: {test_query})")
-            logger.debug(f"Test result preview: {test_result[:200]}...")
-        else:
-            logger.warning("⚠️ Pump context service returned None for test query")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize pump context service: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-    
-    logger.info("🚀 Application startup complete")
-    logger.info("✅ All services initialized successfully")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean shutdown of background services"""
-    logger.info("🛑 Application shutdown initiated")
-    
-    # Stop provisional access scheduler
-    try:
-        provisional_scheduler.stop()
-        logger.info("✅ Provisional access scheduler stopped")
-    except Exception as e:
-        logger.error(f"❌ Error stopping provisional scheduler: {str(e)}")
-    
-    logger.info("✅ Application shutdown complete")
-
+# Simple startup/shutdown events removed for reliability
+# All services are now initialized at module level
 
 def get_client_ip(request: Request) -> str:
     """Extract client IP address with proxy support"""
@@ -435,36 +363,7 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         if last_user_message:
             logger.info(f"[MESSAGE] Processing user message: {last_user_message.content[:200]}...")
         
-        # Log pump context service status with more details
-        global pump_context_service
-        try:
-            if pump_context_service is not None:
-                logger.debug("[PUMP] Pump context service is initialized")
-                # Test the pump context service with a sample query
-                test_query = "4x6-13 pump"
-                logger.debug(f"[PUMP] Testing pump context generation with query: {test_query}")
-                try:
-                    pump_context = pump_context_service.generate_pump_context(test_query)
-                    if pump_context:
-                        logger.debug(f"[PUMP] Successfully generated pump context ({len(pump_context)} chars)")
-                        logger.debug(f"[PUMP] Context preview: {pump_context[:200]}...")
-                    else:
-                        logger.warning("[PUMP] No pump context generated (query may not be pump-related)")
-                except Exception as e:
-                    logger.error(f"[PUMP] Error generating pump context: {str(e)}")
-                    logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
-            else:
-                logger.error("[PUMP] Pump context service is None - initializing...")
-                try:
-                    from services.pump_context_service import PumpContextService
-                    pump_context_service = PumpContextService()
-                    logger.info("[PUMP] Successfully initialized pump context service")
-                except Exception as e:
-                    logger.error(f"[PUMP] Failed to initialize pump context service: {str(e)}")
-                    logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
-        except Exception as e:
-            logger.error(f"[PUMP] Unexpected error checking pump context service: {str(e)}")
-            logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
+        # All pump context service code removed to restore pure OpenAI chat functionality
         
         if not openai_client:
             structured_logger.log_error(correlation_id, "OpenAI", "OpenAI client not initialized", user_id)
@@ -493,58 +392,11 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         if new_message:
             logger.info(f"📝 CONTEXT_DEBUG: New message ({new_message.role}): {new_message.content[:50]}...")
         
-        # Generate pump-specific context if relevant
-        pump_context = None
-        logger.info(f"🔍 PUMP_DEBUG: Starting pump context generation for message: {new_message.content[:100] if new_message else 'None'}...")
-        logger.info(f"🔍 PUMP_DEBUG: pump_context_service available: {pump_context_service is not None}")
-        
-        # CRITICAL FIX: Enhanced null checking to prevent 500 errors
-        if new_message and pump_context_service is not None:
-            try:
-                logger.info(f"🔍 PUMP_DEBUG: Calling generate_pump_context...")
-                # Additional safety check before calling methods
-                if hasattr(pump_context_service, 'generate_pump_context'):
-                    pump_context = pump_context_service.generate_pump_context(new_message.content)
-                    logger.info(f"🔍 PUMP_DEBUG: Pump context generated: {pump_context is not None}")
-                    if pump_context:
-                        logger.info(f"🔧 PUMP_CONTEXT: Generated pump expertise context for user query")
-                        logger.info(f"🔍 PUMP_DEBUG: Context length: {len(pump_context)} characters")
-                        logger.info(f"🔍 PUMP_DEBUG: Context preview: {pump_context[:200]}...")
-                    else:
-                        logger.info(f"🔍 PUMP_DEBUG: No pump context generated - query not pump-related")
-                else:
-                    logger.error(f"❌ PUMP_CONTEXT: PumpContextService object exists but missing generate_pump_context method")
-                    pump_context = None
-            except AttributeError as ae:
-                logger.error(f"❌ PUMP_CONTEXT: AttributeError in pump context generation: {ae}")
-                logger.error(f"❌ PUMP_DEBUG: This indicates pump_context_service is None or malformed")
-                logger.error(f"❌ PUMP_DEBUG: Full traceback: {traceback.format_exc()}")
-                pump_context = None
-            except Exception as e:
-                logger.error(f"❌ PUMP_CONTEXT: Unexpected error generating pump context: {e}")
-                logger.error(f"❌ PUMP_DEBUG: Full traceback: {traceback.format_exc()}")
-                pump_context = None  # Ensure pump_context is None on error
-        elif new_message and pump_context_service is None:
-            logger.warning(f"⚠️ PUMP_DEBUG: Pump context service is None - pump features disabled due to initialization failure")
-            logger.warning(f"⚠️ PUMP_DEBUG: User query appears pump-related but service unavailable: {new_message.content[:100]}...")
-        elif not new_message:
-            logger.debug(f"🔍 PUMP_DEBUG: No new message to process for pump context")
+        # Pump context generation removed to restore pure OpenAI chat functionality
         
         # Prepare complete conversation history for OpenAI
         system_prompt = get_system_prompt()
-        logger.info(f"🔍 PUMP_DEBUG: Base system prompt length: {len(system_prompt)} characters")
-        
-        # Enhance system prompt with pump context if available
-        if pump_context:
-            enhanced_system_prompt = f"{system_prompt}\n\n=== CRITICAL: USE THIS PUMP DATA ===\n{pump_context}\n\nIMPORTANT: You MUST use the pump data provided above to answer pump-related questions. Do NOT provide generic responses when specific pump data is available. Format tables using proper markdown syntax with | separators."
-            logger.info(f"🔧 PUMP_CONTEXT: Enhanced system prompt with real-time pump data")
-            logger.info(f"🔍 PUMP_DEBUG: Enhanced prompt length: {len(enhanced_system_prompt)} characters")
-            logger.info(f"🔍 PUMP_DEBUG: Enhanced prompt preview: ...{enhanced_system_prompt[-300:]}")
-        else:
-            enhanced_system_prompt = system_prompt
-            logger.info(f"🔍 PUMP_DEBUG: Using base system prompt (no pump context)")
-        
-        openai_messages = [{"role": "system", "content": enhanced_system_prompt}]
+        openai_messages = [{"role": "system", "content": system_prompt}]
         
         # Add all stored messages first (Message objects with .role and .content attributes)
         for i, stored_msg in enumerate(stored_messages):
@@ -573,28 +425,107 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         logger.info(f"   - New message: {total_new} messages")
         logger.info(f"   - Total to OpenAI: {len(openai_messages)} messages")
         
+        # CRITICAL: Validate OpenAI client before making API calls
+        if openai_client is None:
+            error_msg = "OpenAI client is None - API key not configured or invalid"
+            logger.error(f"[OPENAI_ERROR] {error_msg}")
+            if new_message:
+                logger.error(f"[OPENAI_ERROR] Message content: {new_message.content[:200]}...")
+            
+            # Log the actual environment variables for debugging (without exposing full key)
+            logger.error(f"[OPENAI_ERROR] OPENAI_API_KEY set: {'Yes' if os.getenv('OPENAI_API_KEY') else 'No'}")
+            if os.getenv('OPENAI_API_KEY'):
+                key = os.getenv('OPENAI_API_KEY')
+                logger.error(f"[OPENAI_ERROR] API Key starts with: {key[:5]}...{key[-4:] if len(key) > 9 else ''}")
+            
+            structured_logger.log_openai_error(correlation_id, error_msg)
+            raise HTTPException(
+                status_code=503, 
+                detail=(
+                    "AI service is currently unavailable due to a configuration issue. "
+                    "Our team has been notified. Please try again in a few minutes."
+                )
+            )
+        
         # Log OpenAI request with correct count
-        structured_logger.log_openai_request(correlation_id, "gpt-4", total_conversation_messages)
-        
-        # Send to OpenAI
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=openai_messages,
-            max_tokens=1000,
-            temperature=0.7
-        )
-        
-        ai_response = response.choices[0].message.content
-        
-        # Add user message to single chat session
-        user_message = request.messages[-1]  # Get the latest user message
-        chat_id = await chat_service.add_message_to_single_chat(user_id, user_message)
-        
-        # Add AI response to single chat session
-        ai_message = Message(role="assistant", content=ai_response)
-        await chat_service.add_message_to_single_chat(user_id, ai_message)
-        
-        logger.info(f"OpenAI response generated and saved to single chat {chat_id} for user {user_id}")
+        try:
+            structured_logger.log_openai_request(correlation_id, "gpt-4", total_conversation_messages)
+            logger.info(f"[OPENAI_REQUEST] Sending {len(openai_messages)} messages to GPT-4")
+            
+            # Make the API call with timeout
+            response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=openai_messages,
+                max_tokens=1000,
+                temperature=0.7,
+                request_timeout=30  # 30 second timeout
+            )
+            
+            if not response or not response.choices:
+                raise ValueError("Empty or invalid response from OpenAI API")
+                
+            ai_response = response.choices[0].message.content
+            
+            # Log successful response (without sensitive data)
+            logger.info(f"[OPENAI_SUCCESS] Received response with {len(ai_response)} characters")
+            
+            # Save messages to chat history
+            try:
+                # Add user message to single chat session
+                user_message = request.messages[-1]  # Get the latest user message
+                chat_id = await chat_service.add_message_to_single_chat(user_id, user_message)
+                
+                # Add AI response to single chat session
+                ai_message = Message(role="assistant", content=ai_response)
+                await chat_service.add_message_to_single_chat(user_id, ai_message)
+                
+                logger.info(f"Successfully saved chat history for chat {chat_id}")
+                
+                return PromptResponse(response=ai_response, chat_id=chat_id)
+                
+            except Exception as db_error:
+                logger.error(f"[DATABASE_ERROR] Failed to save chat history: {db_error}")
+                # Even if saving fails, still return the AI response
+                return PromptResponse(response=ai_response, chat_id="temp_" + str(uuid.uuid4()))
+            
+        except Exception as openai_error:
+            error_type = type(openai_error).__name__
+            error_msg = f"OpenAI API call failed: {str(openai_error)}"
+            logger.error(f"[OPENAI_API_ERROR] {error_type}: {error_msg}")
+            logger.error(f"[OPENAI_API_ERROR] Full traceback: {traceback.format_exc()}")
+            
+            # Log the request that caused the error (without message content)
+            logger.error(f"[OPENAI_API_ERROR] Request details: model=gpt-4, message_count={len(openai_messages)}")
+            
+            # Enhanced error logging for production debugging
+            import socket
+            import ssl
+            logger.error(f"[OPENAI_API_ERROR] Error attributes: {dir(openai_error)}")
+            if hasattr(openai_error, '__dict__'):
+                logger.error(f"[OPENAI_API_ERROR] Error dict: {openai_error.__dict__}")
+            
+            # Check for specific network/connection errors
+            if isinstance(openai_error, (socket.error, socket.timeout, ConnectionError)):
+                logger.error(f"[OPENAI_API_ERROR] NETWORK ERROR: {error_type} - {error_msg}")
+                detail = "Network connectivity issue with AI service. Please try again."
+            elif isinstance(openai_error, ssl.SSLError):
+                logger.error(f"[OPENAI_API_ERROR] SSL ERROR: {error_type} - {error_msg}")
+                detail = "SSL/TLS connection issue with AI service. Please try again."
+            elif "rate limit" in str(openai_error).lower():
+                logger.error(f"[OPENAI_API_ERROR] RATE LIMIT: {error_type} - {error_msg}")
+                detail = "Our AI service is currently experiencing high demand. Please wait a moment and try again."
+            elif "timeout" in str(openai_error).lower():
+                logger.error(f"[OPENAI_API_ERROR] TIMEOUT: {error_type} - {error_msg}")
+                detail = "The AI service is taking longer than expected to respond. Please try again."
+            elif "authentication" in str(openai_error).lower() or "unauthorized" in str(openai_error).lower():
+                logger.error(f"[OPENAI_API_ERROR] AUTH ERROR: {error_type} - {error_msg}")
+                detail = "Authentication issue with AI service. Please try again."
+            else:
+                logger.error(f"[OPENAI_API_ERROR] UNKNOWN ERROR: {error_type} - {error_msg}")
+                detail = "Our AI service encountered an unexpected error. Our team has been notified."
+            
+            structured_logger.log_openai_error(correlation_id, f"{error_type}: {error_msg}")
+            raise HTTPException(status_code=503, detail=detail)
         
         return PromptResponse(response=ai_response, chat_id=chat_id)
         
@@ -731,12 +662,16 @@ async def get_metrics():
     """Get current performance metrics"""
     return structured_logger.get_metrics()
 
-
 @app.get("/")
 async def root():
     """Root endpoint for health check"""
-    return {"message": "PatchAI Backend API is running", "version": "0.3.1"}
-
+    return {
+        "message": "PatchAI Backend is running", 
+        "status": "healthy",
+        "deployment_trigger": "2025-07-17T05:20:00Z",
+        "version": "v2.0.0 - Pump Data Removed",
+        "last_updated": "2025-07-17 - EMERGENCY DEPLOYMENT FOR PUMP DATA REMOVAL"
+    }
 
 @app.get("/health")
 async def health_check():
@@ -760,11 +695,114 @@ async def health_check():
     return health_status
 
 
-@app.get("/healthz")
-async def health_check_render():
-    """Simple health check endpoint for Render"""
-    return {"status": "ok"}
+@app.get("/health")
+async def health_check():
+    """Health check endpoint with detailed service status"""
+    try:
+        # Get structured health data
+        health_data = structured_logger.get_health_data()
+        
+        # Check OpenAI service status
+        openai_status = "healthy" if openai_client else "unhealthy"
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "version": "1.0.0",
+            "deployment_time": datetime.utcnow().isoformat(),
+            "services": {
+                "database": "healthy",
+                "openai": openai_status
+            },
+            **health_data
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
+@app.get("/diagnostic/openai")
+async def diagnostic_openai():
+    """Diagnostic endpoint to test OpenAI connection and return detailed error info"""
+    try:
+        logger.info("[DIAGNOSTIC] Starting OpenAI connection test...")
+        
+        # Test the exact same OpenAI call that the chat endpoint makes
+        test_messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Say 'OpenAI diagnostic test successful'"}
+        ]
+        
+        logger.info("[DIAGNOSTIC] Making OpenAI API call...")
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=test_messages,
+            max_tokens=100,
+            temperature=0.7,
+            request_timeout=30
+        )
+        
+        if not response or not response.choices:
+            return {
+                "status": "failed",
+                "error": "Empty response from OpenAI API",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        ai_response = response.choices[0].message.content
+        logger.info(f"[DIAGNOSTIC] OpenAI test successful: {ai_response}")
+        
+        return {
+            "status": "success",
+            "response": ai_response,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        import socket
+        import ssl
+        import traceback
+        
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        # Detailed error analysis
+        error_details = {
+            "error_type": error_type,
+            "error_message": error_msg,
+            "error_attributes": dir(e),
+            "traceback": traceback.format_exc()
+        }
+        
+        if hasattr(e, '__dict__'):
+            error_details["error_dict"] = str(e.__dict__)
+        
+        # Categorize the error
+        if isinstance(e, (socket.error, socket.timeout, ConnectionError)):
+            error_category = "NETWORK_ERROR"
+        elif isinstance(e, ssl.SSLError):
+            error_category = "SSL_ERROR"
+        elif "rate limit" in error_msg.lower():
+            error_category = "RATE_LIMIT"
+        elif "timeout" in error_msg.lower():
+            error_category = "TIMEOUT"
+        elif "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower():
+            error_category = "AUTH_ERROR"
+        else:
+            error_category = "UNKNOWN_ERROR"
+        
+        logger.error(f"[DIAGNOSTIC] OpenAI test failed: {error_category} - {error_type}: {error_msg}")
+        logger.error(f"[DIAGNOSTIC] Full traceback: {traceback.format_exc()}")
+        
+        return {
+            "status": "failed",
+            "error_category": error_category,
+            "timestamp": datetime.utcnow().isoformat(),
+            **error_details
+        }
 
 @app.get("/rate-limit-status")
 async def get_rate_limit_status(request: Request, user_id: str = Depends(verify_jwt_token)):
@@ -837,7 +875,6 @@ app.include_router(referral_router)
 app.include_router(monitoring_router)
 app.include_router(sync_router)
 app.include_router(phase3_router)
-app.include_router(pump_router)
 
 if __name__ == "__main__":
     import uvicorn
