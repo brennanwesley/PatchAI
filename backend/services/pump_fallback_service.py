@@ -284,7 +284,7 @@ Our team can provide exact specifications and help ensure this pump meets your n
                     curves_text += f"\n*At {requested_rpm} RPM:*\n"
                     curves_text += self._format_single_rpm_curve(curve_data[rpm_key])
                 else:
-                    curves_text += f"\n*Requested RPM ({requested_rpm}) not available. Available RPMs: {', '.join([k.replace('rpm_', '') for k in curve_data.keys()]))*\n"
+                    curves_text += f"\n*Requested RPM ({requested_rpm}) not available. Available RPMs: {', '.join([k.replace('rpm_', '') for k in curve_data.keys() if k.startswith('rpm_')])}*\n"
             else:
                 # Show all available RPM data
                 for rpm_key, rpm_data in curve_data.items():
