@@ -1,754 +1,764 @@
 #!/usr/bin/env python3
 """
-PatchAI Backend v2.0.0 - Enterprise SaaS Platform
-Copyright (c) 2025 brennanwesley. All Rights Reserved.
-
-PROPRIETARY AND CONFIDENTIAL
-This software is proprietary to brennanwesley. Unauthorized copying, distribution,
-modification, or commercial use is strictly prohibited.
-
-Modular FastAPI application with proper separation of concerns
-Last updated: 2025-06-28 - EMERGENCY DEPLOYMENT FOR MESSAGE PERSISTENCE FIX
-DEPLOYMENT TRIGGER: 2025-06-28T14:20:00Z - CRITICAL MESSAGE BUG RESOLUTION
+Simplified main.py for guaranteed Render deployment success
+Uses minimal dependencies and robust error handling
+Last updated: 2025-06-21 - SECURITY + RATE LIMITING + MONITORING APPLIED
 """
 
 import os
+import logging
+import httpx
+import jwt
 import time
 import uuid
-import logging
 import traceback
-import datetime
-from typing import Dict, Any, List, Optional, Union
-from fastapi import FastAPI, HTTPException, Request, Depends, status
+import psutil
+from collections import defaultdict, deque
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional, Tuple, Any
+from fastapi import FastAPI, HTTPException, Depends, Request, Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
+from pydantic import BaseModel, validator
+from openai import OpenAI
+from supabase import create_client, Client
 
-# Import our modular components
-from core.logging import StructuredLogger
-from core.rate_limiter import RateLimiter
-from core.auth import verify_jwt_token
-from core.monitoring import get_health_status
-from core.subscription_middleware import enforce_subscription
-# Fixed import: get_stripe_config_status (not get_stripe_config)
-from core.stripe_config import validate_stripe_config, get_stripe_config_status, initialize_stripe
-from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
-from services.openai_service import initialize_openai_client, get_system_prompt
-from services.supabase_service import supabase
-from services.chat_service import ChatService
-# Pump context service removed to restore pure OpenAI chat functionality
-from routes.payment_routes import router as payment_router
-from routes.referral_routes import router as referral_router
-from routes.monitoring_routes import router as monitoring_router
-from routes.sync_routes import router as sync_router
-from routes.phase3_routes import router as phase3_router
-# Pump routes removed to restore pure OpenAI chat functionality
-from services.background_monitor import background_monitor
-# Phase 3 Production Hardening Services
-from services.webhook_redundancy_service import webhook_redundancy_service
-from services.integrity_validation_service import integrity_validation_service
-from services.performance_optimization_service import performance_optimization_service
-from services.monitoring_dashboard_service import monitoring_dashboard_service
-from services.provisional_scheduler import provisional_scheduler
+# MONITORING: Enhanced structured logging configuration
+class StructuredLogger:
+    """Enhanced logging with correlation IDs and structured data"""
+    
+    def __init__(self):
+        # Configure structured logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        self.logger = logging.getLogger(__name__)
+        
+        # Performance metrics storage
+        self.metrics = {
+            'requests_total': 0,
+            'requests_by_endpoint': defaultdict(int),
+            'response_times': defaultdict(list),
+            'errors_total': 0,
+            'errors_by_type': defaultdict(int),
+            'openai_requests': 0,
+            'openai_errors': 0,
+            'rate_limit_hits': 0
+        }
+        
+        self.logger.info("Structured logger initialized with performance metrics")
+    
+    def log_request(self, correlation_id: str, method: str, path: str, client_ip: str, user_id: str = None):
+        """Log incoming request with structured data"""
+        self.metrics['requests_total'] += 1
+        self.metrics['requests_by_endpoint'][f"{method} {path}"] += 1
+        
+        self.logger.info(
+            f"REQUEST_START - {correlation_id} - {method} {path} - "
+            f"IP: {client_ip} - User: {user_id or 'anonymous'}"
+        )
+    
+    def log_response(self, correlation_id: str, status_code: int, response_time_ms: float, endpoint: str):
+        """Log response with performance metrics"""
+        self.metrics['response_times'][endpoint].append(response_time_ms)
+        
+        # Keep only last 100 response times per endpoint
+        if len(self.metrics['response_times'][endpoint]) > 100:
+            self.metrics['response_times'][endpoint] = self.metrics['response_times'][endpoint][-100:]
+        
+        level = logging.INFO if status_code < 400 else logging.WARNING
+        self.logger.log(
+            level,
+            f"REQUEST_END - {correlation_id} - Status: {status_code} - "
+            f"Time: {response_time_ms:.2f}ms - Endpoint: {endpoint}"
+        )
+    
+    def log_error(self, correlation_id: str, error_type: str, error_message: str, user_id: str = None, stack_trace: str = None):
+        """Log error with detailed context"""
+        self.metrics['errors_total'] += 1
+        self.metrics['errors_by_type'][error_type] += 1
+        
+        error_data = {
+            'correlation_id': correlation_id,
+            'error_type': error_type,
+            'error_message': error_message,
+            'user_id': user_id,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        if stack_trace:
+            error_data['stack_trace'] = stack_trace
+        
+        self.logger.error(f"ERROR - {correlation_id} - {error_type}: {error_message}")
+        if stack_trace:
+            self.logger.error(f"STACK_TRACE - {correlation_id} - {stack_trace}")
+    
+    def log_openai_request(self, correlation_id: str, model: str, message_count: int):
+        """Log OpenAI API request"""
+        self.metrics['openai_requests'] += 1
+        self.logger.info(
+            f"OPENAI_REQUEST - {correlation_id} - Model: {model} - Messages: {message_count}"
+        )
+    
+    def log_openai_error(self, correlation_id: str, error: str):
+        """Log OpenAI API error"""
+        self.metrics['openai_errors'] += 1
+        self.logger.error(f"OPENAI_ERROR - {correlation_id} - {error}")
+    
+    def log_rate_limit_hit(self, correlation_id: str, limit_type: str, user_id: str, client_ip: str):
+        """Log rate limit hit"""
+        self.metrics['rate_limit_hits'] += 1
+        self.logger.warning(
+            f"RATE_LIMIT_HIT - {correlation_id} - Type: {limit_type} - "
+            f"User: {user_id} - IP: {client_ip}"
+        )
+    
+    def get_metrics(self) -> Dict:
+        """Get current performance metrics"""
+        # Calculate average response times
+        avg_response_times = {}
+        for endpoint, times in self.metrics['response_times'].items():
+            if times:
+                avg_response_times[endpoint] = {
+                    'avg_ms': round(sum(times) / len(times), 2),
+                    'min_ms': round(min(times), 2),
+                    'max_ms': round(max(times), 2),
+                    'count': len(times)
+                }
+        
+        return {
+            'requests_total': self.metrics['requests_total'],
+            'requests_by_endpoint': dict(self.metrics['requests_by_endpoint']),
+            'response_times': avg_response_times,
+            'errors_total': self.metrics['errors_total'],
+            'errors_by_type': dict(self.metrics['errors_by_type']),
+            'openai_requests': self.metrics['openai_requests'],
+            'openai_errors': self.metrics['openai_errors'],
+            'rate_limit_hits': self.metrics['rate_limit_hits']
+        }
 
-# Initialize structured logging
+# Initialize structured logger
 structured_logger = StructuredLogger()
 logger = structured_logger.logger
 
-# Initialize services
-logger.info("🚀 Initializing PatchAI Backend services...")
-logger.info("🚨 EMERGENCY DEPLOYMENT: Message persistence bug resolution - 2025-06-28T14:20:00Z")
-logger.info("🔍 Enhanced debugging enabled for chat message operations")
+# Track application start time for uptime monitoring
+app_start_time = time.time()
 
-# Initialize services
-logger.info("🔄 Initializing services...")
+# Initialize FastAPI
+app = FastAPI(title="PatchAI Backend API", version="1.0.0")
 
-# Initialize OpenAI client
-openai_client = None
-try:
-    openai_client = initialize_openai_client()
-    if not openai_client:
-        logger.error("❌ CRITICAL: Failed to initialize OpenAI client - chat will not work")
-        # Log available environment variables for debugging (without sensitive data)
-        logger.debug(f"Available environment variables: {[k for k in os.environ.keys() if 'KEY' not in k and 'SECRET' not in k and 'PASS' not in k]}")
-    else:
-        logger.info("✅ OpenAI client initialized successfully")
-except Exception as e:
-    logger.error(f"❌ Error initializing OpenAI client: {str(e)}")
-    logger.error(f"Traceback: {traceback.format_exc()}")
+# MONITORING: Request correlation middleware
+@app.middleware("http")
+async def add_correlation_id(request: Request, call_next):
+    """Add correlation ID to all requests for tracing"""
+    correlation_id = str(uuid.uuid4())
+    request.state.correlation_id = correlation_id
+    request.state.start_time = time.time()
+    
+    # Extract user info for logging
+    client_ip = get_client_ip(request)
+    user_id = None
+    
+    # Try to extract user ID from JWT token for logging
+    try:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            decoded = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"])
+            user_id = decoded.get("sub")
+    except:
+        pass  # Continue without user ID
+    
+    # Log request start
+    structured_logger.log_request(
+        correlation_id, 
+        request.method, 
+        request.url.path, 
+        client_ip, 
+        user_id
+    )
+    
+    # Process request
+    response = await call_next(request)
+    
+    # Calculate response time
+    response_time_ms = (time.time() - request.state.start_time) * 1000
+    
+    # Log response
+    structured_logger.log_response(
+        correlation_id,
+        response.status_code,
+        response_time_ms,
+        f"{request.method} {request.url.path}"
+    )
+    
+    # Add correlation ID to response headers
+    response.headers["X-Correlation-ID"] = correlation_id
+    response.headers["X-Response-Time"] = f"{response_time_ms:.2f}ms"
+    
+    return response
 
-# Initialize Chat Service
-try:
-    chat_service = ChatService(supabase)
-    logger.info("✅ Chat service initialized")
-except Exception as e:
-    logger.error(f"❌ Failed to initialize chat service: {str(e)}")
-    raise RuntimeError("Failed to initialize chat service") from e
+def get_client_ip(request: Request) -> str:
+    """Extract client IP address with proxy support"""
+    # Check for forwarded IP (from load balancers/proxies)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Take the first IP in the chain
+        return forwarded_for.split(",")[0].strip()
+    
+    # Check for real IP header
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    
+    # Fallback to direct client IP
+    return request.client.host if request.client else "unknown"
 
-# Initialize Supabase
-supabase_client = supabase
-
-# Initialize Stripe
-logger.info("💳 Initializing Stripe...")
-if initialize_stripe():
-    logger.info("✅ Stripe initialized successfully")
-else:
-    logger.warning("⚠️ Stripe initialization warning - payment features may not work")
-
-logger.info("✅ Service initialization complete")
-logger.info("🔄 Triggering deployment update - " + datetime.datetime.utcnow().isoformat() + "")
-
-# Configure structured logging
+# Configure logging - SECURITY: Remove sensitive data from logs
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Global services
-chat_service = None
-openai_client = None
+# Initialize FastAPI
+app = FastAPI(title="PatchAI Backend API", version="1.0.0")
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="PatchAI Backend",
-    description="Enterprise SaaS Platform for PatchAI",
-    version="2.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc"
-)
-
-# Global exception handler for all unhandled exceptions
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    # Log the full error with traceback
-    logger.error(
-        f"Unhandled exception: {str(exc)}\n"
-        f"Path: {request.url.path}\n"
-        f"Method: {request.method}\n"
-        f"Client: {request.client.host if request.client else 'unknown'}\n"
-        f"Traceback: {traceback.format_exc()}",
-        exc_info=True
-    )
-    
-    # Return a detailed error response
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": "Internal server error",
-            "error": str(exc),
-            "request_url": str(request.url),
-            "request_method": request.method,
-            "error_type": exc.__class__.__name__
-        }
-    )
-
-# Handle HTTP exceptions (like 404, 403, etc.)
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    logger.warning(
-        f"HTTP Exception: {exc.detail}\n"
-        f"Status Code: {exc.status_code}\n"
-        f"Path: {request.url.path}\n"
-        f"Method: {request.method}"
-    )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail}
-    )
-
-# Handle request validation errors
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    logger.warning(
-        f"Request Validation Error: {str(exc)}\n"
-        f"Path: {request.url.path}\n"
-        f"Method: {request.method}\n"
-        f"Errors: {exc.errors()}"
-    )
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": "Validation error", "errors": exc.errors()}
-    )
-
-# CORS middleware
+# CORS middleware - SECURITY: Strict origin validation
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://patchai.app",        # Production domain
-        "https://www.patchai.app",    # Production domain with www
-        "https://patchai-frontend.vercel.app",
-        "http://localhost:3000",  # For local development
-        "https://localhost:3000"  # For local HTTPS development
-    ],
+    allow_origins=["https://patchai-frontend.vercel.app"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],  # SECURITY: Limit methods
+    allow_headers=["Authorization", "Content-Type"],  # SECURITY: Limit headers
 )
 
-# Initialize clients
-openai_client = initialize_openai_client()
-rate_limiter = RateLimiter()
-chat_service = ChatService(supabase_client) if supabase_client else None
+# Environment variables
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 
-# CRITICAL: Validate OpenAI client initialization
-if openai_client is not None:
-    logger.info("[OPENAI_INIT] OpenAI client initialized successfully")
-    try:
-        # Test basic client functionality
-        logger.info("[OPENAI_INIT] Testing OpenAI client configuration...")
-        # Note: We don't make an actual API call here to avoid costs during startup
-        logger.info("[OPENAI_INIT] OpenAI client appears to be properly configured")
-    except Exception as test_e:
-        logger.error(f"[OPENAI_INIT] OpenAI client test failed: {test_e}")
-else:
-    logger.error("[OPENAI_INIT] CRITICAL: OpenAI client is None - API key missing or invalid")
-    logger.error("[OPENAI_INIT] All /prompt requests will fail with 503 errors")
-    logger.error("[OPENAI_INIT] Please check OPENAI_API_KEY environment variable")
+# Validate required environment variables
+if not all([OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET]):
+    logger.error("Missing required environment variables")
+    raise RuntimeError("Missing required environment variables")
 
-# Initialize referral service
-from services.referral_service import ReferralService
-referral_service = ReferralService(supabase_client) if supabase_client else None
+# Initialize clients with error handling
+openai_client = None
+supabase_client = None
+initialization_error = None
 
-# Pump fallback service removed - restored original OpenAI chat functionality
-logger.info(f"✅ Referral service initialized: {referral_service is not None}")
+# Security
+security = HTTPBearer()
 
-# DEPLOYMENT TRIGGER: 2025-07-14T01:52:30Z - FORCE RENDER REBUILD WITH 500 ERROR FIX
-# Initialize pump context service with comprehensive error handling and diagnostics
-# All pump-related services removed to restore pure OpenAI chat functionality
-pump_context_service = None
+# Debug logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Validate Stripe configuration
+logger.info(f"OPENAI_API_KEY exists: {OPENAI_API_KEY is not None}")
+logger.info(f"SUPABASE_URL exists: {SUPABASE_URL is not None}")
+logger.info(f"SUPABASE_SERVICE_ROLE_KEY exists: {SUPABASE_SERVICE_ROLE_KEY is not None}")
+
+# Initialize Supabase client
 try:
-    validate_stripe_config()
-    stripe_config = get_stripe_config_status()
-    logger.info(f"Stripe configured: API key={stripe_config['stripe_secret_configured']}, Webhook={stripe_config['stripe_webhook_configured']}")
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        supabase_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        logger.info("Supabase client initialized successfully")
+    else:
+        logger.error("Supabase configuration missing")
 except Exception as e:
-    logger.warning(f"Stripe configuration warning: {str(e)}")
+    logger.error(f"Supabase client initialization error: {e}")
 
-logger.info("PatchAI Backend initialized with enterprise architecture and chat service")
+# Import OpenAI and set up client
+import openai
+from openai import OpenAI
 
-# Simple startup/shutdown events removed for reliability
-# All services are now initialized at module level
+# Use a custom HTTP client to avoid proxy issues
+import httpx
 
-def get_client_ip(request: Request) -> str:
-    """Extract client IP address with proxy support"""
-    # Check for forwarded IP first (common in production deployments)
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        # Take the first IP in the chain
-        return forwarded_for.split(",")[0].strip()
-    
-    # Check for real IP header
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    
-    # Fall back to direct client IP
-    return request.client.host
+class CustomHTTPClient(httpx.Client):
+    def __init__(self, *args, **kwargs):
+        # Remove any proxy settings
+        kwargs.pop('proxies', None)
+        kwargs['timeout'] = httpx.Timeout(60.0, connect=60.0)
+        super().__init__(*args, **kwargs)
 
-
-@app.middleware("http")
-async def add_correlation_id(request: Request, call_next):
-    """Add correlation ID to all requests for tracing"""
-    correlation_id = str(uuid.uuid4())
-    request.state.correlation_id = correlation_id
-    
-    # Get client info
-    client_ip = get_client_ip(request)
-    
-    # Log request start
-    structured_logger.log_request(
-        correlation_id=correlation_id,
-        method=request.method,
-        path=request.url.path,
-        client_ip=client_ip
-    )
-    
-    start_time = time.time()
-    
-    try:
-        response = await call_next(request)
+# Initialize the client
+try:
+    if OPENAI_API_KEY:
+        # Create a custom HTTP client
+        http_client = CustomHTTPClient()
         
-        # Calculate response time
-        response_time_ms = (time.time() - start_time) * 1000
-        
-        # Log response
-        structured_logger.log_response(
-            correlation_id=correlation_id,
-            status_code=response.status_code,
-            response_time_ms=response_time_ms,
-            endpoint=request.url.path
+        # Initialize OpenAI with our custom client
+        openai_client = openai.OpenAI(
+            api_key=OPENAI_API_KEY,
+            http_client=http_client
         )
         
-        # Add correlation ID and timing to response headers
-        response.headers["X-Correlation-ID"] = correlation_id
-        response.headers["X-Response-Time"] = f"{response_time_ms:.2f}ms"
-        
-        return response
-        
-    except Exception as e:
-        # Log error
-        response_time_ms = (time.time() - start_time) * 1000
-        structured_logger.log_error(
-            correlation_id=correlation_id,
-            error_type=type(e).__name__,
-            error_message=str(e),
-            stack_trace=traceback.format_exc()
-        )
-        
-        # Return error response
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error", "correlation_id": correlation_id},
-            headers={"X-Correlation-ID": correlation_id, "X-Response-Time": f"{response_time_ms:.2f}ms"}
-        )
+        # Test the connection
+        openai_client.models.list()
+        logger.info("OpenAI client initialized and tested successfully")
+    else:
+        logger.error("OPENAI_API_KEY is None or empty")
+        initialization_error = "OPENAI_API_KEY is None or empty"
+except Exception as e:
+    logger.error(f"OpenAI client initialization error: {e}")
+    logger.error(f"Error type: {type(e).__name__}")
+    logger.error(f"OpenAI key starts with: {OPENAI_API_KEY[:10] if OPENAI_API_KEY else 'None'}...")
+    initialization_error = f"{type(e).__name__}: {str(e)}"
+    # Continue without crashing - will handle in endpoints
 
+# RATE LIMITING SYSTEM
+class RateLimiter:
+    """High-performance memory-based rate limiter with subscription-tier awareness"""
+    
+    def __init__(self):
+        # Memory-based counters for microsecond performance
+        self.user_requests: Dict[str, deque] = defaultdict(deque)
+        self.ip_requests: Dict[str, deque] = defaultdict(deque)
+        
+        # Subscription tier limits (messages per day)
+        self.TIER_LIMITS = {
+            'free': 10,
+            'standard': 1000,
+            'premium': 5000,
+            'default': 10  # Default to free tier
+        }
+        
+        # IP-based limits (per hour to prevent abuse)
+        self.IP_LIMIT_PER_HOUR = 100
+        
+        logger.info("Rate limiter initialized with subscription-tier awareness")
+    
+    def _cleanup_old_requests(self, request_queue: deque, time_window: int) -> None:
+        """Remove requests older than time_window seconds"""
+        current_time = time.time()
+        while request_queue and current_time - request_queue[0] > time_window:
+            request_queue.popleft()
+    
+    def _get_user_tier(self, user_id: str) -> str:
+        """Get user's subscription tier - placeholder for future subscription system"""
+        # TODO: Query user's subscription from database
+        # For now, default to 'standard' for existing users, 'free' for new
+        return 'standard'  # Will be configurable per user
+    
+    def check_user_limit(self, user_id: str) -> Tuple[bool, Dict]:
+        """Check if user has exceeded their daily message limit"""
+        current_time = time.time()
+        day_in_seconds = 24 * 60 * 60
+        
+        # Clean up old requests (older than 24 hours)
+        self._cleanup_old_requests(self.user_requests[user_id], day_in_seconds)
+        
+        # Get user's subscription tier and limit
+        user_tier = self._get_user_tier(user_id)
+        daily_limit = self.TIER_LIMITS.get(user_tier, self.TIER_LIMITS['default'])
+        
+        # Count requests in last 24 hours
+        requests_today = len(self.user_requests[user_id])
+        
+        # Check if limit exceeded
+        if requests_today >= daily_limit:
+            return False, {
+                'error': 'rate_limit_exceeded',
+                'message': f'Daily message limit reached ({daily_limit} messages)',
+                'tier': user_tier,
+                'requests_today': requests_today,
+                'limit': daily_limit,
+                'reset_time': 'midnight UTC'
+            }
+        
+        # Record this request
+        self.user_requests[user_id].append(current_time)
+        
+        return True, {
+            'tier': user_tier,
+            'requests_today': requests_today + 1,
+            'limit': daily_limit,
+            'remaining': daily_limit - requests_today - 1
+        }
+    
+    def check_ip_limit(self, client_ip: str) -> Tuple[bool, Dict]:
+        """Check if IP has exceeded hourly request limit"""
+        current_time = time.time()
+        hour_in_seconds = 60 * 60
+        
+        # Clean up old requests (older than 1 hour)
+        self._cleanup_old_requests(self.ip_requests[client_ip], hour_in_seconds)
+        
+        # Count requests in last hour
+        requests_this_hour = len(self.ip_requests[client_ip])
+        
+        # Check if limit exceeded
+        if requests_this_hour >= self.IP_LIMIT_PER_HOUR:
+            return False, {
+                'error': 'ip_rate_limit_exceeded',
+                'message': f'Too many requests from this IP ({self.IP_LIMIT_PER_HOUR}/hour)',
+                'requests_this_hour': requests_this_hour,
+                'limit': self.IP_LIMIT_PER_HOUR,
+                'reset_time': '1 hour'
+            }
+        
+        # Record this request
+        self.ip_requests[client_ip].append(current_time)
+        
+        return True, {
+            'requests_this_hour': requests_this_hour + 1,
+            'limit': self.IP_LIMIT_PER_HOUR,
+            'remaining': self.IP_LIMIT_PER_HOUR - requests_this_hour - 1
+        }
 
-async def check_rate_limits(request: Request, user_id: str):
+# Initialize rate limiter
+rate_limiter = RateLimiter()
+
+async def check_rate_limits(request: Request, user_id: str) -> None:
     """Check both user and IP rate limits"""
-    correlation_id = getattr(request.state, 'correlation_id', 'unknown')
     client_ip = get_client_ip(request)
+    correlation_id = getattr(request.state, 'correlation_id', 'unknown')
     
-    # Check user rate limit
-    user_allowed, user_count, user_limit = rate_limiter.check_user_limit(user_id)
-    if not user_allowed:
-        structured_logger.log_rate_limit_hit(correlation_id, "user_daily", user_id, client_ip)
-        raise HTTPException(
-            status_code=429,
-            detail=f"Daily message limit exceeded ({user_count}/{user_limit}). Upgrade your subscription for higher limits.",
-            headers={"Retry-After": "86400"}  # 24 hours
-        )
-    
-    # Check IP rate limit
-    ip_allowed, ip_count = rate_limiter.check_ip_limit(client_ip)
+    # Check IP-based rate limit first (prevents IP-based abuse)
+    ip_allowed, ip_info = rate_limiter.check_ip_limit(client_ip)
     if not ip_allowed:
-        structured_logger.log_rate_limit_hit(correlation_id, "ip_hourly", user_id, client_ip)
+        structured_logger.log_rate_limit_hit(correlation_id, "ip_limit", user_id, client_ip)
         raise HTTPException(
             status_code=429,
-            detail=f"Too many requests from your IP ({ip_count}/100 per hour). Please try again later.",
-            headers={"Retry-After": "3600"}  # 1 hour
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": "Too many requests. Please try again later.",
+                "type": "ip_limit",
+                "retry_after": 3600  # 1 hour in seconds
+            }
         )
+    
+    # Check user-based rate limit (subscription-tier aware)
+    user_allowed, user_info = rate_limiter.check_user_limit(user_id)
+    if not user_allowed:
+        structured_logger.log_rate_limit_hit(correlation_id, "user_limit", user_id, client_ip)
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": user_info['message'],
+                "type": "user_limit",
+                "tier": user_info['tier'],
+                "requests_today": user_info['requests_today'],
+                "limit": user_info['limit'],
+                "retry_after": 86400  # 24 hours in seconds
+            }
+        )
+    
+    # Log successful rate limit check (for monitoring)
+    logger.info(f"Rate limit check passed - User: {user_id}, IP: {client_ip}, "
+               f"User tier: {user_info['tier']}, Remaining: {user_info['remaining']}")
 
+# SECURITY: Enhanced Pydantic models with validation
+class Message(BaseModel):
+    role: str
+    content: str
+    
+    @validator('role')
+    def validate_role(cls, v):
+        if v not in ['user', 'assistant', 'system']:
+            raise ValueError('Invalid role')
+        return v
+    
+    @validator('content')
+    def validate_content(cls, v):
+        if not v or len(v.strip()) == 0:
+            raise ValueError('Content cannot be empty')
+        if len(v) > 10000:  # SECURITY: Limit message length
+            raise ValueError('Content too long (max 10000 characters)')
+        return v.strip()
+
+class PromptRequest(BaseModel):
+    message: str
+    
+    @validator('message')
+    def validate_message(cls, v):
+        if not v or len(v.strip()) == 0:
+            raise ValueError('Message cannot be empty')
+        if len(v) > 10000:  # SECURITY: Limit message length
+            raise ValueError('Message too long (max 10000 characters)')
+        return v.strip()
+
+class PromptResponse(BaseModel):
+    response: str
+
+# SECURITY: Enhanced JWT validation
+async def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Verify JWT token and return user ID - SECURITY: Signature verification enabled"""
+    try:
+        token = credentials.credentials
+        # SECURITY: Enable JWT signature verification
+        decoded = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"])
+        user_id = decoded.get("sub")
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
+        
+        return user_id
+        
+    except jwt.ExpiredSignatureError:
+        logger.error("Token validation error: ExpiredSignatureError")  # SECURITY: No token details in logs
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        logger.error(f"Token validation error: InvalidTokenError")  # SECURITY: No token details in logs
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        logger.error(f"Token validation error: {type(e).__name__}")  # SECURITY: No token details in logs
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+def get_system_prompt():
+    """
+    Defines the system prompt that sets the behavior and personality of PatchAI
+    """
+    return """You are PatchAI, an expert AI assistant for drilling operations and oil & gas industry. 
+    Provide accurate, practical advice on drilling, completions, production, and regulatory compliance.
+    Be concise, technical, and prioritize safety in all recommendations."""
 
 # Routes
 @app.post("/prompt", response_model=PromptResponse)
 async def chat_completion(request: PromptRequest, req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Send conversation to OpenAI and return response with proper chat session management"""
+    """Send prompt to OpenAI and return response - SECURITY: Now requires authentication"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
-    logger.info(f"[REQUEST] Starting chat completion - User: {user_id}, Correlation ID: {correlation_id}")
     
     try:
-        # Log the incoming request
-        logger.debug(f"[REQUEST] Incoming request data: {request.model_dump_json()}")
-        
-        # Check rate limits
-        logger.debug("[RATE LIMIT] Checking rate limits...")
+        # Check rate limits first
         await check_rate_limits(req, user_id)
-        logger.debug("[RATE LIMIT] Rate limits check passed")
         
-        # Enforce subscription access (PAYWALL)
-        logger.debug("[SUBSCRIPTION] Validating subscription...")
-        subscription_info = await enforce_subscription(req, user_id)
-        logger.debug(f"[SUBSCRIPTION] Subscription info: {subscription_info}")
+        # Validate request
+        if not request.message or not request.message.strip():
+            structured_logger.log_error(correlation_id, "validation_error", "Empty message provided", user_id)
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
         
-        # Validate input
-        if not request.messages:
-            logger.warning("[VALIDATION] Empty messages array received")
-            raise HTTPException(status_code=400, detail="Messages array cannot be empty")
-            
-        # Log the last user message for context
-        last_user_message = next((msg for msg in reversed(request.messages) if msg.role == "user"), None)
-        if last_user_message:
-            logger.info(f"[MESSAGE] Processing user message: {last_user_message.content[:200]}...")
+        # Log OpenAI request
+        structured_logger.log_openai_request(correlation_id, "gpt-4", 1)
         
-        # All pump context service code removed to restore pure OpenAI chat functionality
+        # Call OpenAI API
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": get_system_prompt()},
+                {"role": "user", "content": request.message}
+            ],
+            max_tokens=1000,
+            temperature=0.7
+        )
         
-        if not openai_client:
-            structured_logger.log_error(correlation_id, "OpenAI", "OpenAI client not initialized", user_id)
-            raise HTTPException(status_code=503, detail="AI service temporarily unavailable")
+        ai_response = response.choices[0].message.content
         
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        logger.info(f"OpenAI request successful - {correlation_id} - User: {user_id}")
         
-        # CRITICAL FIX: Retrieve full conversation history from database
-        logger.info(f"🔍 CONTEXT_DEBUG: Received {len(request.messages)} new messages from frontend")
-        
-        # Get the user's single chat session with full message history
-        try:
-            chat_session = await chat_service.get_single_chat_session(user_id)
-            stored_messages = chat_session.messages if chat_session else []
-            logger.info(f"📚 CONTEXT_DEBUG: Retrieved {len(stored_messages)} stored messages from database")
-        except Exception as e:
-            logger.error(f"❌ CONTEXT_DEBUG: Failed to retrieve chat history: {e}")
-            stored_messages = []
-        
-        # Combine stored messages with new message for complete context
-        # The new message should be the last one in request.messages
-        new_message = request.messages[-1] if request.messages else None
-        
-        if new_message:
-            logger.info(f"📝 CONTEXT_DEBUG: New message ({new_message.role}): {new_message.content[:50]}...")
-        
-        # Pump context generation removed to restore pure OpenAI chat functionality
-        
-        # Prepare complete conversation history for OpenAI
-        system_prompt = get_system_prompt()
-        openai_messages = [{"role": "system", "content": system_prompt}]
-        
-        # Add all stored messages first (Message objects with .role and .content attributes)
-        for i, stored_msg in enumerate(stored_messages):
-            openai_messages.append({
-                "role": stored_msg.role,
-                "content": stored_msg.content
-            })
-            logger.info(f"🔄 CONTEXT_DEBUG: Added stored message {i+1} ({stored_msg.role})")
-        
-        # Add the new message
-        if new_message:
-            openai_messages.append({
-                "role": new_message.role,
-                "content": new_message.content
-            })
-            logger.info(f"🆕 CONTEXT_DEBUG: Added new message ({new_message.role})")
-        
-        # Final context validation
-        total_conversation_messages = len(openai_messages) - 1  # Exclude system prompt
-        total_stored = len(stored_messages)
-        total_new = 1 if new_message else 0
-        
-        logger.info(f"🎯 CONTEXT_DEBUG: Complete context prepared:")
-        logger.info(f"   - System prompt: 1 message")
-        logger.info(f"   - Stored history: {total_stored} messages")
-        logger.info(f"   - New message: {total_new} messages")
-        logger.info(f"   - Total to OpenAI: {len(openai_messages)} messages")
-        
-        # CRITICAL: Validate OpenAI client before making API calls
-        if openai_client is None:
-            error_msg = "OpenAI client is None - API key not configured or invalid"
-            logger.error(f"[OPENAI_ERROR] {error_msg}")
-            if new_message:
-                logger.error(f"[OPENAI_ERROR] Message content: {new_message.content[:200]}...")
-            
-            # Log the actual environment variables for debugging (without exposing full key)
-            logger.error(f"[OPENAI_ERROR] OPENAI_API_KEY set: {'Yes' if os.getenv('OPENAI_API_KEY') else 'No'}")
-            if os.getenv('OPENAI_API_KEY'):
-                key = os.getenv('OPENAI_API_KEY')
-                logger.error(f"[OPENAI_ERROR] API Key starts with: {key[:5]}...{key[-4:] if len(key) > 9 else ''}")
-            
-            structured_logger.log_openai_error(correlation_id, error_msg)
-            raise HTTPException(
-                status_code=503, 
-                detail=(
-                    "AI service is currently unavailable due to a configuration issue. "
-                    "Our team has been notified. Please try again in a few minutes."
-                )
-            )
-        
-        # Log OpenAI request with correct count
-        try:
-            structured_logger.log_openai_request(correlation_id, "gpt-4", total_conversation_messages)
-            logger.info(f"[OPENAI_REQUEST] Sending {len(openai_messages)} messages to GPT-4")
-            
-            # Make the API call with timeout
-            response = openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=openai_messages,
-                max_tokens=1000,
-                temperature=0.7,
-                request_timeout=30  # 30 second timeout
-            )
-            
-            if not response or not response.choices:
-                raise ValueError("Empty or invalid response from OpenAI API")
-                
-            ai_response = response.choices[0].message.content
-            
-            # Log successful response (without sensitive data)
-            logger.info(f"[OPENAI_SUCCESS] Received response with {len(ai_response)} characters")
-            
-            # Save messages to chat history
-            try:
-                # Add user message to single chat session
-                user_message = request.messages[-1]  # Get the latest user message
-                chat_id = await chat_service.add_message_to_single_chat(user_id, user_message)
-                
-                # Add AI response to single chat session
-                ai_message = Message(role="assistant", content=ai_response)
-                await chat_service.add_message_to_single_chat(user_id, ai_message)
-                
-                logger.info(f"Successfully saved chat history for chat {chat_id}")
-                
-                return PromptResponse(response=ai_response, chat_id=chat_id)
-                
-            except Exception as db_error:
-                logger.error(f"[DATABASE_ERROR] Failed to save chat history: {db_error}")
-                # Even if saving fails, still return the AI response
-                return PromptResponse(response=ai_response, chat_id="temp_" + str(uuid.uuid4()))
-            
-        except Exception as openai_error:
-            error_type = type(openai_error).__name__
-            error_msg = f"OpenAI API call failed: {str(openai_error)}"
-            logger.error(f"[OPENAI_API_ERROR] {error_type}: {error_msg}")
-            logger.error(f"[OPENAI_API_ERROR] Full traceback: {traceback.format_exc()}")
-            
-            # Log the request that caused the error (without message content)
-            logger.error(f"[OPENAI_API_ERROR] Request details: model=gpt-4, message_count={len(openai_messages)}")
-            
-            # More specific error messages based on error type
-            if "rate limit" in str(openai_error).lower():
-                detail = "Our AI service is currently experiencing high demand. Please wait a moment and try again."
-            elif "timeout" in str(openai_error).lower():
-                detail = "The AI service is taking longer than expected to respond. Please try again."
-            else:
-                detail = "Our AI service encountered an unexpected error. Our team has been notified."
-            
-            structured_logger.log_openai_error(correlation_id, f"{error_type}: {error_msg}")
-            raise HTTPException(status_code=503, detail=detail)
-        
-        return PromptResponse(response=ai_response, chat_id=chat_id)
+        return PromptResponse(
+            response=ai_response,
+            user_id=user_id,
+            timestamp=datetime.now().isoformat()
+        )
         
     except HTTPException:
+        # Re-raise HTTP exceptions (like rate limits)
         raise
     except Exception as e:
-        structured_logger.log_openai_error(correlation_id, str(e))
-        structured_logger.log_error(correlation_id, "OpenAI", str(e), user_id, traceback.format_exc())
+        error_msg = f"OpenAI API error: {str(e)}"
+        structured_logger.log_openai_error(correlation_id, error_msg)
+        structured_logger.log_error(
+            correlation_id, 
+            "openai_api_error", 
+            error_msg, 
+            user_id, 
+            traceback.format_exc()
+        )
         raise HTTPException(status_code=500, detail="Failed to process your request")
-
 
 @app.get("/history")
 async def get_history(req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Get user's single chat session with all messages"""
+    """Get chat history for authenticated user - SECURITY: JWT signature verification enabled"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
-        # NOTE: Removed enforce_subscription() to allow new users to load empty chat history
-        # Paywall enforcement happens at /prompt endpoint when user tries to chat
+        # Fetch chat sessions from Supabase
+        response = supabase_client.table("chat_sessions").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
         
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        logger.info(f"Chat history retrieved - {correlation_id} - User: {user_id} - Sessions: {len(response.data)}")
         
-        # Get user's single chat session
-        chat_session = await chat_service.get_single_chat_session(user_id)
+        return {"sessions": response.data}
         
-        if chat_session:
-            # Return single chat session in expected format
-            session_data = {
-                "id": chat_session.id,
-                "title": chat_session.title,
-                "created_at": chat_session.created_at.isoformat(),
-                "updated_at": chat_session.updated_at.isoformat()
-            }
-            
-            # Properly serialize Message objects for JSON response
-            serialized_messages = []
-            for msg in chat_session.messages:
-                serialized_messages.append({
-                    "role": msg.role,
-                    "content": msg.content
-                })
-            
-            logger.info(f"Single chat session retrieved for user {user_id} with {len(chat_session.messages)} messages")
-            logger.info(f"🔍 HISTORY_DEBUG: Returning {len(serialized_messages)} serialized messages to frontend")
-            
-            # Debug log first few messages for verification
-            for i, msg in enumerate(serialized_messages[:3]):
-                preview = msg['content'][:50] + "..." if len(msg['content']) > 50 else msg['content']
-                logger.info(f"📄 HISTORY_DEBUG: Message {i+1} ({msg['role']}): {preview}")
-            
-            return {"sessions": [session_data], "messages": serialized_messages}
-        else:
-            # No chat session exists yet
-            logger.info(f"No chat session found for user {user_id} - will be created on first message")
-            return {"sessions": [], "messages": []}
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
+        error_msg = f"Failed to retrieve chat history: {str(e)}"
+        structured_logger.log_error(
+            correlation_id, 
+            "database_error", 
+            error_msg, 
+            user_id, 
+            traceback.format_exc()
+        )
         raise HTTPException(status_code=500, detail="Failed to retrieve chat history")
 
-
-# REMOVED: Individual chat session endpoint - single chat architecture only uses /history
-
-
-# REMOVED: Multi-chat message append endpoint - single chat architecture handles messages automatically
-
-
-
-
-
-@app.delete("/history/clear")
-async def clear_chat_messages(req: Request, user_id: str = Depends(verify_jwt_token)):
-    """Clear all messages from user's single chat session"""
+@app.post("/history")
+async def save_history(request: PromptRequest, req: Request, user_id: str = Depends(verify_jwt_token)):
+    """Save chat history - SECURITY: Now requires authentication"""
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
-        # Enforce subscription access (PAYWALL)
-        await enforce_subscription(req, user_id)
+        # Validate request
+        if not request.message or not request.message.strip():
+            structured_logger.log_error(correlation_id, "validation_error", "Empty message in save request", user_id)
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
         
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        # Save to Supabase with user association
+        chat_data = {
+            "user_id": user_id,
+            "message": request.message,
+            "created_at": datetime.now().isoformat()
+        }
         
-        success = await chat_service.clear_single_chat_messages(user_id)
+        response = supabase_client.table("chat_sessions").insert(chat_data).execute()
         
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to clear chat messages")
+        logger.info(f"Chat history saved - {correlation_id} - User: {user_id}")
         
-        logger.info(f"Chat messages cleared for user {user_id}")
-        return {"status": "cleared"}
+        return {"message": "Chat history saved successfully", "id": response.data[0]["id"]}
         
-    except HTTPException:
-        raise
     except Exception as e:
-        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Failed to clear chat messages")
-
-
-@app.post("/admin/global-hard-delete")
-async def global_hard_delete_all_messages(req: Request, user_id: str = Depends(verify_jwt_token)):
-    """ADMIN ONLY: Global hard delete of ALL chat messages for ALL users (complete reset)"""
-    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
-    
-    try:
-        # CRITICAL: This is a destructive operation - log extensively
-        logger.warning(f"🚨 ADMIN GLOBAL HARD DELETE requested by user {user_id}")
-        
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized", user_id)
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
-        
-        # Execute global hard delete
-        success = await chat_service.global_hard_delete_all_messages()
-        
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to execute global hard delete")
-        
-        logger.warning(f"🚨 GLOBAL HARD DELETE COMPLETED by user {user_id} - ALL chat history removed")
-        return {"status": "global_hard_delete_complete", "message": "All chat history for all users has been permanently deleted"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Failed to execute global hard delete")
-
+        error_msg = f"Failed to save chat history: {str(e)}"
+        structured_logger.log_error(
+            correlation_id, 
+            "database_error", 
+            error_msg, 
+            user_id, 
+            traceback.format_exc()
+        )
+        raise HTTPException(status_code=500, detail="Failed to save chat history")
 
 @app.get("/metrics")
 async def get_metrics():
     """Get current performance metrics"""
     return structured_logger.get_metrics()
 
-
 @app.get("/")
 async def root():
     """Root endpoint for health check"""
-    return {"message": "PatchAI Backend API is running", "version": "0.3.1"}
+    return {"message": "PatchAI Backend API is running", "status": "healthy"}
 
+@app.get("/debug")
+async def debug_info():
+    """Debug endpoint to check environment variables and client status"""
+    return {
+        "openai_client_initialized": openai_client is not None,
+        "supabase_client_initialized": supabase_client is not None,
+        "initialization_error": initialization_error,
+        "environment_check": {
+            "openai_key_configured": OPENAI_API_KEY is not None,
+            "supabase_url_configured": SUPABASE_URL is not None,
+            "supabase_key_configured": SUPABASE_SERVICE_ROLE_KEY is not None,
+            "jwt_secret_configured": SUPABASE_JWT_SECRET is not None
+        }
+    }
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint with comprehensive system status"""
-    health_status = get_health_status(openai_client, supabase_client, rate_limiter, structured_logger)
-    
-    # Add Stripe configuration status
     try:
-        stripe_config = get_stripe_config_status()
-        health_status["stripe"] = {
-            "configured": stripe_config['stripe_secret_configured'] and stripe_config['stripe_webhook_configured'],
-            "stripe_secret_configured": stripe_config['stripe_secret_configured'],
-            "stripe_webhook_configured": stripe_config['stripe_webhook_configured'],
-            "stripe_publishable_configured": stripe_config['stripe_publishable_configured'],
-            "stripe_initialized": stripe_config['stripe_initialized']
+        # Get system metrics
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        # Get application metrics
+        app_metrics = structured_logger.get_metrics()
+        
+        status = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0.0",
+            "uptime_seconds": time.time() - app_start_time,
+            "services": {
+                "openai": openai_client is not None,
+                "supabase": supabase_client is not None,
+                "rate_limiter": rate_limiter is not None
+            },
+            "system_metrics": {
+                "cpu_percent": cpu_percent,
+                "memory_percent": memory.percent,
+                "memory_available_mb": round(memory.available / 1024 / 1024, 2),
+                "disk_percent": disk.percent,
+                "disk_free_gb": round(disk.free / 1024 / 1024 / 1024, 2)
+            },
+            "application_metrics": app_metrics,
+            "rate_limiter": {
+                "active_users": len(rate_limiter.user_requests),
+                "active_ips": len(rate_limiter.ip_requests),
+                "tier_limits": rate_limiter.TIER_LIMITS
+            }
         }
+        
+        # Determine overall health status
+        if cpu_percent > 90 or memory.percent > 90 or disk.percent > 95:
+            status["status"] = "degraded"
+            status["warnings"] = []
+            if cpu_percent > 90:
+                status["warnings"].append(f"High CPU usage: {cpu_percent}%")
+            if memory.percent > 90:
+                status["warnings"].append(f"High memory usage: {memory.percent}%")
+            if disk.percent > 95:
+                status["warnings"].append(f"Low disk space: {disk.percent}% used")
+        
+        if initialization_error:
+            status["initialization_error"] = initialization_error
+            status["status"] = "degraded"
+        
+        return status
+        
     except Exception as e:
-        logger.error(f"Error getting Stripe config status: {str(e)}")
-        health_status["stripe"] = {"configured": False, "error": str(e)}
-    
-    return health_status
-
-
-@app.get("/healthz")
-async def health_check_render():
-    """Simple health check endpoint for Render"""
-    return {"status": "ok"}
-
+        logger.error(f"Health check failed: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": "Health check failed",
+            "services": {
+                "openai": openai_client is not None,
+                "supabase": supabase_client is not None,
+                "rate_limiter": rate_limiter is not None
+            }
+        }
 
 @app.get("/rate-limit-status")
 async def get_rate_limit_status(request: Request, user_id: str = Depends(verify_jwt_token)):
     """Get current rate limit status for authenticated user"""
     client_ip = get_client_ip(request)
     
-    try:
-        user_status = rate_limiter.get_user_status(user_id)
-        ip_status = rate_limiter.get_ip_status(client_ip)
-        
-        return {
-            "user_limits": user_status,
-            "ip_limits": ip_status,
-            "timestamp": time.time()
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting rate limit status: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get rate limit status")
-
-
-@app.delete("/admin/user/{user_id}/history")
-async def delete_user_history(user_id: str, req: Request):
-    """Admin endpoint to delete all chat history for a specific user"""
-    correlation_id = getattr(req.state, 'correlation_id', 'unknown')
+    # Get user tier and current usage
+    user_tier = rate_limiter._get_user_tier(user_id)
+    daily_limit = rate_limiter.TIER_LIMITS.get(user_tier, rate_limiter.TIER_LIMITS['default'])
     
-    try:
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized")
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
-        
-        # Get all chat sessions for the user
-        chat_sessions = await chat_service.get_user_chat_sessions(user_id, limit=1000)
-        
-        if not chat_sessions:
-            logger.info(f"No chat sessions found for user {user_id}")
-            return {"status": "no_data", "message": f"No chat history found for user {user_id}"}
-        
-        deleted_sessions = 0
-        deleted_messages = 0
-        
-        # Delete each chat session (this will also delete associated messages)
-        for session in chat_sessions:
-            chat_id = session['id']
-            success = await chat_service.delete_chat_session(chat_id, user_id)
-            if success:
-                deleted_sessions += 1
-                # Count messages (rough estimate)
-                deleted_messages += 10  # Average estimate
-        
-        logger.info(f"Deleted {deleted_sessions} chat sessions for user {user_id}")
-        
-        return {
-            "status": "deleted",
-            "user_id": user_id,
-            "deleted_sessions": deleted_sessions,
-            "estimated_deleted_messages": deleted_messages,
-            "message": f"Successfully deleted all chat history for user {user_id}"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to delete user history: {str(e)}")
-
-
-app.include_router(payment_router)
-app.include_router(referral_router)
-app.include_router(monitoring_router)
-app.include_router(sync_router)
-app.include_router(phase3_router)
+    # Clean up old requests to get accurate counts
+    current_time = time.time()
+    day_in_seconds = 24 * 60 * 60
+    hour_in_seconds = 60 * 60
+    
+    rate_limiter._cleanup_old_requests(rate_limiter.user_requests[user_id], day_in_seconds)
+    rate_limiter._cleanup_old_requests(rate_limiter.ip_requests[client_ip], hour_in_seconds)
+    
+    # Calculate current usage
+    requests_today = len(rate_limiter.user_requests[user_id])
+    requests_this_hour = len(rate_limiter.ip_requests[client_ip])
+    
+    return {
+        "user": {
+            "tier": user_tier,
+            "daily_limit": daily_limit,
+            "requests_today": requests_today,
+            "remaining_today": daily_limit - requests_today,
+            "percentage_used": round((requests_today / daily_limit) * 100, 1)
+        },
+        "ip": {
+            "hourly_limit": rate_limiter.IP_LIMIT_PER_HOUR,
+            "requests_this_hour": requests_this_hour,
+            "remaining_this_hour": rate_limiter.IP_LIMIT_PER_HOUR - requests_this_hour
+        },
+        "status": "within_limits" if requests_today < daily_limit else "limit_reached"
+    }
 
 if __name__ == "__main__":
     import uvicorn
