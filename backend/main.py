@@ -38,13 +38,12 @@ from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Messa
 from services.openai_service import initialize_openai_client, get_system_prompt
 from services.supabase_service import supabase
 from services.chat_service import ChatService
-from services.pump_context_service import PumpContextService
 from routes.payment_routes import router as payment_router
 from routes.referral_routes import router as referral_router
 from routes.monitoring_routes import router as monitoring_router
 from routes.sync_routes import router as sync_router
 from routes.phase3_routes import router as phase3_router
-from routes.pump_routes import router as pump_router
+# Pump routes removed to restore basic chat functionality
 from services.background_monitor import background_monitor
 # Phase 3 Production Hardening Services
 from services.webhook_redundancy_service import webhook_redundancy_service
@@ -85,8 +84,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global variable for pump context service
-pump_context_service = None
+# Pump context service removed to restore basic chat functionality
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -170,78 +168,7 @@ openai_client = initialize_openai_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
 
-# DEPLOYMENT TRIGGER: 2025-07-14T01:52:30Z - FORCE RENDER REBUILD WITH 500 ERROR FIX
-# Initialize pump context service with comprehensive error handling and diagnostics
-logger.info("🔧 PUMP_INIT: Starting PumpContextService initialization...")
-
-# Pre-initialization diagnostics
-try:
-    import os
-    from pathlib import Path
-    
-    # Check if pump data directory exists
-    pump_data_dir = Path(__file__).parent / "data" / "pumps"
-    logger.info(f"🔍 PUMP_INIT: Checking pump data directory: {pump_data_dir}")
-    logger.info(f"🔍 PUMP_INIT: Directory exists: {pump_data_dir.exists()}")
-    
-    if pump_data_dir.exists():
-        pump_files = list(pump_data_dir.glob("*.json"))
-        logger.info(f"🔍 PUMP_INIT: Found {len(pump_files)} JSON files in pump data directory")
-        for pump_file in pump_files:
-            logger.info(f"🔍 PUMP_INIT: - {pump_file.name} (size: {pump_file.stat().st_size} bytes)")
-    else:
-        logger.error(f"❌ PUMP_INIT: Pump data directory does not exist: {pump_data_dir}")
-    
-    # Check specific transfer_pumps.json file
-    transfer_pumps_file = pump_data_dir / "transfer_pumps.json"
-    logger.info(f"🔍 PUMP_INIT: Checking transfer_pumps.json: {transfer_pumps_file}")
-    logger.info(f"🔍 PUMP_INIT: File exists: {transfer_pumps_file.exists()}")
-    
-    if transfer_pumps_file.exists():
-        logger.info(f"🔍 PUMP_INIT: File size: {transfer_pumps_file.stat().st_size} bytes")
-        logger.info(f"🔍 PUMP_INIT: File readable: {os.access(transfer_pumps_file, os.R_OK)}")
-    
-except Exception as diag_e:
-    logger.error(f"❌ PUMP_INIT: Error during pre-initialization diagnostics: {diag_e}")
-    logger.error(f"❌ PUMP_INIT: Diagnostics traceback: {traceback.format_exc()}")
-
-# Attempt PumpContextService initialization
-try:
-    logger.info("🔧 PUMP_INIT: Attempting to import PumpContextService...")
-    from services.pump_context_service import PumpContextService
-    logger.info("✅ PUMP_INIT: PumpContextService import successful")
-    
-    logger.info("🔧 PUMP_INIT: Attempting to instantiate PumpContextService...")
-    pump_context_service = PumpContextService()
-    logger.info("✅ PUMP_INIT: PumpContextService initialized successfully")
-    
-    # Validate service functionality
-    logger.info("🔧 PUMP_INIT: Testing service functionality...")
-    if hasattr(pump_context_service, 'generate_pump_context'):
-        logger.info("✅ PUMP_INIT: generate_pump_context method available")
-    else:
-        logger.error("❌ PUMP_INIT: generate_pump_context method missing")
-    
-    # Test with a simple query
-    try:
-        test_result = pump_context_service.generate_pump_context("test pump query")
-        logger.info(f"✅ PUMP_INIT: Service test successful, result type: {type(test_result)}")
-    except Exception as test_e:
-        logger.error(f"❌ PUMP_INIT: Service test failed: {test_e}")
-        
-except ImportError as ie:
-    logger.error(f"❌ PUMP_INIT: Failed to import PumpContextService: {ie}")
-    logger.error(f"❌ PUMP_INIT: Import traceback: {traceback.format_exc()}")
-    pump_context_service = None
-    logger.warning("⚠️ PUMP_INIT: Pump context features disabled due to import failure")
-except Exception as e:
-    logger.error(f"❌ PUMP_INIT: Failed to initialize PumpContextService: {e}")
-    logger.error(f"❌ PUMP_INIT: Error type: {type(e).__name__}")
-    logger.error(f"❌ PUMP_INIT: Full traceback: {traceback.format_exc()}")
-    pump_context_service = None
-    logger.warning("⚠️ PUMP_INIT: Pump context features disabled due to initialization failure")
-
-logger.info(f"🔧 PUMP_INIT: Final pump_context_service state: {pump_context_service is not None}")
+# Pump initialization removed to restore basic chat functionality
 
 # Validate Stripe configuration
 try:
@@ -837,7 +764,7 @@ app.include_router(referral_router)
 app.include_router(monitoring_router)
 app.include_router(sync_router)
 app.include_router(phase3_router)
-app.include_router(pump_router)
+# Pump router removed to restore basic chat functionality
 
 if __name__ == "__main__":
     import uvicorn
