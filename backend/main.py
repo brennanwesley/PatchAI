@@ -170,6 +170,11 @@ openai_client = initialize_openai_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
 
+# Initialize referral service
+from services.referral_service import ReferralService
+referral_service = ReferralService(supabase_client) if supabase_client else None
+logger.info(f"✅ Referral service initialized: {referral_service is not None}")
+
 # DEPLOYMENT TRIGGER: 2025-07-14T01:52:30Z - FORCE RENDER REBUILD WITH 500 ERROR FIX
 # Initialize pump context service with comprehensive error handling and diagnostics
 logger.info("🔧 PUMP_INIT: Starting PumpContextService initialization...")

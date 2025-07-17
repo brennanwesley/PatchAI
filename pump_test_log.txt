@@ -1,0 +1,141 @@
+2025-07-14 21:07:59,499 - INFO - === Starting PatchAI Pump Data Tests ===
+
+2025-07-14 21:08:00,764 - INFO - Health check failed: {'status': 'healthy', 'timestamp': 1752545279.544422, 'uptime_seconds': 813, 'system': {'cpu_percent': 50.8, 'memory_percent': 68.5, 'disk_percent': 78.1}, 'services': {'openai': 'healthy', 'supabase': 'healthy', 'rate_limiter': 'healthy'}, 'application': {'requests_total': 13, 'requests_by_endpoint': {'/': 1, '/payments/subscription-status': 8, '/history': 2, '/prompt': 1, '/health': 1}, 'avg_response_times_ms': {'/': 0.47016143798828125, '/payments/subscription-status': 160.1293683052063, '/history': 141.6020393371582, '/prompt': 1262.6514434814453}, 'errors_total': 1, 'errors_by_type': {'OpenAI': 1}, 'openai_requests': 1, 'openai_errors': 1, 'rate_limit_hits': 0}, 'warnings': [], 'stripe': {'configured': True, 'stripe_secret_configured': True, 'stripe_webhook_configured': True, 'stripe_publishable_configured': True, 'stripe_initialized': True}}
+2025-07-14 21:08:00,765 - ERROR - Production endpoint is not healthy. Aborting tests.
+2025-07-14 21:09:28,735 - INFO - === Starting PatchAI Pump Data Tests ===
+
+2025-07-14 21:09:30,079 - INFO - Health check response: {
+  "status": "healthy",
+  "timestamp": 1752545368.8626661,
+  "uptime_seconds": 903,
+  "system": {
+    "cpu_percent": 40.9,
+    "memory_percent": 68.6,
+    "disk_percent": 78.1
+  },
+  "services": {
+    "openai": "healthy",
+    "supabase": "healthy",
+    "rate_limiter": "healthy"
+  },
+  "application": {
+    "requests_total": 14,
+    "requests_by_endpoint": {
+      "/": 1,
+      "/payments/subscription-status": 8,
+      "/history": 2,
+      "/prompt": 1,
+      "/health": 2
+    },
+    "avg_response_times_ms": {
+      "/": 0.47016143798828125,
+      "/payments/subscription-status": 160.1293683052063,
+      "/history": 141.6020393371582,
+      "/prompt": 1262.6514434814453,
+      "/health": 1001.5027523040771
+    },
+    "errors_total": 1,
+    "errors_by_type": {
+      "OpenAI": 1
+    },
+    "openai_requests": 1,
+    "openai_errors": 1,
+    "rate_limit_hits": 0
+  },
+  "warnings": [],
+  "stripe": {
+    "configured": true,
+    "stripe_secret_configured": true,
+    "stripe_webhook_configured": true,
+    "stripe_publishable_configured": true,
+    "stripe_initialized": true
+  }
+}
+2025-07-14 21:09:30,079 - WARNING - Found 1 error(s) in application logs
+2025-07-14 21:09:30,079 - WARNING -   - OpenAI: 1 error(s)
+2025-07-14 21:09:30,079 - INFO - 
+================================================================================
+2025-07-14 21:09:30,079 - INFO - TESTING QUERY: What's the flowrate vs pressure for a 4x6-13 pump?
+2025-07-14 21:09:30,079 - INFO - ================================================================================
+2025-07-14 21:09:30,079 - INFO - 
+Testing query: What's the flowrate vs pressure for a 4x6-13 pump?
+2025-07-14 21:09:30,246 - INFO - Response status: 403
+2025-07-14 21:09:30,246 - ERROR - Unexpected status code: 403
+2025-07-14 21:09:30,246 - ERROR - Response: {
+  "error": "{\"detail\":\"Not authenticated\"}",
+  "status_code": 403
+}
+2025-07-14 21:09:30,263 - ERROR -    - Error: No error details
+2025-07-14 21:09:31,278 - INFO - 
+================================================================================
+2025-07-14 21:09:31,278 - INFO - TESTING QUERY: Show me the performance curve for a 2x3-13 pump at 1750 RPM
+2025-07-14 21:09:31,278 - INFO - ================================================================================
+2025-07-14 21:09:31,278 - INFO - 
+Testing query: Show me the performance curve for a 2x3-13 pump at 1750 RPM
+2025-07-14 21:09:31,390 - INFO - Response status: 403
+2025-07-14 21:09:31,390 - ERROR - Unexpected status code: 403
+2025-07-14 21:09:31,390 - ERROR - Response: {
+  "error": "{\"detail\":\"Not authenticated\"}",
+  "status_code": 403
+}
+2025-07-14 21:09:31,394 - ERROR -    - Error: No error details
+2025-07-14 21:09:32,409 - INFO - 
+================================================================================
+2025-07-14 21:09:32,410 - INFO - TESTING QUERY: What's the efficiency of a 3x4-13 pump at 100 GPM and 100 ft?
+2025-07-14 21:09:32,410 - INFO - ================================================================================
+2025-07-14 21:09:32,411 - INFO - 
+Testing query: What's the efficiency of a 3x4-13 pump at 100 GPM and 100 ft?
+2025-07-14 21:09:32,514 - INFO - Response status: 403
+2025-07-14 21:09:32,514 - ERROR - Unexpected status code: 403
+2025-07-14 21:09:32,514 - ERROR - Response: {
+  "error": "{\"detail\":\"Not authenticated\"}",
+  "status_code": 403
+}
+2025-07-14 21:09:32,515 - ERROR -    - Error: No error details
+2025-07-14 21:09:33,526 - INFO - 
+================================================================================
+2025-07-14 21:09:33,527 - INFO - TESTING QUERY: Compare the performance of 4x6-13 and 6x8-15 pumps
+2025-07-14 21:09:33,527 - INFO - ================================================================================
+2025-07-14 21:09:33,527 - INFO - 
+Testing query: Compare the performance of 4x6-13 and 6x8-15 pumps
+2025-07-14 21:09:33,651 - INFO - Response status: 403
+2025-07-14 21:09:33,651 - ERROR - Unexpected status code: 403
+2025-07-14 21:09:33,651 - ERROR - Response: {
+  "error": "{\"detail\":\"Not authenticated\"}",
+  "status_code": 403
+}
+2025-07-14 21:09:33,652 - ERROR -    - Error: No error details
+2025-07-14 21:09:34,660 - INFO - 
+================================================================================
+2025-07-14 21:09:34,660 - INFO - TESTING QUERY: What's the NPSHr for a 8x10-17 pump at 2000 GPM?
+2025-07-14 21:09:34,660 - INFO - ================================================================================
+2025-07-14 21:09:34,660 - INFO - 
+Testing query: What's the NPSHr for a 8x10-17 pump at 2000 GPM?
+2025-07-14 21:09:34,764 - INFO - Response status: 403
+2025-07-14 21:09:34,764 - ERROR - Unexpected status code: 403
+2025-07-14 21:09:34,764 - ERROR - Response: {
+  "error": "{\"detail\":\"Not authenticated\"}",
+  "status_code": 403
+}
+2025-07-14 21:09:34,765 - ERROR -    - Error: No error details
+2025-07-14 21:17:45,372 - INFO - === Starting PatchAI Pump Data Tests ===
+
+2025-07-14 21:17:45,855 - INFO - ==================================================
+2025-07-14 21:19:15,753 - INFO - === Starting PatchAI Pump Data Tests ===
+
+2025-07-14 21:19:16,299 - INFO - 
+[AUTH] AUTHENTICATION STEP
+2025-07-14 21:19:16,299 - INFO - ==================================================
+2025-07-14 21:19:16,299 - INFO - Authenticating with email: brennan@patchai.com
+2025-07-14 21:19:16,662 - INFO - HTTP Request: POST https://iyacqcylnunndcswaeri.supabase.co/auth/v1/token?grant_type=password "HTTP/2 400 Bad Request"
+2025-07-14 21:19:16,666 - ERROR - [ERROR] Authentication error: Invalid login credentials
+2025-07-14 21:19:16,667 - ERROR - [ERROR] Authentication failed. Cannot proceed with tests.
+2025-07-14 21:19:16,672 - INFO - 
+Test report generated: pump_test_report_2025-07-14_21-19-16.txt
+2025-07-14 21:19:16,673 - INFO - 
+=== Test Summary ===
+2025-07-14 21:19:16,674 - INFO - Total queries: 0
+2025-07-14 21:19:16,674 - INFO - Successful: 0
+2025-07-14 21:19:16,675 - INFO - With pump data: 0
+2025-07-14 21:19:16,675 - INFO - 
+View full report in: pump_test_report_2025-07-14_21-19-16.txt
