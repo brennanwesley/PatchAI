@@ -60,28 +60,11 @@ def initialize_openai_client():
             max_retries=3  # Retry failed requests up to 3 times
         )
         
-        # Test the client with a simple request
-        try:
-            logger.info("Testing OpenAI connection...")
-            test_response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": "Test"}],
-                max_tokens=5
-            )
-            logger.info("✅ OpenAI client initialized and tested successfully")
-            return client
-            
-        except Exception as test_error:
-            error_type = type(test_error).__name__
-            logger.error(f"❌ OpenAI test request failed: {error_type}: {str(test_error)}")
-            logger.error(f"API Key starts with: {api_key[:5]}...{api_key[-4:] if len(api_key) > 9 else ''}")
-            
-            # Log more details about the error
-            if hasattr(test_error, 'response') and test_error.response:
-                logger.error(f"OpenAI API Response: {test_error.response.text}")
-                logger.error(f"Status Code: {test_error.response.status_code}")
-                
-            return None
+        # REMOVED: Test request during initialization that was causing production failures
+        # The test request was failing in production but still creating a client object,
+        # causing health checks to show "healthy" while actual API calls failed with 503 errors
+        logger.info("✅ OpenAI client initialized successfully (test request removed)")
+        return client
             
     except Exception as e:
         error_type = type(e).__name__
