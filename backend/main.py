@@ -170,6 +170,21 @@ openai_client = initialize_openai_client()
 rate_limiter = RateLimiter()
 chat_service = ChatService(supabase_client) if supabase_client else None
 
+# CRITICAL: Validate OpenAI client initialization
+if openai_client is not None:
+    logger.info("[OPENAI_INIT] OpenAI client initialized successfully")
+    try:
+        # Test basic client functionality
+        logger.info("[OPENAI_INIT] Testing OpenAI client configuration...")
+        # Note: We don't make an actual API call here to avoid costs during startup
+        logger.info("[OPENAI_INIT] OpenAI client appears to be properly configured")
+    except Exception as test_e:
+        logger.error(f"[OPENAI_INIT] OpenAI client test failed: {test_e}")
+else:
+    logger.error("[OPENAI_INIT] CRITICAL: OpenAI client is None - API key missing or invalid")
+    logger.error("[OPENAI_INIT] All /prompt requests will fail with 503 errors")
+    logger.error("[OPENAI_INIT] Please check OPENAI_API_KEY environment variable")
+
 # Initialize referral service
 from services.referral_service import ReferralService
 referral_service = ReferralService(supabase_client) if supabase_client else None
@@ -578,16 +593,37 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         logger.info(f"   - New message: {total_new} messages")
         logger.info(f"   - Total to OpenAI: {len(openai_messages)} messages")
         
+        # CRITICAL: Validate OpenAI client before making API calls
+        if openai_client is None:
+            logger.error(f"[OPENAI_ERROR] OpenAI client is None - API key not configured or invalid")
+            logger.error(f"[OPENAI_ERROR] Cannot process user query: {new_message.content[:100] if new_message else 'No message'}")
+            structured_logger.log_openai_error(correlation_id, "OpenAI client not initialized - missing or invalid API key")
+            raise HTTPException(
+                status_code=503, 
+                detail="AI service is temporarily unavailable. Please try again later or contact support if the issue persists."
+            )
+        
         # Log OpenAI request with correct count
         structured_logger.log_openai_request(correlation_id, "gpt-4", total_conversation_messages)
         
-        # Send to OpenAI
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=openai_messages,
-            max_tokens=1000,
-            temperature=0.7
-        )
+        # Send to OpenAI with additional error handling
+        try:
+            logger.info(f"[OPENAI_REQUEST] Sending {len(openai_messages)} messages to GPT-4")
+            response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=openai_messages,
+                max_tokens=1000,
+                temperature=0.7
+            )
+            logger.info(f"[OPENAI_SUCCESS] Received response from GPT-4")
+        except Exception as openai_error:
+            logger.error(f"[OPENAI_API_ERROR] {str(openai_error)}")
+            logger.error(f"[OPENAI_API_ERROR] Full traceback: {traceback.format_exc()}")
+            structured_logger.log_openai_error(correlation_id, f"OpenAI API call failed: {str(openai_error)}")
+            raise HTTPException(
+                status_code=503,
+                detail="AI service encountered an error. Please try again later."
+            )
         
         ai_response = response.choices[0].message.content
         
