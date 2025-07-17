@@ -497,12 +497,31 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
             # Log the request that caused the error (without message content)
             logger.error(f"[OPENAI_API_ERROR] Request details: model=gpt-4, message_count={len(openai_messages)}")
             
-            # More specific error messages based on error type
-            if "rate limit" in str(openai_error).lower():
+            # Enhanced error logging for production debugging
+            import socket
+            import ssl
+            logger.error(f"[OPENAI_API_ERROR] Error attributes: {dir(openai_error)}")
+            if hasattr(openai_error, '__dict__'):
+                logger.error(f"[OPENAI_API_ERROR] Error dict: {openai_error.__dict__}")
+            
+            # Check for specific network/connection errors
+            if isinstance(openai_error, (socket.error, socket.timeout, ConnectionError)):
+                logger.error(f"[OPENAI_API_ERROR] NETWORK ERROR: {error_type} - {error_msg}")
+                detail = "Network connectivity issue with AI service. Please try again."
+            elif isinstance(openai_error, ssl.SSLError):
+                logger.error(f"[OPENAI_API_ERROR] SSL ERROR: {error_type} - {error_msg}")
+                detail = "SSL/TLS connection issue with AI service. Please try again."
+            elif "rate limit" in str(openai_error).lower():
+                logger.error(f"[OPENAI_API_ERROR] RATE LIMIT: {error_type} - {error_msg}")
                 detail = "Our AI service is currently experiencing high demand. Please wait a moment and try again."
             elif "timeout" in str(openai_error).lower():
+                logger.error(f"[OPENAI_API_ERROR] TIMEOUT: {error_type} - {error_msg}")
                 detail = "The AI service is taking longer than expected to respond. Please try again."
+            elif "authentication" in str(openai_error).lower() or "unauthorized" in str(openai_error).lower():
+                logger.error(f"[OPENAI_API_ERROR] AUTH ERROR: {error_type} - {error_msg}")
+                detail = "Authentication issue with AI service. Please try again."
             else:
+                logger.error(f"[OPENAI_API_ERROR] UNKNOWN ERROR: {error_type} - {error_msg}")
                 detail = "Our AI service encountered an unexpected error. Our team has been notified."
             
             structured_logger.log_openai_error(correlation_id, f"{error_type}: {error_msg}")
