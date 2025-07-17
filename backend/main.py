@@ -407,7 +407,7 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         logger.info(f"   - Total to OpenAI: {len(openai_messages)} messages")
         
         # Log OpenAI request with correct count
-        structured_logger.log_openai_request(correlation_id, "gpt-4", total_conversation_messages)
+        structured_logger.log_openai_request(correlation_id, "gpt-4o", total_conversation_messages)
         
         # Send to OpenAI
         response = openai_client.chat.completions.create(

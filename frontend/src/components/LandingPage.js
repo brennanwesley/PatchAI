@@ -154,7 +154,7 @@ const LandingPage = () => {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <span className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400 font-mono tracking-wide">
-                PatchAI
+                Welcome Keith! PatchAI is your helpful friend.
               </span>
             </div>
             <div className="flex items-center space-x-4">
