@@ -44,7 +44,7 @@ from routes.referral_routes import router as referral_router
 from routes.monitoring_routes import router as monitoring_router
 from routes.sync_routes import router as sync_router
 from routes.phase3_routes import router as phase3_router
-from routes.pump_routes import router as pump_router
+# Pump routes removed to restore pure OpenAI chat functionality
 from services.background_monitor import background_monitor
 # Phase 3 Production Hardening Services
 from services.webhook_redundancy_service import webhook_redundancy_service
