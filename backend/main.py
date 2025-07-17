@@ -17,14 +17,12 @@ import time
 import uuid
 import logging
 import traceback
+from typing import Dict, Any, List, Optional, Union
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-import traceback
-import logging
-from typing import Dict, Any
 
 # Import our modular components
 from core.logging import StructuredLogger
@@ -62,16 +60,30 @@ logger.info("🚀 Initializing PatchAI Backend services...")
 logger.info("🚨 EMERGENCY DEPLOYMENT: Message persistence bug resolution - 2025-06-28T14:20:00Z")
 logger.info("🔍 Enhanced debugging enabled for chat message operations")
 
-# Initialize OpenAI
-openai_client = initialize_openai_client()
-if not openai_client:
-    logger.error("❌ CRITICAL: Failed to initialize OpenAI client - chat will not work")
-else:
-    logger.info("✅ OpenAI client initialized successfully")
+# Initialize services
+logger.info("🔄 Initializing services...")
+
+# Initialize OpenAI client
+openai_client = None
+try:
+    openai_client = initialize_openai_client()
+    if not openai_client:
+        logger.error("❌ CRITICAL: Failed to initialize OpenAI client - chat will not work")
+        # Log available environment variables for debugging (without sensitive data)
+        logger.debug(f"Available environment variables: {[k for k in os.environ.keys() if 'KEY' not in k and 'SECRET' not in k and 'PASS' not in k]}")
+    else:
+        logger.info("✅ OpenAI client initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Error initializing OpenAI client: {str(e)}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
 
 # Initialize Chat Service
-chat_service = ChatService(supabase)
-logger.info("✅ Chat service initialized")
+try:
+    chat_service = ChatService(supabase)
+    logger.info("✅ Chat service initialized")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize chat service: {str(e)}")
+    raise RuntimeError("Failed to initialize chat service") from e
 
 # Initialize Supabase
 supabase_client = supabase
@@ -413,50 +425,86 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         
         # CRITICAL: Validate OpenAI client before making API calls
         if openai_client is None:
-            logger.error(f"[OPENAI_ERROR] OpenAI client is None - API key not configured or invalid")
-            logger.error(f"[OPENAI_ERROR] Cannot process user query: {new_message.content[:100] if new_message else 'No message'}")
-            structured_logger.log_openai_error(correlation_id, "OpenAI client not initialized - missing or invalid API key")
+            error_msg = "OpenAI client is None - API key not configured or invalid"
+            logger.error(f"[OPENAI_ERROR] {error_msg}")
+            if new_message:
+                logger.error(f"[OPENAI_ERROR] Message content: {new_message.content[:200]}...")
             
+            # Log the actual environment variables for debugging (without exposing full key)
+            logger.error(f"[OPENAI_ERROR] OPENAI_API_KEY set: {'Yes' if os.getenv('OPENAI_API_KEY') else 'No'}")
+            if os.getenv('OPENAI_API_KEY'):
+                key = os.getenv('OPENAI_API_KEY')
+                logger.error(f"[OPENAI_ERROR] API Key starts with: {key[:5]}...{key[-4:] if len(key) > 9 else ''}")
+            
+            structured_logger.log_openai_error(correlation_id, error_msg)
             raise HTTPException(
                 status_code=503, 
-                detail="AI service is temporarily unavailable. Please try again later or contact support if the issue persists."
+                detail=(
+                    "AI service is currently unavailable due to a configuration issue. "
+                    "Our team has been notified. Please try again in a few minutes."
+                )
             )
         
         # Log OpenAI request with correct count
-        structured_logger.log_openai_request(correlation_id, "gpt-4", total_conversation_messages)
-        
-        # Send to OpenAI with additional error handling
         try:
+            structured_logger.log_openai_request(correlation_id, "gpt-4", total_conversation_messages)
             logger.info(f"[OPENAI_REQUEST] Sending {len(openai_messages)} messages to GPT-4")
+            
+            # Make the API call with timeout
             response = openai_client.chat.completions.create(
                 model="gpt-4",
                 messages=openai_messages,
                 max_tokens=1000,
-                temperature=0.7
+                temperature=0.7,
+                request_timeout=30  # 30 second timeout
             )
-            logger.info(f"[OPENAI_SUCCESS] Received response from GPT-4")
-        except Exception as openai_error:
-            logger.error(f"[OPENAI_API_ERROR] {str(openai_error)}")
-            logger.error(f"[OPENAI_API_ERROR] Full traceback: {traceback.format_exc()}")
-            structured_logger.log_openai_error(correlation_id, f"OpenAI API call failed: {str(openai_error)}")
             
-            # Original error handling when OpenAI API fails
-            raise HTTPException(
-                status_code=503,
-                detail="AI service encountered an error. Please try again later."
-            )
-        
-        ai_response = response.choices[0].message.content
-        
-        # Add user message to single chat session
-        user_message = request.messages[-1]  # Get the latest user message
-        chat_id = await chat_service.add_message_to_single_chat(user_id, user_message)
-        
-        # Add AI response to single chat session
-        ai_message = Message(role="assistant", content=ai_response)
-        await chat_service.add_message_to_single_chat(user_id, ai_message)
-        
-        logger.info(f"OpenAI response generated and saved to single chat {chat_id} for user {user_id}")
+            if not response or not response.choices:
+                raise ValueError("Empty or invalid response from OpenAI API")
+                
+            ai_response = response.choices[0].message.content
+            
+            # Log successful response (without sensitive data)
+            logger.info(f"[OPENAI_SUCCESS] Received response with {len(ai_response)} characters")
+            
+            # Save messages to chat history
+            try:
+                # Add user message to single chat session
+                user_message = request.messages[-1]  # Get the latest user message
+                chat_id = await chat_service.add_message_to_single_chat(user_id, user_message)
+                
+                # Add AI response to single chat session
+                ai_message = Message(role="assistant", content=ai_response)
+                await chat_service.add_message_to_single_chat(user_id, ai_message)
+                
+                logger.info(f"Successfully saved chat history for chat {chat_id}")
+                
+                return PromptResponse(response=ai_response, chat_id=chat_id)
+                
+            except Exception as db_error:
+                logger.error(f"[DATABASE_ERROR] Failed to save chat history: {db_error}")
+                # Even if saving fails, still return the AI response
+                return PromptResponse(response=ai_response, chat_id="temp_" + str(uuid.uuid4()))
+            
+        except Exception as openai_error:
+            error_type = type(openai_error).__name__
+            error_msg = f"OpenAI API call failed: {str(openai_error)}"
+            logger.error(f"[OPENAI_API_ERROR] {error_type}: {error_msg}")
+            logger.error(f"[OPENAI_API_ERROR] Full traceback: {traceback.format_exc()}")
+            
+            # Log the request that caused the error (without message content)
+            logger.error(f"[OPENAI_API_ERROR] Request details: model=gpt-4, message_count={len(openai_messages)}")
+            
+            # More specific error messages based on error type
+            if "rate limit" in str(openai_error).lower():
+                detail = "Our AI service is currently experiencing high demand. Please wait a moment and try again."
+            elif "timeout" in str(openai_error).lower():
+                detail = "The AI service is taking longer than expected to respond. Please try again."
+            else:
+                detail = "Our AI service encountered an unexpected error. Our team has been notified."
+            
+            structured_logger.log_openai_error(correlation_id, f"{error_type}: {error_msg}")
+            raise HTTPException(status_code=503, detail=detail)
         
         return PromptResponse(response=ai_response, chat_id=chat_id)
         

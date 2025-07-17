@@ -10,7 +10,22 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 # Environment variables
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+def get_openai_api_key():
+    """Safely get the OpenAI API key from environment"""
+    # Try multiple ways to get the API key to ensure compatibility
+    api_key = (
+        os.environ.get("OPENAI_API_KEY") or  # Standard environment variable
+        os.environ.get("OPENAI_API_KEY") or  # Try again in case of case sensitivity
+        os.getenv("OPENAI_API_KEY") or       # Try os.getenv as fallback
+        os.getenv("OPENAI_API_KEY")          # Try again for case sensitivity
+    )
+    
+    if not api_key:
+        logger.error("OPENAI_API_KEY not found in environment variables")
+        # Log all available environment variables (for debugging, remove in production)
+        logger.debug(f"Available environment variables: {list(os.environ.keys())}")
+        
+    return api_key
 
 
 class CustomHTTPClient(httpx.Client):
@@ -25,23 +40,52 @@ class CustomHTTPClient(httpx.Client):
 def initialize_openai_client():
     """Initialize OpenAI client with custom configuration"""
     try:
-        if OPENAI_API_KEY:
-            # Create a custom HTTP client
-            custom_client = CustomHTTPClient()
-            
-            # Initialize OpenAI client with custom HTTP client
-            client = OpenAI(
-                api_key=OPENAI_API_KEY,
-                http_client=custom_client
-            )
-            
-            logger.info("OpenAI client initialized successfully")
-            return client
-        else:
-            logger.warning("OPENAI_API_KEY not found - OpenAI features will be disabled")
+        # Get API key from environment
+        api_key = get_openai_api_key()
+        if not api_key:
+            logger.error("❌ OPENAI_API_KEY not found in environment variables")
             return None
+            
+        logger.info("🔄 Initializing OpenAI client...")
+        
+        # Create a custom HTTP client with timeout settings
+        custom_client = CustomHTTPClient()
+        
+        # Initialize OpenAI client with custom HTTP client
+        client = OpenAI(
+            api_key=api_key,
+            http_client=custom_client,
+            timeout=30.0,  # 30 second timeout
+            max_retries=3  # Retry failed requests up to 3 times
+        )
+        
+        # Test the client with a simple request
+        try:
+            logger.info("Testing OpenAI connection...")
+            test_response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": "Test"}],
+                max_tokens=5
+            )
+            logger.info("✅ OpenAI client initialized and tested successfully")
+            return client
+            
+        except Exception as test_error:
+            error_type = type(test_error).__name__
+            logger.error(f"❌ OpenAI test request failed: {error_type}: {str(test_error)}")
+            logger.error(f"API Key starts with: {api_key[:5]}...{api_key[-4:] if len(api_key) > 9 else ''}")
+            
+            # Log more details about the error
+            if hasattr(test_error, 'response') and test_error.response:
+                logger.error(f"OpenAI API Response: {test_error.response.text}")
+                logger.error(f"Status Code: {test_error.response.status_code}")
+                
+            return None
+            
     except Exception as e:
-        logger.error(f"Failed to initialize OpenAI client: {e}")
+        error_type = type(e).__name__
+        logger.error(f"❌ Failed to initialize OpenAI client: {error_type}: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 
