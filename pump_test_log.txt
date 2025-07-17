@@ -139,3 +139,21 @@ Test report generated: pump_test_report_2025-07-14_21-19-16.txt
 2025-07-14 21:19:16,675 - INFO - With pump data: 0
 2025-07-14 21:19:16,675 - INFO - 
 View full report in: pump_test_report_2025-07-14_21-19-16.txt
+2025-07-16 21:30:17,005 - INFO - === Starting PatchAI Pump Data Tests ===
+
+2025-07-16 21:30:17,487 - INFO - 
+[AUTH] AUTHENTICATION STEP
+2025-07-16 21:30:17,487 - INFO - ==================================================
+2025-07-16 21:30:17,487 - INFO - Authenticating with email: brennan.testuser4@email.com
+2025-07-16 21:30:17,983 - INFO - HTTP Request: POST https://iyacqcylnunndcswaeri.supabase.co/auth/v1/token?grant_type=password "HTTP/2 400 Bad Request"
+2025-07-16 21:30:17,984 - ERROR - [ERROR] Authentication error: Invalid login credentials
+2025-07-16 21:30:17,984 - ERROR - [ERROR] Authentication failed. Cannot proceed with tests.
+2025-07-16 21:30:17,985 - INFO - 
+Test report generated: pump_test_report_2025-07-16_21-30-17.txt
+2025-07-16 21:30:17,985 - INFO - 
+=== Test Summary ===
+2025-07-16 21:30:17,985 - INFO - Total queries: 0
+2025-07-16 21:30:17,986 - INFO - Successful: 0
+2025-07-16 21:30:17,986 - INFO - With pump data: 0
+2025-07-16 21:30:17,986 - INFO - 
+View full report in: pump_test_report_2025-07-16_21-30-17.txt

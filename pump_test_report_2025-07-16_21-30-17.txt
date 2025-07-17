@@ -1,0 +1,11 @@
+=== PatchAI Pump Data Test Report ===
+Generated at: 2025-07-16 21:30:17.985401
+
+Test Results Summary:
+- Total queries: 0
+- Successful responses: 0/0 (0.0%)
+- Responses with pump data: 0/0 (0.0%)
+
+
+=== Detailed Results ===
+
