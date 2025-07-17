@@ -38,7 +38,7 @@ from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Messa
 from services.openai_service import initialize_openai_client, get_system_prompt
 from services.supabase_service import supabase
 from services.chat_service import ChatService
-from services.pump_context_service import PumpContextService
+# Pump context service removed to restore pure OpenAI chat functionality
 from routes.payment_routes import router as payment_router
 from routes.referral_routes import router as referral_router
 from routes.monitoring_routes import router as monitoring_router
