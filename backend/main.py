@@ -184,7 +184,6 @@ logger.info("PatchAI Backend initialized with enterprise architecture and chat s
 @app.on_event("startup")
 async def startup_event():
     """Initialize background services on startup"""
-    global pump_context_service
     logger.info("🚀 Application startup initiated")
     
     # Start provisional access scheduler
@@ -194,24 +193,7 @@ async def startup_event():
     except Exception as e:
         logger.error(f"❌ Failed to start provisional scheduler: {str(e)}")
     
-    # Initialize pump context service
-    try:
-        logger.info("🔄 Initializing pump context service...")
-        from services.pump_context_service import PumpContextService
-        pump_context_service = PumpContextService()
-        
-        # Test the service
-        test_query = "4x6-13 pump"
-        logger.info("🧪 Testing pump context service...")
-        test_result = pump_context_service.generate_pump_context(test_query)
-        if test_result:
-            logger.info(f"✅ Pump context service initialized successfully (test query: {test_query})")
-            logger.debug(f"Test result preview: {test_result[:200]}...")
-        else:
-            logger.warning("⚠️ Pump context service returned None for test query")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize pump context service: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+    # Pump context service removed to restore basic chat functionality
     
     logger.info("🚀 Application startup complete")
     logger.info("✅ All services initialized successfully")
@@ -362,36 +344,7 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         if last_user_message:
             logger.info(f"[MESSAGE] Processing user message: {last_user_message.content[:200]}...")
         
-        # Log pump context service status with more details
-        global pump_context_service
-        try:
-            if pump_context_service is not None:
-                logger.debug("[PUMP] Pump context service is initialized")
-                # Test the pump context service with a sample query
-                test_query = "4x6-13 pump"
-                logger.debug(f"[PUMP] Testing pump context generation with query: {test_query}")
-                try:
-                    pump_context = pump_context_service.generate_pump_context(test_query)
-                    if pump_context:
-                        logger.debug(f"[PUMP] Successfully generated pump context ({len(pump_context)} chars)")
-                        logger.debug(f"[PUMP] Context preview: {pump_context[:200]}...")
-                    else:
-                        logger.warning("[PUMP] No pump context generated (query may not be pump-related)")
-                except Exception as e:
-                    logger.error(f"[PUMP] Error generating pump context: {str(e)}")
-                    logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
-            else:
-                logger.error("[PUMP] Pump context service is None - initializing...")
-                try:
-                    from services.pump_context_service import PumpContextService
-                    pump_context_service = PumpContextService()
-                    logger.info("[PUMP] Successfully initialized pump context service")
-                except Exception as e:
-                    logger.error(f"[PUMP] Failed to initialize pump context service: {str(e)}")
-                    logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
-        except Exception as e:
-            logger.error(f"[PUMP] Unexpected error checking pump context service: {str(e)}")
-            logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
+        # Pump context service removed to restore basic chat functionality
         
         if not openai_client:
             structured_logger.log_error(correlation_id, "OpenAI", "OpenAI client not initialized", user_id)
@@ -420,58 +373,11 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         if new_message:
             logger.info(f"📝 CONTEXT_DEBUG: New message ({new_message.role}): {new_message.content[:50]}...")
         
-        # Generate pump-specific context if relevant
-        pump_context = None
-        logger.info(f"🔍 PUMP_DEBUG: Starting pump context generation for message: {new_message.content[:100] if new_message else 'None'}...")
-        logger.info(f"🔍 PUMP_DEBUG: pump_context_service available: {pump_context_service is not None}")
-        
-        # CRITICAL FIX: Enhanced null checking to prevent 500 errors
-        if new_message and pump_context_service is not None:
-            try:
-                logger.info(f"🔍 PUMP_DEBUG: Calling generate_pump_context...")
-                # Additional safety check before calling methods
-                if hasattr(pump_context_service, 'generate_pump_context'):
-                    pump_context = pump_context_service.generate_pump_context(new_message.content)
-                    logger.info(f"🔍 PUMP_DEBUG: Pump context generated: {pump_context is not None}")
-                    if pump_context:
-                        logger.info(f"🔧 PUMP_CONTEXT: Generated pump expertise context for user query")
-                        logger.info(f"🔍 PUMP_DEBUG: Context length: {len(pump_context)} characters")
-                        logger.info(f"🔍 PUMP_DEBUG: Context preview: {pump_context[:200]}...")
-                    else:
-                        logger.info(f"🔍 PUMP_DEBUG: No pump context generated - query not pump-related")
-                else:
-                    logger.error(f"❌ PUMP_CONTEXT: PumpContextService object exists but missing generate_pump_context method")
-                    pump_context = None
-            except AttributeError as ae:
-                logger.error(f"❌ PUMP_CONTEXT: AttributeError in pump context generation: {ae}")
-                logger.error(f"❌ PUMP_DEBUG: This indicates pump_context_service is None or malformed")
-                logger.error(f"❌ PUMP_DEBUG: Full traceback: {traceback.format_exc()}")
-                pump_context = None
-            except Exception as e:
-                logger.error(f"❌ PUMP_CONTEXT: Unexpected error generating pump context: {e}")
-                logger.error(f"❌ PUMP_DEBUG: Full traceback: {traceback.format_exc()}")
-                pump_context = None  # Ensure pump_context is None on error
-        elif new_message and pump_context_service is None:
-            logger.warning(f"⚠️ PUMP_DEBUG: Pump context service is None - pump features disabled due to initialization failure")
-            logger.warning(f"⚠️ PUMP_DEBUG: User query appears pump-related but service unavailable: {new_message.content[:100]}...")
-        elif not new_message:
-            logger.debug(f"🔍 PUMP_DEBUG: No new message to process for pump context")
-        
         # Prepare complete conversation history for OpenAI
         system_prompt = get_system_prompt()
-        logger.info(f"🔍 PUMP_DEBUG: Base system prompt length: {len(system_prompt)} characters")
+        logger.info(f"📝 CONTEXT_DEBUG: Base system prompt length: {len(system_prompt)} characters")
         
-        # Enhance system prompt with pump context if available
-        if pump_context:
-            enhanced_system_prompt = f"{system_prompt}\n\n=== CRITICAL: USE THIS PUMP DATA ===\n{pump_context}\n\nIMPORTANT: You MUST use the pump data provided above to answer pump-related questions. Do NOT provide generic responses when specific pump data is available. Format tables using proper markdown syntax with | separators."
-            logger.info(f"🔧 PUMP_CONTEXT: Enhanced system prompt with real-time pump data")
-            logger.info(f"🔍 PUMP_DEBUG: Enhanced prompt length: {len(enhanced_system_prompt)} characters")
-            logger.info(f"🔍 PUMP_DEBUG: Enhanced prompt preview: ...{enhanced_system_prompt[-300:]}")
-        else:
-            enhanced_system_prompt = system_prompt
-            logger.info(f"🔍 PUMP_DEBUG: Using base system prompt (no pump context)")
-        
-        openai_messages = [{"role": "system", "content": enhanced_system_prompt}]
+        openai_messages = [{"role": "system", "content": system_prompt}]
         
         # Add all stored messages first (Message objects with .role and .content attributes)
         for i, stored_msg in enumerate(stored_messages):
