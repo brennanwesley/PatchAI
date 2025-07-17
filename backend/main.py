@@ -86,8 +86,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global variable for pump context service
-pump_context_service = None
+# Global services
+chat_service = None
+openai_client = None
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -212,7 +213,6 @@ logger.info("PatchAI Backend initialized with enterprise architecture and chat s
 @app.on_event("startup")
 async def startup_event():
     """Initialize background services on startup"""
-    global pump_context_service
     logger.info("🚀 Application startup initiated")
     
     # Start provisional access scheduler
@@ -222,23 +222,22 @@ async def startup_event():
     except Exception as e:
         logger.error(f"❌ Failed to start provisional scheduler: {str(e)}")
     
-    # Initialize pump context service
+    # Initialize OpenAI client
+    global openai_client, chat_service
     try:
-        logger.info("🔄 Initializing pump context service...")
-        from services.pump_context_service import PumpContextService
-        pump_context_service = PumpContextService()
-        
-        # Test the service
-        test_query = "4x6-13 pump"
-        logger.info("🧪 Testing pump context service...")
-        test_result = pump_context_service.generate_pump_context(test_query)
-        if test_result:
-            logger.info(f"✅ Pump context service initialized successfully (test query: {test_query})")
-            logger.debug(f"Test result preview: {test_result[:200]}...")
+        logger.info("🔄 Initializing OpenAI client...")
+        openai_client = initialize_openai_client()
+        if openai_client:
+            logger.info("✅ OpenAI client initialized successfully")
         else:
-            logger.warning("⚠️ Pump context service returned None for test query")
+            logger.error("❌ Failed to initialize OpenAI client - check API key configuration")
+            
+        # Initialize chat service
+        chat_service = ChatService(supabase)
+        logger.info("✅ Chat service initialized")
+        
     except Exception as e:
-        logger.error(f"❌ Failed to initialize pump context service: {str(e)}")
+        logger.error(f"❌ Failed to initialize services: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
     
     logger.info("🚀 Application startup complete")
