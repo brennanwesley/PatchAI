@@ -17,6 +17,7 @@ import time
 import uuid
 import logging
 import traceback
+import datetime
 from typing import Dict, Any, List, Optional, Union
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -96,6 +97,7 @@ else:
     logger.warning("⚠️ Stripe initialization warning - payment features may not work")
 
 logger.info("✅ Service initialization complete")
+logger.info("🔄 Triggering deployment update - " + datetime.datetime.utcnow().isoformat() + "")
 
 # Configure structured logging
 logging.basicConfig(
