@@ -63,7 +63,8 @@ logger.info("🚨 EMERGENCY DEPLOYMENT: Message persistence bug resolution - 202
 logger.info("🔍 Enhanced debugging enabled for chat message operations")
 
 # Initialize OpenAI
-if not initialize_openai_client():
+openai_client = initialize_openai_client()
+if not openai_client:
     logger.error("❌ Failed to initialize OpenAI client")
     
 # Initialize Supabase
@@ -389,36 +390,7 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         if last_user_message:
             logger.info(f"[MESSAGE] Processing user message: {last_user_message.content[:200]}...")
         
-        # Log pump context service status with more details
-        global pump_context_service
-        try:
-            if pump_context_service is not None:
-                logger.debug("[PUMP] Pump context service is initialized")
-                # Test the pump context service with a sample query
-                test_query = "4x6-13 pump"
-                logger.debug(f"[PUMP] Testing pump context generation with query: {test_query}")
-                try:
-                    pump_context = pump_context_service.generate_pump_context(test_query)
-                    if pump_context:
-                        logger.debug(f"[PUMP] Successfully generated pump context ({len(pump_context)} chars)")
-                        logger.debug(f"[PUMP] Context preview: {pump_context[:200]}...")
-                    else:
-                        logger.warning("[PUMP] No pump context generated (query may not be pump-related)")
-                except Exception as e:
-                    logger.error(f"[PUMP] Error generating pump context: {str(e)}")
-                    logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
-            else:
-                logger.error("[PUMP] Pump context service is None - initializing...")
-                try:
-                    from services.pump_context_service import PumpContextService
-                    pump_context_service = PumpContextService()
-                    logger.info("[PUMP] Successfully initialized pump context service")
-                except Exception as e:
-                    logger.error(f"[PUMP] Failed to initialize pump context service: {str(e)}")
-                    logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
-        except Exception as e:
-            logger.error(f"[PUMP] Unexpected error checking pump context service: {str(e)}")
-            logger.error(f"[PUMP] Traceback: {traceback.format_exc()}")
+        # All pump context service code removed to restore pure OpenAI chat functionality
         
         if not openai_client:
             structured_logger.log_error(correlation_id, "OpenAI", "OpenAI client not initialized", user_id)
