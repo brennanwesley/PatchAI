@@ -181,17 +181,7 @@ class PumpFallbackService:
         pump_data = self.find_pump_by_model(model)
         
         if pump_data:
-            return self.response_templates["specific_model"].format(
-                model=pump_data.get('model', model),
-                flow_rate=pump_data.get('flow_rate', 'Contact support for specifications'),
-                head=pump_data.get('head', 'Contact support for specifications'),
-                power=pump_data.get('power', 'Contact support for specifications'),
-                inlet_outlet=pump_data.get('inlet_outlet', 'Contact support for specifications'),
-                efficiency=pump_data.get('efficiency', 'High efficiency design'),
-                performance=pump_data.get('performance', 'Reliable performance for water transfer applications'),
-                applications=pump_data.get('applications', 'Water transfer, irrigation, dewatering'),
-                installation=pump_data.get('installation', 'Professional installation recommended')
-            )
+            return self._format_detailed_pump_response(pump_data, query)
         else:
             return f"""**{model.upper()} Transfer Pump Information**
 
@@ -213,6 +203,145 @@ For detailed specifications including flow rates, head pressure, power requireme
 Our team can provide exact specifications and help ensure this pump meets your needs.
 
 *This information is provided from our pump database. Contact support for complete technical specifications.*"""
+    
+    def _format_detailed_pump_response(self, pump_data: Dict[str, Any], query: str) -> str:
+        """Format detailed pump response from actual JSON data structure"""
+        try:
+            model = pump_data.get('model', 'Unknown Model')
+            size = pump_data.get('size', 'Unknown Size')
+            pump_type = pump_data.get('type', 'transfer')
+            specs = pump_data.get('specs', {})
+            curve_data = pump_data.get('curve_data', {})
+            
+            # Extract RPM from query if specified
+            requested_rpm = self._extract_rpm_from_query(query)
+            
+            # Build comprehensive response
+            impeller_dia = specs.get('impeller_dia_inches', 'N/A')
+            max_temp = specs.get('max_temp_f', 'N/A')
+            max_solids = specs.get('max_solids_inches', 'N/A')
+            
+            response = f"""**{model} - {size} Transfer Pump Specifications**
+
+**Basic Specifications:**
+- Model: {model}
+- Size: {size}
+- Type: {pump_type.replace('_', ' ').title()}
+- Maximum HP: {specs.get('max_hp', 'Contact support')}
+- RPM Options: {', '.join(map(str, specs.get('rpm_options', [])))}
+- Impeller Diameter: {impeller_dia}" (max)
+- Maximum Temperature: {max_temp}°F
+- Specific Gravity Range: {specs.get('sg_range', [0.8, 1.2])}
+- Maximum Solids: {max_solids}" particles
+"""
+            
+            # Add fluid compatibility
+            fluid_types = specs.get('fluid_types', [])
+            if fluid_types:
+                fluid_list = ', '.join(fluid_types).replace('_', ' ').title()
+                response += f"\n**Fluid Compatibility:**\n- {fluid_list}\n"
+            
+            # Add performance curves if available
+            if curve_data:
+                response += self._format_performance_curves(curve_data, requested_rpm)
+            
+            # Add trim options if available
+            trim_options = specs.get('trim_options_inches', [])
+            if trim_options:
+                trim_list = ', '.join(map(str, trim_options))
+                response += f"\n**Impeller Trim Options:**\n- Available trims: {trim_list}\"\n"
+            
+            # Add VFD information if available
+            vfd_range = specs.get('vfd_hz_range', [])
+            if vfd_range:
+                response += f"\n**Variable Frequency Drive (VFD):**\n- Frequency Range: {vfd_range[0]}-{vfd_range[1]} Hz\n- Allows flow and head adjustment\n"
+            
+            response += "\n*This data is sourced from our comprehensive pump database. Contact support for installation guidance and custom applications.*"
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"[PUMP_FALLBACK] Error formatting detailed response: {e}")
+            return f"**{pump_data.get('model', 'Unknown')} Pump Information**\n\nTechnical specifications are available. Please contact support for detailed performance data."
+    
+    def _extract_rpm_from_query(self, query: str) -> Optional[int]:
+        """Extract RPM value from user query"""
+        import re
+        rpm_match = re.search(r'(\d+)\s*rpm', query.lower())
+        if rpm_match:
+            return int(rpm_match.group(1))
+        return None
+    
+    def _format_performance_curves(self, curve_data: Dict[str, Any], requested_rpm: Optional[int] = None) -> str:
+        """Format performance curve data for display"""
+        try:
+            curves_text = "\n**Performance Data:**\n"
+            
+            # If specific RPM requested, show only that data
+            if requested_rpm:
+                rpm_key = f"rpm_{requested_rpm}"
+                if rpm_key in curve_data:
+                    curves_text += f"\n*At {requested_rpm} RPM:*\n"
+                    curves_text += self._format_single_rpm_curve(curve_data[rpm_key])
+                else:
+                    curves_text += f"\n*Requested RPM ({requested_rpm}) not available. Available RPMs: {', '.join([k.replace('rpm_', '') for k in curve_data.keys()]))*\n"
+            else:
+                # Show all available RPM data
+                for rpm_key, rpm_data in curve_data.items():
+                    if rpm_key.startswith('rpm_'):
+                        rpm_value = rpm_key.replace('rpm_', '')
+                        curves_text += f"\n*At {rpm_value} RPM:*\n"
+                        curves_text += self._format_single_rpm_curve(rpm_data)
+            
+            return curves_text
+            
+        except Exception as e:
+            logger.error(f"[PUMP_FALLBACK] Error formatting curves: {e}")
+            return "\n**Performance Data:** Contact support for detailed curves\n"
+    
+    def _format_single_rpm_curve(self, rpm_data: Dict[str, Any]) -> str:
+        """Format curve data for a single RPM"""
+        try:
+            curve_text = ""
+            
+            # Format head vs flow data
+            head_vs_flow = rpm_data.get('head_vs_flow', [])
+            if head_vs_flow:
+                curve_text += "\n**Flow Rate vs Head Pressure:**\n"
+                curve_text += "| Flow (GPM) | Head (ft) |\n"
+                curve_text += "|------------|-----------|\n"
+                for point in head_vs_flow:
+                    flow = point.get('flow', 0)
+                    head = point.get('head', 0)
+                    curve_text += f"| {flow:,} | {head} |\n"
+            
+            # Format efficiency data
+            efficiency = rpm_data.get('efficiency', [])
+            if efficiency:
+                curve_text += "\n**Efficiency Data:**\n"
+                curve_text += "| Flow (GPM) | Efficiency (%) |\n"
+                curve_text += "|------------|----------------|\n"
+                for point in efficiency:
+                    flow = point.get('flow', 0)
+                    eff = point.get('eff', 0)
+                    curve_text += f"| {flow:,} | {eff}% |\n"
+            
+            # Format NPSH data
+            npsh_data = rpm_data.get('npsh_required', [])
+            if npsh_data:
+                curve_text += "\n**NPSH Required:**\n"
+                curve_text += "| Flow (GPM) | NPSH (ft) |\n"
+                curve_text += "|------------|-----------|\n"
+                for point in npsh_data:
+                    flow = point.get('flow', 0)
+                    npsh = point.get('npsh', 0)
+                    curve_text += f"| {flow:,} | {npsh} |\n"
+            
+            return curve_text
+            
+        except Exception as e:
+            logger.error(f"[PUMP_FALLBACK] Error formatting single RPM curve: {e}")
+            return "Performance data available - contact support for details\n"
     
     def _generate_comparison_response(self, query: str) -> str:
         """Generate response for pump comparison queries"""
