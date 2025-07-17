@@ -695,11 +695,114 @@ async def health_check():
     return health_status
 
 
-@app.get("/healthz")
-async def health_check_render():
-    """Simple health check endpoint for Render"""
-    return {"status": "ok"}
+@app.get("/health")
+async def health_check():
+    """Health check endpoint with detailed service status"""
+    try:
+        # Get structured health data
+        health_data = structured_logger.get_health_data()
+        
+        # Check OpenAI service status
+        openai_status = "healthy" if openai_client else "unhealthy"
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "version": "1.0.0",
+            "deployment_time": datetime.utcnow().isoformat(),
+            "services": {
+                "database": "healthy",
+                "openai": openai_status
+            },
+            **health_data
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
+@app.get("/diagnostic/openai")
+async def diagnostic_openai():
+    """Diagnostic endpoint to test OpenAI connection and return detailed error info"""
+    try:
+        logger.info("[DIAGNOSTIC] Starting OpenAI connection test...")
+        
+        # Test the exact same OpenAI call that the chat endpoint makes
+        test_messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Say 'OpenAI diagnostic test successful'"}
+        ]
+        
+        logger.info("[DIAGNOSTIC] Making OpenAI API call...")
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=test_messages,
+            max_tokens=100,
+            temperature=0.7,
+            request_timeout=30
+        )
+        
+        if not response or not response.choices:
+            return {
+                "status": "failed",
+                "error": "Empty response from OpenAI API",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        ai_response = response.choices[0].message.content
+        logger.info(f"[DIAGNOSTIC] OpenAI test successful: {ai_response}")
+        
+        return {
+            "status": "success",
+            "response": ai_response,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        import socket
+        import ssl
+        import traceback
+        
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        # Detailed error analysis
+        error_details = {
+            "error_type": error_type,
+            "error_message": error_msg,
+            "error_attributes": dir(e),
+            "traceback": traceback.format_exc()
+        }
+        
+        if hasattr(e, '__dict__'):
+            error_details["error_dict"] = str(e.__dict__)
+        
+        # Categorize the error
+        if isinstance(e, (socket.error, socket.timeout, ConnectionError)):
+            error_category = "NETWORK_ERROR"
+        elif isinstance(e, ssl.SSLError):
+            error_category = "SSL_ERROR"
+        elif "rate limit" in error_msg.lower():
+            error_category = "RATE_LIMIT"
+        elif "timeout" in error_msg.lower():
+            error_category = "TIMEOUT"
+        elif "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower():
+            error_category = "AUTH_ERROR"
+        else:
+            error_category = "UNKNOWN_ERROR"
+        
+        logger.error(f"[DIAGNOSTIC] OpenAI test failed: {error_category} - {error_type}: {error_msg}")
+        logger.error(f"[DIAGNOSTIC] Full traceback: {traceback.format_exc()}")
+        
+        return {
+            "status": "failed",
+            "error_category": error_category,
+            "timestamp": datetime.utcnow().isoformat(),
+            **error_details
+        }
 
 @app.get("/rate-limit-status")
 async def get_rate_limit_status(request: Request, user_id: str = Depends(verify_jwt_token)):
