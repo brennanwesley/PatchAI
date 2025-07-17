@@ -411,9 +411,9 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         
         # Send to OpenAI
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o",
             messages=openai_messages,
-            max_tokens=1000,
+            max_tokens=2500,
             temperature=0.7
         )
         
