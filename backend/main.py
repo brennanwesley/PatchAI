@@ -643,12 +643,16 @@ async def get_metrics():
     """Get current performance metrics"""
     return structured_logger.get_metrics()
 
-
 @app.get("/")
 async def root():
     """Root endpoint for health check"""
-    return {"message": "PatchAI Backend API is running", "version": "0.3.1"}
-
+    return {
+        "message": "PatchAI Backend is running", 
+        "status": "healthy",
+        "deployment_trigger": "2025-07-17T05:20:00Z",
+        "version": "v2.0.0 - Pump Data Removed",
+        "last_updated": "2025-07-17 - EMERGENCY DEPLOYMENT FOR PUMP DATA REMOVAL"
+    }
 
 @app.get("/health")
 async def health_check():
