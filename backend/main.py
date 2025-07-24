@@ -40,7 +40,9 @@ from core.subscription_middleware import enforce_subscription
 from core.stripe_config import validate_stripe_config, get_stripe_config_status, initialize_stripe
 from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
 from services.openai_service import initialize_openai_client, get_system_prompt
+from services.openai_service import openai_client
 from services.supabase_service import supabase
+from services.wti_service import wti_service
 from services.chat_service import ChatService
 from routes.payment_routes import router as payment_router
 from routes.referral_routes import router as referral_router
@@ -629,30 +631,22 @@ async def delete_user_history(user_id: str, req: Request):
     correlation_id = getattr(req.state, 'correlation_id', 'unknown')
     
     try:
-        if not chat_service:
-            structured_logger.log_error(correlation_id, "ChatService", "Chat service not initialized")
-            raise HTTPException(status_code=503, detail="Chat service temporarily unavailable")
+        # Get the requesting user's ID from the JWT token
+        requesting_user_id = verify_jwt_token(req.headers.get("authorization", "").replace("Bearer ", ""))
         
-        # Get all chat sessions for the user
-        chat_sessions = await chat_service.get_user_chat_sessions(user_id, limit=1000)
+        # Check if the requesting user is an admin
+        admin_result = supabase.table("users").select("is_admin").eq("id", requesting_user_id).execute()
         
-        if not chat_sessions:
-            logger.info(f"No chat sessions found for user {user_id}")
-            return {"status": "no_data", "message": f"No chat history found for user {user_id}"}
+        if not admin_result.data or not admin_result.data[0].get("is_admin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
         
-        deleted_sessions = 0
-        deleted_messages = 0
+        # Delete all messages for the specified user
+        delete_result = supabase.table("messages").delete().eq("user_id", user_id).execute()
         
-        # Delete each chat session (this will also delete associated messages)
-        for session in chat_sessions:
-            chat_id = session['id']
-            success = await chat_service.delete_chat_session(chat_id, user_id)
-            if success:
-                deleted_sessions += 1
-                # Count messages (rough estimate)
-                deleted_messages += 10  # Average estimate
+        # Delete the chat session for the user
+        chat_delete_result = supabase.table("chats").delete().eq("user_id", user_id).execute()
         
-        logger.info(f"Deleted {deleted_sessions} chat sessions for user {user_id}")
+        logger.info(f"Admin {requesting_user_id} deleted all history for user {user_id}")
         
         return {
             "status": "deleted",
@@ -667,6 +661,29 @@ async def delete_user_history(user_id: str, req: Request):
     except Exception as e:
         structured_logger.log_error(correlation_id, "Database", str(e), user_id, traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to delete user history: {str(e)}")
+
+
+@app.get("/api/wti-price")
+async def get_wti_price():
+    """Get current WTI oil price data"""
+    try:
+        logger.info("WTI price endpoint called")
+        wti_data = await wti_service.get_wti_price()
+        logger.info(f"WTI price data returned: ${wti_data.get('price', 'N/A')}")
+        return wti_data
+    except Exception as e:
+        logger.error(f"Failed to get WTI price: {e}")
+        # Return fallback data instead of error to keep UI working
+        import time
+        return {
+            'price': 65.00,
+            'change': 0.00,
+            'changePercent': 0.0,
+            'lastUpdated': time.time(),
+            'source': 'fallback',
+            'isLive': False,
+            'oilType': 'Fallback Data'
+        }
 
 
 app.include_router(payment_router)

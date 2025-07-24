@@ -72,33 +72,35 @@ class WTIService {
   }
 
   /**
-   * Fetch live WTI price from API
+   * Fetch live WTI price from backend API (avoids CORS issues)
    * @returns {Promise<Object>} WTI price data
    */
   async fetchWTIPrice() {
-    console.log('[WTI] fetchWTIPrice called');
-    if (!WTI_API_KEY) {
-      console.error('[WTI] API key not found!');
-      throw new Error('WTI API key not configured');
-    }
+    console.log('[WTI] fetchWTIPrice called - using backend API');
+    
+    // Get backend API URL from environment or use default
+    const backendUrl = process.env.REACT_APP_API_URL || 'https://patchai-backend.onrender.com';
+    const apiUrl = `${backendUrl}/api/wti-price`;
+    
+    console.log('[WTI] Calling backend API:', apiUrl);
 
-    const response = await fetch(`${WTI_API_BASE_URL}/prices/latest`, {
+    const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Token ${WTI_API_KEY}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       }
     });
 
     if (!response.ok) {
-      throw new Error(`WTI API request failed: ${response.status} ${response.statusText}`);
+      throw new Error(`Backend API request failed: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
+    console.log('[WTI] Backend API response:', data);
     
-    // Process and format the API response
-    return this.formatWTIData(data);
+    // Backend already returns formatted data, no need to reformat
+    return data;
   }
 
   /**
