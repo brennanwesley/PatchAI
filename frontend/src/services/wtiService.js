@@ -14,6 +14,9 @@ class WTIService {
       isValid: false
     };
     this.CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+    
+    // Debug logging
+    console.log('[WTIService] Initializing with API key:', WTI_API_KEY ? `${WTI_API_KEY.substring(0, 10)}...` : 'NOT FOUND');
   }
 
   /**
@@ -73,7 +76,9 @@ class WTIService {
    * @returns {Promise<Object>} WTI price data
    */
   async fetchWTIPrice() {
+    console.log('[WTI] fetchWTIPrice called');
     if (!WTI_API_KEY) {
+      console.error('[WTI] API key not found!');
       throw new Error('WTI API key not configured');
     }
 

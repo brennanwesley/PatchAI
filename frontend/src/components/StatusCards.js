@@ -7,22 +7,34 @@ export default function StatusCards() {
   
   // WTI Oil Price state
   const [wtiData, setWtiData] = useState({
-    price: 72.45,
-    change: 0.87,
-    changePercent: 1.2,
+    price: 0,
+    change: 0,
+    changePercent: 0,
     lastUpdated: null,
     source: 'loading',
-    isLive: false
+    isLive: false,
+    loading: true
   });
   
   // Fetch WTI price data
   const fetchWTIData = async () => {
     try {
+      console.log('[StatusCards] Fetching WTI data...');
       const data = await wtiService.getWTIPrice();
-      setWtiData(data);
+      console.log('[StatusCards] WTI data received:', data);
+      setWtiData({ ...data, loading: false });
     } catch (error) {
       console.error('[StatusCards] Failed to fetch WTI data:', error);
-      // Keep existing fallback data on error
+      // Set fallback data with error state
+      setWtiData({
+        price: 65.00, // Fallback price close to expected range
+        change: 0,
+        changePercent: 0,
+        lastUpdated: new Date().toISOString(),
+        source: 'fallback',
+        isLive: false,
+        loading: false
+      });
     }
   };
   
@@ -110,23 +122,28 @@ export default function StatusCards() {
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-700">WTI Oil Price</h3>
-            <span className={`text-xs ${
+            <span className={`text-xs font-medium ${
+              wtiData.loading ? 'text-blue-600' : 
               wtiData.isLive ? 'text-green-600' : 'text-gray-500'
             }`}>
-              {wtiData.isLive ? 'Live' : 'Cached'}
+              {wtiData.loading ? 'Loading...' : wtiData.isLive ? 'Live' : 'Cached'}
             </span>
           </div>
           <div className="flex items-end gap-2">
             <span className="text-2xl font-bold text-gray-900">
-              ${wtiData.price.toFixed(2)}
+              {wtiData.loading ? '--' : `$${wtiData.price.toFixed(2)}`}
             </span>
-            <span className={`text-sm font-medium ${
-              wtiData.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {wtiData.changePercent >= 0 ? '+' : ''}{wtiData.changePercent.toFixed(1)}%
-            </span>
+            {!wtiData.loading && (
+              <span className={`text-sm font-medium ${
+                wtiData.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {wtiData.changePercent >= 0 ? '+' : ''}{wtiData.changePercent.toFixed(1)}%
+              </span>
+            )}
           </div>
-          <p className="text-xs text-gray-500 mt-1">Per barrel</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {wtiData.loading ? 'Fetching live data...' : 'Per barrel'}
+          </p>
         </div>
 
         {/* Recent Deals Card */}
