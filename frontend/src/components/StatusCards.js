@@ -1,8 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useChatStore } from '../hooks/useChatStore';
+import wtiService from '../services/wtiService';
 
 export default function StatusCards() {
   const { sendMessage, isTyping } = useChatStore();
+  
+  // WTI Oil Price state
+  const [wtiData, setWtiData] = useState({
+    price: 72.45,
+    change: 0.87,
+    changePercent: 1.2,
+    lastUpdated: null,
+    source: 'loading',
+    isLive: false
+  });
+  
+  // Fetch WTI price data
+  const fetchWTIData = async () => {
+    try {
+      const data = await wtiService.getWTIPrice();
+      setWtiData(data);
+    } catch (error) {
+      console.error('[StatusCards] Failed to fetch WTI data:', error);
+      // Keep existing fallback data on error
+    }
+  };
+  
+  // Initial fetch and setup interval
+  useEffect(() => {
+    // Fetch immediately
+    fetchWTIData();
+    
+    // Set up 10-minute interval
+    const interval = setInterval(fetchWTIData, 10 * 60 * 1000);
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, []);
 
   const quickPrompts = [
     {
@@ -76,11 +110,21 @@ export default function StatusCards() {
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-700">WTI Oil Price</h3>
-            <span className="text-xs text-gray-500">Live</span>
+            <span className={`text-xs ${
+              wtiData.isLive ? 'text-green-600' : 'text-gray-500'
+            }`}>
+              {wtiData.isLive ? 'Live' : 'Cached'}
+            </span>
           </div>
           <div className="flex items-end gap-2">
-            <span className="text-2xl font-bold text-gray-900">$72.45</span>
-            <span className="text-sm text-green-600 font-medium">+1.2%</span>
+            <span className="text-2xl font-bold text-gray-900">
+              ${wtiData.price.toFixed(2)}
+            </span>
+            <span className={`text-sm font-medium ${
+              wtiData.changePercent >= 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {wtiData.changePercent >= 0 ? '+' : ''}{wtiData.changePercent.toFixed(1)}%
+            </span>
           </div>
           <p className="text-xs text-gray-500 mt-1">Per barrel</p>
         </div>
