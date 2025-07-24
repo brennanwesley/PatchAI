@@ -40,7 +40,6 @@ from core.subscription_middleware import enforce_subscription
 from core.stripe_config import validate_stripe_config, get_stripe_config_status, initialize_stripe
 from models.schemas import PromptRequest, PromptResponse, SaveChatRequest, Message
 from services.openai_service import initialize_openai_client, get_system_prompt
-from services.openai_service import openai_client
 from services.supabase_service import supabase
 from services.wti_service import wti_service
 from services.chat_service import ChatService
