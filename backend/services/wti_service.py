@@ -65,7 +65,7 @@ class WTIService:
             return self.get_fallback_data()
     
     async def fetch_wti_price(self) -> Dict:
-        """Fetch live WTI price from API"""
+        """Fetch live WTI price from API using health endpoint"""
         if not self.api_key:
             raise Exception("WTI API key not configured")
         
@@ -76,8 +76,9 @@ class WTIService:
         }
         
         async with httpx.AsyncClient(timeout=10.0) as client:
+            # Fetch from health endpoint to get WTI data from commodity_health
             response = await client.get(
-                f'{self.base_url}/prices/latest',
+                f'{self.base_url}/health',
                 headers=headers
             )
             
@@ -89,20 +90,35 @@ class WTIService:
     
     def format_wti_data(self, api_data: Dict) -> Dict:
         """Format API response data for consistent use"""
-        # Handle actual API response structure from oilpriceapi.com
-        # Response format: { status: "success", data: { price: 68.76, formatted: "$68.76", currency: "USD", code: "BRENT_CRUDE_USD", created_at: "...", type: "spot_price" } }
+        # Handle health endpoint response structure
+        # Response format: { metrics: { commodity_health: { "WTI_USD": { latest_price: 6876, last_update: "..." } } } }
         
         price = 0
         last_updated = None
-        oil_type = 'Unknown'
+        oil_type = 'WTI Crude Oil'
         
-        if api_data.get('status') == 'success' and api_data.get('data'):
-            price = float(api_data['data'].get('price', 0))
-            last_updated = api_data['data'].get('created_at')
-            oil_type = api_data['data'].get('code', 'Oil Price')
-        elif api_data.get('price'):
-            # Fallback for direct price format
-            price = float(api_data['price'])
+        # Extract WTI data from commodity_health metrics
+        commodity_health = api_data.get('metrics', {}).get('commodity_health', {})
+        wti_data = commodity_health.get('WTI_USD')
+        
+        if wti_data and wti_data.get('latest_price'):
+            # Apply scaling: divide by 100 for oil prices as per the Node.js guide
+            price = float(wti_data['latest_price']) / 100
+            last_updated = wti_data.get('last_update')
+            oil_type = 'WTI Crude Oil'
+            logger.info(f"WTI price extracted: ${price:.2f} from raw value {wti_data['latest_price']}")
+        else:
+            logger.warning("WTI_USD not found in commodity_health data")
+            logger.info(f"Available commodities: {list(commodity_health.keys())}")
+            # Fallback: try to find any oil-related commodity
+            for key, data in commodity_health.items():
+                if 'WTI' in key.upper() or 'OIL' in key.upper():
+                    if data.get('latest_price'):
+                        price = float(data['latest_price']) / 100
+                        last_updated = data.get('last_update')
+                        oil_type = f"Oil Price ({key})"
+                        logger.info(f"Using fallback oil price from {key}: ${price:.2f}")
+                        break
         
         # Calculate a mock change percentage since API doesn't provide it
         # In a real implementation, you'd store previous price and calculate actual change
