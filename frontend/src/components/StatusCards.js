@@ -123,10 +123,9 @@ export default function StatusCards() {
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-700">WTI Oil Price</h3>
             <span className={`text-xs font-medium ${
-              wtiData.loading ? 'text-blue-600' : 
-              wtiData.isLive ? 'text-green-600' : 'text-gray-500'
+              wtiData.loading ? 'text-blue-600' : 'text-green-600'
             }`}>
-              {wtiData.loading ? 'Loading...' : wtiData.isLive ? 'Live' : 'Cached'}
+              {wtiData.loading ? 'Loading...' : 'Live'}
             </span>
           </div>
           <div className="flex items-end gap-2">
