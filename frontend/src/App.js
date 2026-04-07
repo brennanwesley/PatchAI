@@ -75,8 +75,6 @@ function ChatLayout() {
   const { needsPayment, hasActiveSubscription, loading: subscriptionLoading, refetch: refetchSubscription } = useSubscription();
   const { user } = useAuth();
   const [showPaywall, setShowPaywall] = React.useState(false);
-  
-  console.log('🏗️ LAYOUT_DEBUG: ChatLayout rendering with isLoading:', isLoading, 'error:', !!error, 'chats.length:', chats.length);
 
   // Check for payment success in URL and refresh subscription
   React.useEffect(() => {
@@ -84,7 +82,6 @@ function ChatLayout() {
     const paymentStatus = urlParams.get('payment');
     
     if (paymentStatus === 'success') {
-      console.log('💳 Payment success detected, refreshing subscription status...');
       // Clear the URL parameter
       window.history.replaceState({}, document.title, window.location.pathname);
       
@@ -94,19 +91,16 @@ function ChatLayout() {
       // Retry subscription refresh with exponential backoff
       const retrySubscriptionRefresh = async (attempt = 1, maxAttempts = 5) => {
         try {
-          console.log(`🔄 Refreshing subscription status (attempt ${attempt}/${maxAttempts})...`);
           await refetchSubscription();
           
           // Check if subscription is now active
           if (hasActiveSubscription) {
-            console.log('✅ Subscription status confirmed active');
             return;
           }
           
           // If not active yet and we have more attempts, retry
           if (attempt < maxAttempts) {
             const delay = Math.min(1000 * Math.pow(2, attempt), 10000); // Exponential backoff, max 10s
-            console.log(`⏳ Subscription not active yet, retrying in ${delay}ms...`);
             setTimeout(() => retrySubscriptionRefresh(attempt + 1, maxAttempts), delay);
           } else {
             console.warn('⚠️ Subscription sync may be delayed. Please refresh the page if paywall persists.');
@@ -139,9 +133,8 @@ function ChatLayout() {
 
   // Listen for paywall events (402 errors)
   React.useEffect(() => {
-    const unsubscribe = paywallEvents.subscribe((eventType, data) => {
+    const unsubscribe = paywallEvents.subscribe((eventType) => {
       if (eventType === PAYWALL_EVENTS.PAYMENT_REQUIRED) {
-        console.log('💳 App: Payment required event received, showing paywall');
         setShowPaywall(true);
       }
     });

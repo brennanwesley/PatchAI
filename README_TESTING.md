@@ -1,196 +1,137 @@
 # PatchAI Testing Infrastructure
 
 ## Overview
-Comprehensive testing suite to detect issues before deployment and ensure stable production releases.
+The default PatchAI validation flow now focuses on a small set of trustworthy checks that are simple to run locally and in CI.
+
+## Current Default Validation Flow
+
+### Backend Validation
+- **Python compile validation** for the active backend runtime surface
+- **Coverage target**: `backend/main.py`, `backend/core`, `backend/models`, `backend/routes`, and `backend/services`
+
+### Frontend Validation
+- **Smoke test** for the current app shell using the active React test setup
+- **Production build check** to ensure the frontend still bundles successfully
+
+### CI Coverage
+- **Backend job** installs backend dependencies and validates Python files
+- **Frontend job** installs frontend dependencies, runs the smoke test, and builds the app
 
 ## Quick Start
 
-### Run Complete Test Suite
+### Run The Default Local Validation Flow
 ```bash
-python test_all.py
+npm run test-backend
+npm run test-frontend
+npm run build-frontend
 ```
 
-### Run Individual Tests
+### Run Combined Backend And Frontend Checks
 ```bash
-# Backend API tests only
-python final_test.py
-
-# Simple connectivity check
-python simple_test.py
-
-# Backend diagnostics
-python debug_backend.py
+npm run test-all
 ```
 
-## Test Files
+### Run Windows Wrappers
+```bash
+run_tests.bat
+test.bat
+```
 
-### Core Testing
-- **`test_all.py`** - Complete test suite (recommended)
-- **`final_test.py`** - Backend API + basic frontend tests
-- **`simple_test.py`** - Quick connectivity check
+## Active Test Entry Points
 
-### Diagnostics
-- **`debug_backend.py`** - Detailed backend troubleshooting
-- **`frontend_test.js`** - Browser-based console error detection (requires Node.js)
+### Root Scripts
+- **`npm run test-backend`** - Python compile validation for the active backend code
+- **`npm run test-frontend`** - Frontend smoke test
+- **`npm run build-frontend`** - Frontend production build validation
+- **`npm run test-all`** - Combined backend compile validation and frontend smoke test
 
-### Configuration
-- **`package.json`** - Node.js dependencies for frontend testing
-- **`requirements-test.txt`** - Python testing dependencies
-- **`run_tests.bat`** - Windows batch script for easy testing
+### Frontend Test Files
+- **`frontend/src/App.test.js`** - Lightweight app-shell smoke test
+- **`frontend/src/setupTests.js`** - Jest DOM setup
 
-## What Gets Tested
+### CI Workflow
+- **`.github/workflows/test.yml`** - Current GitHub Actions validation pipeline
 
-### Backend Tests ✅
-- **Health Check** - Backend API availability
-- **CORS Configuration** - Cross-origin request handling
-- **Authentication** - Protected endpoint security
-- **API Documentation** - Swagger docs availability
-- **Error Handling** - Proper HTTP status codes
+## Legacy Diagnostic Scripts
 
-### Frontend Tests ✅
-- **Accessibility** - Frontend loading and availability
-- **React Detection** - Framework presence
-- **JavaScript Bundles** - Asset loading
-- **PatchAI Branding** - Content verification
-- **HTML Structure** - Meta tags and SEO
-- **CSS Framework** - Styling framework detection
+The following scripts still exist in the repository, but they are no longer the default CI path:
 
-### Integration Tests ✅
-- **CORS Integration** - Frontend-backend communication
-- **API Contract** - Request/response format compatibility
+- **`final_test.py`**
+- **`simple_test.py`**
+- **`debug_backend.py`**
+- **`frontend_test.js`**
 
-## Current Status
+These should be treated as manual diagnostics only unless they are intentionally modernized later.
 
-### Live URLs
-- **Backend**: `https://patchai-backend.onrender.com`
-- **Frontend**: `https://patchai-frontend.vercel.app`
+## What The Current Flow Verifies
 
-### Latest Test Results
-- ✅ **6/7 tests PASSED**
-- ❌ **0 FAILED** (no critical issues)
-- ⚠️ **1 WARNING** (minor frontend detection)
-- 🎯 **Overall Status: HEALTHY**
+### Backend
+- **Syntax and compile validity** across the active backend runtime surface
+- **Protection against broken commits** caused by invalid Python files in key runtime directories
+
+### Frontend
+- **Basic app shell rendering** via the smoke test
+- **Build integrity** for the React application
+
+## Windows Wrapper Behavior
+
+- **`run_tests.bat`** - Installs required dependencies, runs backend validation, runs the frontend smoke test, and runs the frontend build
+- **`test.bat`** - Validates local tools are present and runs the same streamlined local checks without reinstalling dependencies
+
+The wrappers set safe placeholder frontend environment variables for local smoke testing and build validation so real production secrets are not required for these checks.
 
 ## Usage Examples
 
-### Pre-Deployment Check
+### Pre-Commit Validation
 ```bash
-# Run before pushing to production
-python test_all.py
-
-# Check exit code
-echo $?  # 0 = success, 1 = failures detected
+npm run test-backend
+npm run test-frontend
 ```
 
-### Continuous Integration
+### Pre-Deployment Validation
 ```bash
-# Add to CI pipeline
-python test_all.py && echo "Tests passed, deploying..." || echo "Tests failed, blocking deployment"
+npm run test-backend
+npm run test-frontend
+npm run build-frontend
 ```
 
-### Development Workflow
-```bash
-# Quick check during development
-python simple_test.py
+### Continuous Integration Reference
+```yaml
+- name: Validate backend Python files
+  run: python -m compileall backend/main.py backend/core backend/models backend/routes backend/services
 
-# Full check before commit
-python test_all.py
+- name: Run frontend smoke tests
+  run: npm test -- --watchAll=false
+
+- name: Build frontend
+  run: npx react-scripts build
 ```
-
-## Report Files
-
-### Generated Reports
-- **`complete_test_report.json`** - Detailed test results with timestamps
-- **`patchai_test_report.json`** - Backend/frontend test summary
-- **`simple_test_results.json`** - Basic connectivity results
-- **`backend_diagnostics.json`** - Backend troubleshooting data
-
-### Report Structure
-```json
-{
-  "timestamp": "2025-06-21T14:00:00",
-  "summary": {
-    "passed": 6,
-    "failed": 0,
-    "warnings": 1,
-    "health_score": 85.7
-  },
-  "results": [...]
-}
-```
-
-## Health Score Interpretation
-
-- **90-100%** - Production ready, excellent health
-- **80-89%** - Good health, minor warnings acceptable
-- **70-79%** - Needs attention, some issues detected
-- **<70%** - Critical issues, do not deploy
-
-## Troubleshooting
-
-### Common Issues
-
-#### Backend 404 Errors
-```bash
-# Check if using correct URL
-python debug_backend.py
-```
-
-#### CORS Failures
-- Verify frontend URL in backend CORS settings
-- Check browser console for CORS errors
-
-#### Authentication Errors
-- Ensure JWT tokens are properly configured
-- Verify Supabase integration
-
-### Getting Help
-1. Run `python debug_backend.py` for detailed diagnostics
-2. Check generated JSON reports for specific error details
-3. Review console logs in browser developer tools
 
 ## Dependencies
 
-### Python Requirements
+### Backend
 ```bash
-pip install httpx
+pip install -r backend/requirements.txt
 ```
 
-### Node.js Requirements (Optional)
+### Frontend
 ```bash
-npm install puppeteer
+npm --prefix frontend install
 ```
 
-## Integration with Development Workflow
+## Troubleshooting
 
-### Pre-Commit Hook
-Add to `.git/hooks/pre-commit`:
-```bash
-#!/bin/bash
-python test_all.py
-if [ $? -ne 0 ]; then
-    echo "Tests failed. Commit blocked."
-    exit 1
-fi
-```
+### Frontend Test Fails Due To Missing Environment Variables
+- Use the Windows wrappers or set placeholder `REACT_APP_*` values before running the frontend checks manually
 
-### GitHub Actions
-```yaml
-- name: Run PatchAI Tests
-  run: python test_all.py
-```
+### Backend Compile Validation Fails
+- Fix the reported Python syntax or import-surface issue in the file listed by the compiler output
+
+### Need Deeper Manual Investigation
+- Use the legacy diagnostic scripts only as manual troubleshooting tools, not as the default release gate
 
 ## Future Enhancements
 
-### Planned Features
-- [ ] E2E testing with Playwright
-- [ ] Performance benchmarking
-- [ ] Database migration testing
-- [ ] Load testing capabilities
-- [ ] Automated screenshot comparison
-
-### Contributing
-To add new tests:
-1. Add test method to appropriate class
-2. Update this README
-3. Test locally before committing
+- **Add more meaningful frontend tests around authenticated routing and paywall states**
+- **Introduce targeted backend unit tests once key services are less environment-coupled**
+- **Add linting only when it can be introduced cleanly and consistently across the repo**

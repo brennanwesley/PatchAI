@@ -21,11 +21,6 @@ export const DEFAULT_HEADERS = {
 const getAuthToken = async () => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    console.log('🔐 Supabase session:', session ? 'Present' : 'Null');
-    console.log('🔐 Access token:', session?.access_token ? 'Present' : 'Missing');
-    if (session?.access_token) {
-      console.log('🔐 Token preview:', session.access_token.substring(0, 50) + '...');
-    }
     return session?.access_token || null;
   } catch (error) {
     console.error('Error getting auth token:', error);
@@ -98,8 +93,7 @@ export const createApiRequest = async (endpoint, method = 'GET', data = null) =>
     console.error('API request failed:', {
       message: error.message,
       status: error.status,
-      isAuthError: error.isAuthError,
-      stack: error.stack
+      isAuthError: error.isAuthError
     });
     throw error;
   }

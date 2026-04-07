@@ -95,35 +95,22 @@ export async function createPortalSession(returnUrl) {
  */
 export async function syncSubscriptionManually(email = null) {
   try {
-    console.log('🔄 Starting subscription sync...');
-    console.log('📍 API Base URL:', API_BASE_URL);
-    
     // Check authentication
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      console.error('❌ No active session found');
       throw new Error('Not authenticated - please log in again');
     }
-    
-    console.log('✅ Session found, user:', session.user?.email);
-    
+
     // Use current user's email if no specific email provided
     const targetEmail = email || session.user?.email;
-    console.log('🎯 Target email for sync:', targetEmail);
-    
+
     if (!targetEmail) {
-      console.error('❌ No email available for sync');
       throw new Error('No email available for subscription sync');
     }
-    
+
     const requestBody = {
       email: targetEmail, // Use current user's email or provided email
     };
-    
-    console.log('📤 Request details:');
-    console.log('  URL:', `${API_BASE_URL}/payments/sync-subscription`);
-    console.log('  Body:', requestBody);
-    console.log('  Auth token length:', session.access_token?.length || 0);
 
     const response = await fetch(`${API_BASE_URL}/payments/sync-subscription`, {
       method: 'POST',
@@ -133,9 +120,6 @@ export async function syncSubscriptionManually(email = null) {
       },
       body: JSON.stringify(requestBody),
     });
-
-    console.log('📥 Response status:', response.status);
-    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
     
     if (!response.ok) {
       let errorData;
@@ -167,19 +151,11 @@ export async function syncSubscriptionManually(email = null) {
     }
 
     const result = await response.json();
-    console.log('✅ Sync completed successfully:', {
-      success: result.success,
-      status: result.subscription_status,
-      plan: result.plan_tier,
-      message: result.message
-    });
-    
     return result;
     
   } catch (error) {
     console.error('💥 Sync error details:', {
       message: error.message,
-      stack: error.stack,
       name: error.name
     });
     
@@ -198,8 +174,6 @@ export async function syncSubscriptionManually(email = null) {
  */
 export async function grantProvisionalAccess() {
   try {
-    console.log('🎯 Granting provisional Standard Plan access...');
-    
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('Not authenticated');
 
@@ -217,8 +191,6 @@ export async function grantProvisionalAccess() {
     }
 
     const result = await response.json();
-    console.log('✅ Provisional access granted:', result);
-    
     return result;
   } catch (error) {
     console.error('💥 Failed to grant provisional access:', error);

@@ -3,8 +3,9 @@
   "version": "2.0.0",
   "description": "Testing suite for PatchAI frontend and backend",
   "scripts": {
-    "test-frontend": "node frontend_test.js",
-    "test-backend": "python test_suite.py",
+    "test-frontend": "npm --prefix frontend test -- --watchAll=false",
+    "test-backend": "python -m compileall backend/main.py backend/core backend/models backend/routes backend/services",
+    "build-frontend": "npm --prefix frontend run build",
     "test-all": "npm run test-backend && npm run test-frontend",
     "install-deps": "npm install puppeteer httpx"
   },

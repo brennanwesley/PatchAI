@@ -27,11 +27,7 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
             raise HTTPException(status_code=500, detail="Authentication configuration error - JWT secret missing")
         
         # DEBUG: Log token details for debugging
-        token = credentials.credentials
-        logger.info(f"🔐 Attempting JWT verification...")
-        logger.info(f"🔐 Token preview: {token[:50]}...")
-        logger.info(f"🔐 JWT secret present: {bool(SUPABASE_JWT_SECRET)}")
-        logger.info(f"🔐 JWT secret length: {len(SUPABASE_JWT_SECRET) if SUPABASE_JWT_SECRET else 0}")
+        logger.debug("🔐 Attempting JWT verification")
         
         # SECURITY: Verify JWT signature with secret
         payload = jwt.decode(
@@ -49,7 +45,7 @@ def verify_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(securit
             logger.warning("JWT token missing user ID (sub claim)")
             raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
         
-        logger.info(f"✅ JWT verification successful for user: {user_id}")
+        logger.debug("✅ JWT verification successful")
         return user_id
         
     except jwt.ExpiredSignatureError:

@@ -63,8 +63,6 @@ logger = structured_logger.logger
 
 # Initialize services
 logger.info("🚀 Initializing PatchAI Backend services...")
-logger.info("🚨 EMERGENCY DEPLOYMENT: Message persistence bug resolution - 2025-06-28T14:20:00Z")
-logger.info("🔍 Enhanced debugging enabled for chat message operations")
 
 # Initialize OpenAI
 if not initialize_openai_client():
@@ -412,11 +410,11 @@ async def chat_completion(request: PromptRequest, req: Request, user_id: str = D
         logger.info(f"   - Total to OpenAI: {len(openai_messages)} messages")
         
         # Log OpenAI request with correct count
-        structured_logger.log_openai_request(correlation_id, "gpt-4o", total_conversation_messages)
+        structured_logger.log_openai_request(correlation_id, "gpt-5", total_conversation_messages)
         
         # Send to OpenAI
         response = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5",
             messages=openai_messages,
             max_tokens=2500,
             temperature=0.7

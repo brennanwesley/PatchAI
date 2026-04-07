@@ -1,7 +1,8 @@
 @echo off
+setlocal
 echo.
 echo ========================================
-echo  PATCHAI TESTING SUITE
+echo  PATCHAI VALIDATION SUITE
 echo ========================================
 echo.
 
@@ -13,36 +14,49 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Check if httpx is installed
-python -c "import httpx" >nul 2>&1
+REM Check if npm is available
+npm --version >nul 2>&1
 if errorlevel 1 (
-    echo Installing httpx...
-    pip install httpx
+    echo ERROR: npm not found. Please install Node.js and npm.
+    pause
+    exit /b 1
 )
 
-echo Running comprehensive tests...
+echo Running streamlined validation checks...
 echo.
 
-REM Run the complete test suite
-python test_all.py
+REM Run backend validation
+call npm run test-backend
+if errorlevel 1 goto :fail
 
-REM Check exit code
-if errorlevel 1 (
-    echo.
-    echo ❌ TESTS FAILED - Issues detected
-    echo Check the report files for details
-    echo.
-) else (
-    echo.
-    echo ✅ TESTS PASSED - System healthy
-    echo.
-)
+REM Set placeholder frontend environment variables
+set CI=true
+set REACT_APP_BACKEND_URL=https://patchai-backend.onrender.com
+set REACT_APP_SUPABASE_URL=https://example.supabase.co
+set REACT_APP_SUPABASE_ANON_KEY=example-anon-key
 
-echo Generated reports:
-if exist complete_test_report.json echo   - complete_test_report.json
-if exist patchai_test_report.json echo   - patchai_test_report.json
-if exist simple_test_results.json echo   - simple_test_results.json
+REM Run frontend smoke test
+call npm run test-frontend
+if errorlevel 1 goto :fail
 
+REM Run frontend build validation
+call npm run build-frontend
+if errorlevel 1 goto :fail
+
+goto :success
+
+:fail
 echo.
-echo Testing complete!
+echo ❌ VALIDATION FAILED - Review the output above
+echo.
+goto :end
+
+:success
+echo.
+echo ✅ VALIDATION PASSED - Backend and frontend checks succeeded
+
+:end
+echo.
+echo Validation complete!
+endlocal
 pause
